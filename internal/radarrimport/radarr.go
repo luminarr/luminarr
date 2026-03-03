@@ -21,11 +21,11 @@ type radarrStatus struct {
 }
 
 type radarrProfile struct {
-	ID             int                  `json:"id"`
-	Name           string               `json:"name"`
-	UpgradeAllowed bool                 `json:"upgradeAllowed"`
-	Cutoff         radarrProfileQuality `json:"cutoff"`
-	Items          []radarrProfileItem  `json:"items"`
+	ID             int                 `json:"id"`
+	Name           string              `json:"name"`
+	UpgradeAllowed bool                `json:"upgradeAllowed"`
+	Cutoff         int                 `json:"cutoff"` // quality ID of the cutoff quality
+	Items          []radarrProfileItem `json:"items"`
 }
 
 type radarrProfileQuality struct {

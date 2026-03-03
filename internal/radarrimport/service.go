@@ -429,6 +429,25 @@ func buildClientSettings(kind string, fields []radarrField) (json.RawMessage, er
 	return json.Marshal(settings)
 }
 
+// cutoffName finds the quality name matching the given cutoff ID by searching
+// the profile items recursively. Returns "" if not found.
+func cutoffName(items []radarrProfileItem, cutoffID int) string {
+	for _, item := range items {
+		if len(item.Items) == 0 {
+			if item.Quality.ID == cutoffID {
+				return item.Quality.Name
+			}
+		} else {
+			for _, child := range item.Items {
+				if child.Quality.ID == cutoffID {
+					return child.Quality.Name
+				}
+			}
+		}
+	}
+	return ""
+}
+
 // mapProfile converts a Radarr quality profile into a Luminarr CreateRequest.
 func mapProfile(p radarrProfile) quality.CreateRequest {
 	var qualities []plugin.Quality
@@ -437,7 +456,7 @@ func mapProfile(p radarrProfile) quality.CreateRequest {
 			qualities = append(qualities, mapRadarrQuality(q.Name))
 		}
 	}
-	cutoff := mapRadarrQuality(p.Cutoff.Name)
+	cutoff := mapRadarrQuality(cutoffName(p.Items, p.Cutoff))
 	return quality.CreateRequest{
 		Name:           p.Name,
 		Cutoff:         cutoff,
