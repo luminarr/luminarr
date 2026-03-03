@@ -51,6 +51,7 @@ type Movie struct {
 	Monitored           bool
 	LibraryID           string
 	QualityProfileID    string
+	MinimumAvailability string
 	Path                string
 	AddedAt             time.Time
 	UpdatedAt           time.Time
@@ -59,10 +60,11 @@ type Movie struct {
 
 // AddRequest carries the fields needed to add a movie to the library.
 type AddRequest struct {
-	TMDBID           int
-	LibraryID        string
-	QualityProfileID string
-	Monitored        bool
+	TMDBID              int
+	LibraryID           string
+	QualityProfileID    string
+	Monitored           bool
+	MinimumAvailability string // defaults to "released" when empty
 }
 
 // ListRequest carries filter and pagination options for listing movies.
@@ -82,10 +84,11 @@ type ListResult struct {
 
 // UpdateRequest carries the mutable fields for updating a movie.
 type UpdateRequest struct {
-	Title            string
-	Monitored        bool
-	LibraryID        string
-	QualityProfileID string
+	Title               string
+	Monitored           bool
+	LibraryID           string
+	QualityProfileID    string
+	MinimumAvailability string // preserved from existing when empty
 }
 
 // LookupRequest carries parameters for searching TMDB without adding to the library.
@@ -189,6 +192,11 @@ func (s *Service) Add(ctx context.Context, req AddRequest) (Movie, error) {
 		fanartURL = &detail.BackdropPath
 	}
 
+	minAvail := req.MinimumAvailability
+	if minAvail == "" {
+		minAvail = "released"
+	}
+
 	row, err := s.q.CreateMovie(ctx, dbsqlite.CreateMovieParams{
 		ID:                  uuid.New().String(),
 		TmdbID:              int64(detail.ID),
@@ -205,6 +213,7 @@ func (s *Service) Add(ctx context.Context, req AddRequest) (Movie, error) {
 		Monitored:           monitored,
 		LibraryID:           req.LibraryID,
 		QualityProfileID:    req.QualityProfileID,
+		MinimumAvailability: minAvail,
 		Path:                nil,
 		AddedAt:             now,
 		UpdatedAt:           now,
@@ -258,6 +267,7 @@ func (s *Service) addStub(ctx context.Context, req AddRequest) (Movie, error) {
 		Monitored:           monitored,
 		LibraryID:           req.LibraryID,
 		QualityProfileID:    req.QualityProfileID,
+		MinimumAvailability: "released",
 		Path:                nil,
 		AddedAt:             now,
 		UpdatedAt:           now,
@@ -399,21 +409,27 @@ func (s *Service) Update(ctx context.Context, id string, req UpdateRequest) (Mov
 		title = existing.Title
 	}
 
+	minAvail := req.MinimumAvailability
+	if minAvail == "" {
+		minAvail = existing.MinimumAvailability
+	}
+
 	row, err := s.q.UpdateMovie(ctx, dbsqlite.UpdateMovieParams{
-		ID:               id,
-		Title:            title,
-		OriginalTitle:    existing.OriginalTitle,
-		Year:             existing.Year,
-		Overview:         existing.Overview,
-		RuntimeMinutes:   existing.RuntimeMinutes,
-		GenresJson:       existing.GenresJson,
-		PosterUrl:        existing.PosterUrl,
-		FanartUrl:        existing.FanartUrl,
-		Status:           existing.Status,
-		Monitored:        monitored,
-		LibraryID:        libraryID,
-		QualityProfileID: qualityProfileID,
-		UpdatedAt:        time.Now().UTC().Format(time.RFC3339),
+		ID:                  id,
+		Title:               title,
+		OriginalTitle:       existing.OriginalTitle,
+		Year:                existing.Year,
+		Overview:            existing.Overview,
+		RuntimeMinutes:      existing.RuntimeMinutes,
+		GenresJson:          existing.GenresJson,
+		PosterUrl:           existing.PosterUrl,
+		FanartUrl:           existing.FanartUrl,
+		Status:              existing.Status,
+		Monitored:           monitored,
+		LibraryID:           libraryID,
+		QualityProfileID:    qualityProfileID,
+		MinimumAvailability: minAvail,
+		UpdatedAt:           time.Now().UTC().Format(time.RFC3339),
 	})
 	if err != nil {
 		return Movie{}, fmt.Errorf("updating movie %q: %w", id, err)
@@ -531,20 +547,21 @@ func (s *Service) RefreshMetadata(ctx context.Context, id string) (Movie, error)
 	now := time.Now().UTC().Format(time.RFC3339)
 
 	row, err := s.q.UpdateMovie(ctx, dbsqlite.UpdateMovieParams{
-		ID:               id,
-		Title:            detail.Title,
-		OriginalTitle:    detail.OriginalTitle,
-		Year:             int64(detail.Year),
-		Overview:         detail.Overview,
-		RuntimeMinutes:   runtimeMinutes,
-		GenresJson:       genresJSON,
-		PosterUrl:        posterURL,
-		FanartUrl:        fanartURL,
-		Status:           detail.Status,
-		Monitored:        existing.Monitored,
-		LibraryID:        existing.LibraryID,
-		QualityProfileID: existing.QualityProfileID,
-		UpdatedAt:        now,
+		ID:                  id,
+		Title:               detail.Title,
+		OriginalTitle:       detail.OriginalTitle,
+		Year:                int64(detail.Year),
+		Overview:            detail.Overview,
+		RuntimeMinutes:      runtimeMinutes,
+		GenresJson:          genresJSON,
+		PosterUrl:           posterURL,
+		FanartUrl:           fanartURL,
+		Status:              detail.Status,
+		Monitored:           existing.Monitored,
+		LibraryID:           existing.LibraryID,
+		QualityProfileID:    existing.QualityProfileID,
+		MinimumAvailability: existing.MinimumAvailability,
+		UpdatedAt:           now,
 	})
 	if err != nil {
 		return Movie{}, fmt.Errorf("updating movie %q after metadata refresh: %w", id, err)
@@ -725,6 +742,7 @@ func rowToMovie(row dbsqlite.Movie) (Movie, error) {
 		Monitored:           row.Monitored != 0,
 		LibraryID:           row.LibraryID,
 		QualityProfileID:    row.QualityProfileID,
+		MinimumAvailability: row.MinimumAvailability,
 		Path:                path,
 		AddedAt:             addedAt,
 		UpdatedAt:           updatedAt,

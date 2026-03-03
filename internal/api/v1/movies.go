@@ -30,6 +30,7 @@ type movieBody struct {
 	Monitored           bool       `json:"monitored"                      doc:"Whether the movie is monitored for downloads"`
 	LibraryID           string     `json:"library_id"                     doc:"Parent library UUID"`
 	QualityProfileID    string     `json:"quality_profile_id"             doc:"Quality profile UUID"`
+	MinimumAvailability string     `json:"minimum_availability"           doc:"Minimum availability before grabbing: tba, announced, in_cinemas, released"`
 	Path                string     `json:"path,omitempty"                 doc:"Absolute path on disk"`
 	AddedAt             time.Time  `json:"added_at"                       doc:"When the movie was added"`
 	UpdatedAt           time.Time  `json:"updated_at"                     doc:"When the record was last changed"`
@@ -92,10 +93,11 @@ type listMoviesInput struct {
 
 type addMovieInput struct {
 	Body struct {
-		TMDBID           int    `json:"tmdb_id"                        doc:"TMDB movie ID to add"`
-		LibraryID        string `json:"library_id"                     doc:"Library UUID to place the movie in"`
-		QualityProfileID string `json:"quality_profile_id"             doc:"Quality profile UUID"`
-		Monitored        *bool  `json:"monitored,omitempty"            doc:"Whether to monitor the movie for downloads (default: true)"`
+		TMDBID              int    `json:"tmdb_id"                        doc:"TMDB movie ID to add"`
+		LibraryID           string `json:"library_id"                     doc:"Library UUID to place the movie in"`
+		QualityProfileID    string `json:"quality_profile_id"             doc:"Quality profile UUID"`
+		Monitored           *bool  `json:"monitored,omitempty"            doc:"Whether to monitor the movie for downloads (default: true)"`
+		MinimumAvailability string `json:"minimum_availability,omitempty" doc:"Minimum availability before grabbing: tba, announced, in_cinemas, released (default: released)"`
 	}
 }
 
@@ -114,10 +116,11 @@ type getMovieInput struct {
 type updateMovieInput struct {
 	ID   string `path:"id"`
 	Body struct {
-		Title            string `json:"title"              doc:"Updated title"`
-		Monitored        bool   `json:"monitored"          doc:"Whether to monitor the movie for downloads"`
-		LibraryID        string `json:"library_id"         doc:"Library UUID"`
-		QualityProfileID string `json:"quality_profile_id" doc:"Quality profile UUID"`
+		Title               string `json:"title"                          doc:"Updated title"`
+		Monitored           bool   `json:"monitored"                      doc:"Whether to monitor the movie for downloads"`
+		LibraryID           string `json:"library_id"                     doc:"Library UUID"`
+		QualityProfileID    string `json:"quality_profile_id"             doc:"Quality profile UUID"`
+		MinimumAvailability string `json:"minimum_availability,omitempty" doc:"Minimum availability before grabbing: tba, announced, in_cinemas, released"`
 	}
 }
 
@@ -148,6 +151,7 @@ func movieToBody(m movie.Movie) *movieBody {
 		Monitored:           m.Monitored,
 		LibraryID:           m.LibraryID,
 		QualityProfileID:    m.QualityProfileID,
+		MinimumAvailability: m.MinimumAvailability,
 		Path:                m.Path,
 		AddedAt:             m.AddedAt,
 		UpdatedAt:           m.UpdatedAt,
@@ -217,10 +221,11 @@ func RegisterMovieRoutes(api huma.API, svc *movie.Service) {
 			monitored = *input.Body.Monitored
 		}
 		m, err := svc.Add(ctx, movie.AddRequest{
-			TMDBID:           input.Body.TMDBID,
-			LibraryID:        input.Body.LibraryID,
-			QualityProfileID: input.Body.QualityProfileID,
-			Monitored:        monitored,
+			TMDBID:              input.Body.TMDBID,
+			LibraryID:           input.Body.LibraryID,
+			QualityProfileID:    input.Body.QualityProfileID,
+			Monitored:           monitored,
+			MinimumAvailability: input.Body.MinimumAvailability,
 		})
 		if err != nil {
 			if errors.Is(err, movie.ErrAlreadyExists) {
@@ -285,10 +290,11 @@ func RegisterMovieRoutes(api huma.API, svc *movie.Service) {
 		Tags:        []string{"Movies"},
 	}, func(ctx context.Context, input *updateMovieInput) (*movieOutput, error) {
 		m, err := svc.Update(ctx, input.ID, movie.UpdateRequest{
-			Title:            input.Body.Title,
-			Monitored:        input.Body.Monitored,
-			LibraryID:        input.Body.LibraryID,
-			QualityProfileID: input.Body.QualityProfileID,
+			Title:               input.Body.Title,
+			Monitored:           input.Body.Monitored,
+			LibraryID:           input.Body.LibraryID,
+			QualityProfileID:    input.Body.QualityProfileID,
+			MinimumAvailability: input.Body.MinimumAvailability,
 		})
 		if err != nil {
 			if errors.Is(err, movie.ErrNotFound) {

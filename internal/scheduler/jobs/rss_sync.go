@@ -100,6 +100,11 @@ func runRSSSync(
 			continue // already downloading something for this movie
 		}
 
+		// Skip movies that haven't reached their minimum availability threshold.
+		if !movieEligibleForGrab(m.MinimumAvailability, m.Status) {
+			continue
+		}
+
 		// Load the quality profile.
 		prof, err := qualSvc.Get(ctx, m.QualityProfileID)
 		if err != nil {
@@ -211,6 +216,30 @@ func releaseMatchesMovie(releaseTitle, movieTitle string, year int) bool {
 	}
 	return strings.Contains(normRelease, normMovie) &&
 		strings.Contains(normRelease, strconv.Itoa(year))
+}
+
+// movieEligibleForGrab reports whether a movie's TMDB status has reached the
+// user-configured minimum availability threshold. The four thresholds map to
+// TMDB status strings as follows:
+//
+//	tba / announced → always eligible (grab as soon as monitored)
+//	in_cinemas      → "In Production", "Post Production", or "Released"
+//	released        → "Released" only
+func movieEligibleForGrab(minAvail, tmdbStatus string) bool {
+	switch minAvail {
+	case "tba", "announced", "":
+		return true
+	case "in_cinemas":
+		switch tmdbStatus {
+		case "In Production", "Post Production", "Released":
+			return true
+		}
+		return false
+	case "released":
+		return tmdbStatus == "Released"
+	default:
+		return true
+	}
 }
 
 // normalizeTitle lowercases a string, converts common separators (dots,

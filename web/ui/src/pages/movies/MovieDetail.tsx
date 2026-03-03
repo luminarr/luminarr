@@ -310,6 +310,19 @@ export default function MovieDetail() {
       monitored: !movie.monitored,
       library_id: movie.library_id,
       quality_profile_id: movie.quality_profile_id,
+      minimum_availability: movie.minimum_availability,
+    });
+  }
+
+  function handleMinimumAvailabilityChange(value: string) {
+    if (!movie) return;
+    updateMovie.mutate({
+      id: movie.id,
+      title: movie.title,
+      monitored: movie.monitored,
+      library_id: movie.library_id,
+      quality_profile_id: movie.quality_profile_id,
+      minimum_availability: value,
     });
   }
 
@@ -483,7 +496,7 @@ export default function MovieDetail() {
           {tab === "overview" && (
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
               {/* Quick facts */}
-              <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+              <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "flex-start" }}>
                 {[
                   { label: "Runtime", value: formatRuntime(movie.runtime_minutes) },
                   { label: "Status", value: movie.status },
@@ -505,6 +518,39 @@ export default function MovieDetail() {
                     <div style={{ fontSize: 13, color: "var(--color-text-primary)" }}>{value}</div>
                   </div>
                 ))}
+
+                {/* Minimum availability selector */}
+                <div
+                  style={{
+                    background: "var(--color-bg-elevated)",
+                    border: "1px solid var(--color-border-subtle)",
+                    borderRadius: 6,
+                    padding: "8px 14px",
+                  }}
+                >
+                  <div style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--color-text-muted)", marginBottom: 4 }}>
+                    Min. Availability
+                  </div>
+                  <select
+                    value={movie.minimum_availability || "released"}
+                    onChange={(e) => handleMinimumAvailabilityChange(e.target.value)}
+                    disabled={updateMovie.isPending}
+                    style={{
+                      fontSize: 13,
+                      color: "var(--color-text-primary)",
+                      background: "transparent",
+                      border: "none",
+                      padding: 0,
+                      cursor: "pointer",
+                      outline: "none",
+                    }}
+                  >
+                    <option value="announced">Announced</option>
+                    <option value="in_cinemas">In Cinemas</option>
+                    <option value="released">Released</option>
+                    <option value="tba">TBA</option>
+                  </select>
+                </div>
               </div>
 
               {/* Genres */}

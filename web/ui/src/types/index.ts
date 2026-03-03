@@ -62,6 +62,7 @@ export interface Movie {
   monitored: boolean;
   library_id: string;
   quality_profile_id: string;
+  minimum_availability: string;
   path?: string;
   added_at: string;
   updated_at: string;

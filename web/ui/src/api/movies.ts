@@ -60,6 +60,7 @@ export interface MovieUpdateRequest {
   monitored: boolean;
   library_id: string;
   quality_profile_id: string;
+  minimum_availability?: string;
 }
 
 export function useUpdateMovie() {

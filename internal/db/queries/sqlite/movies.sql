@@ -4,13 +4,15 @@ INSERT INTO movies (
     year, overview, runtime_minutes, genres_json,
     poster_url, fanart_url, status, monitored,
     library_id, quality_profile_id, path,
-    added_at, updated_at, metadata_refreshed_at
+    added_at, updated_at, metadata_refreshed_at,
+    minimum_availability
 ) VALUES (
     ?, ?, ?, ?, ?,
     ?, ?, ?, ?,
     ?, ?, ?, ?,
     ?, ?, ?,
-    ?, ?, ?
+    ?, ?, ?,
+    ?
 )
 RETURNING *;
 
@@ -44,19 +46,20 @@ SELECT COUNT(*) FROM movies WHERE library_id = ?;
 
 -- name: UpdateMovie :one
 UPDATE movies SET
-    title              = ?,
-    original_title     = ?,
-    year               = ?,
-    overview           = ?,
-    runtime_minutes    = ?,
-    genres_json        = ?,
-    poster_url         = ?,
-    fanart_url         = ?,
-    status             = ?,
-    monitored          = ?,
-    library_id         = ?,
-    quality_profile_id = ?,
-    updated_at         = ?
+    title                = ?,
+    original_title       = ?,
+    year                 = ?,
+    overview             = ?,
+    runtime_minutes      = ?,
+    genres_json          = ?,
+    poster_url           = ?,
+    fanart_url           = ?,
+    status               = ?,
+    monitored            = ?,
+    library_id           = ?,
+    quality_profile_id   = ?,
+    minimum_availability = ?,
+    updated_at           = ?
 WHERE id = ?
 RETURNING *;
 
