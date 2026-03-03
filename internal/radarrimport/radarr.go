@@ -139,7 +139,10 @@ func NewClient(baseURL, apiKey string) *Client {
 	return &Client{
 		baseURL: strings.TrimRight(baseURL, "/"),
 		apiKey:  apiKey,
-		http:    &http.Client{Timeout: 30 * time.Second, Transport: safedialer.Transport()},
+		// LANTransport allows RFC-1918 and loopback (Radarr is typically on
+		// localhost or a LAN address) while still blocking cloud-metadata
+		// link-local ranges (169.254.169.254 etc.).
+		http: &http.Client{Timeout: 30 * time.Second, Transport: safedialer.LANTransport()},
 	}
 }
 
