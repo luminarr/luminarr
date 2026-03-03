@@ -63,13 +63,15 @@ type Client struct {
 }
 
 // New creates a new qBittorrent client. Call Test to verify connectivity.
-// Outbound HTTP uses safedialer.Transport() to block connections to private
-// network addresses. For unit tests that use httptest.Server, use NewWithHTTPClient.
+// Outbound HTTP uses safedialer.LANTransport() because download clients are
+// typically hosted on localhost or a LAN address. It blocks cloud-metadata
+// ranges (169.254.0.0/16 etc.) but allows RFC-1918 and loopback.
+// For unit tests that use httptest.Server, use NewWithHTTPClient.
 func New(cfg Config) *Client {
 	jar, _ := cookiejar.New(nil)
 	return &Client{
 		cfg:  cfg,
-		http: &http.Client{Jar: jar, Timeout: 30 * time.Second, Transport: safedialer.Transport()},
+		http: &http.Client{Jar: jar, Timeout: 30 * time.Second, Transport: safedialer.LANTransport()},
 	}
 }
 

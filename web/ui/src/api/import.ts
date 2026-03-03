@@ -1,4 +1,4 @@
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "./client";
 import type { RadarrPreviewResult, RadarrImportOptions, RadarrImportResult } from "@/types";
 
@@ -30,6 +30,7 @@ export function useRadarrPreview() {
 }
 
 export function useRadarrImport() {
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: (req: { url: string; api_key: string; options: RadarrImportOptions }) =>
       apiFetch<RadarrImportResult>("/import/radarr/execute", {
@@ -37,5 +38,13 @@ export function useRadarrImport() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(req),
       }).then(normalizeImportResult),
+    onSuccess: () => {
+      // Invalidate all lists that import may have populated so navigating
+      // to those pages shows fresh data without a manual browser refresh.
+      qc.invalidateQueries({ queryKey: ["quality-profiles"] });
+      qc.invalidateQueries({ queryKey: ["libraries"] });
+      qc.invalidateQueries({ queryKey: ["indexers"] });
+      qc.invalidateQueries({ queryKey: ["download-clients"] });
+    },
   });
 }

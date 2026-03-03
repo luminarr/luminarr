@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/davidfic/luminarr/internal/registry"
+	"github.com/davidfic/luminarr/internal/safedialer"
 	"github.com/davidfic/luminarr/pkg/plugin"
 )
 
@@ -63,11 +64,13 @@ type Client struct {
 }
 
 // New creates a new Deluge client. Call Test to verify connectivity.
+// Outbound HTTP uses safedialer.LANTransport() because download clients are
+// typically hosted on localhost or a LAN address.
 func New(cfg Config) *Client {
 	jar, _ := cookiejar.New(nil)
 	return &Client{
 		cfg:  cfg,
-		http: &http.Client{Jar: jar, Timeout: 30 * time.Second},
+		http: &http.Client{Jar: jar, Timeout: 30 * time.Second, Transport: safedialer.LANTransport()},
 	}
 }
 
