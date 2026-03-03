@@ -260,9 +260,20 @@ func (s *Service) Execute(ctx context.Context, radarrURL, apiKey string, opts Im
 		if err != nil {
 			result.Errors = append(result.Errors, fmt.Sprintf("fetch indexers: %v", err))
 		} else {
+			// Build a set of existing indexer names to avoid duplicates.
+			existingIndexers := map[string]struct{}{}
+			if existing, err := s.indexers.List(ctx); err == nil {
+				for _, e := range existing {
+					existingIndexers[e.Name] = struct{}{}
+				}
+			}
 			for _, idx := range rdxIndexers {
 				kind := mapIndexerKind(idx.ConfigContract)
 				if kind == "" {
+					result.Indexers.Skipped++
+					continue
+				}
+				if _, exists := existingIndexers[idx.Name]; exists {
 					result.Indexers.Skipped++
 					continue
 				}
@@ -294,9 +305,20 @@ func (s *Service) Execute(ctx context.Context, radarrURL, apiKey string, opts Im
 		if err != nil {
 			result.Errors = append(result.Errors, fmt.Sprintf("fetch download clients: %v", err))
 		} else {
+			// Build a set of existing client names to avoid duplicates.
+			existingClients := map[string]struct{}{}
+			if existing, err := s.downloaders.List(ctx); err == nil {
+				for _, e := range existing {
+					existingClients[e.Name] = struct{}{}
+				}
+			}
 			for _, cl := range rdxClients {
 				kind := mapClientKind(cl.ConfigContract)
 				if kind == "" {
+					result.DownloadClients.Skipped++
+					continue
+				}
+				if _, exists := existingClients[cl.Name]; exists {
 					result.DownloadClients.Skipped++
 					continue
 				}

@@ -1,10 +1,29 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Eye, EyeOff, ArrowLeft, CheckCircle, XCircle, AlertCircle, Loader2 } from "lucide-react";
+import { Eye, EyeOff, ArrowLeft, CheckCircle, XCircle, AlertCircle, Loader2, RefreshCw } from "lucide-react";
 import { useRadarrPreview, useRadarrImport } from "@/api/import";
 import type { RadarrPreviewResult, RadarrImportOptions, RadarrImportResult, CategoryResult } from "@/types";
 
-type Step = "connect" | "preview" | "done";
+// ── localStorage helpers ───────────────────────────────────────────────────────
+
+const LS_URL = "luminarr.radarr.url";
+const LS_KEY = "luminarr.radarr.api_key";
+
+function loadSaved(): { url: string; apiKey: string } | null {
+  const url = localStorage.getItem(LS_URL);
+  const key = localStorage.getItem(LS_KEY);
+  return url && key ? { url, apiKey: key } : null;
+}
+
+function saveCreds(url: string, apiKey: string) {
+  localStorage.setItem(LS_URL, url);
+  localStorage.setItem(LS_KEY, apiKey);
+}
+
+function clearCreds() {
+  localStorage.removeItem(LS_URL);
+  localStorage.removeItem(LS_KEY);
+}
 
 // ── Shared styles ─────────────────────────────────────────────────────────────
 
@@ -68,23 +87,129 @@ const sectionTitle: React.CSSProperties = {
   marginBottom: 12,
 };
 
+// ── Quick Sync card (shown when saved credentials exist) ──────────────────────
+
+function QuickSyncCard({
+  saved,
+  onSync,
+  onChangeSetting,
+  onForget,
+}: {
+  saved: { url: string; apiKey: string };
+  onSync: (result: RadarrPreviewResult) => void;
+  onChangeSetting: () => void;
+  onForget: () => void;
+}) {
+  const preview = useRadarrPreview();
+
+  function handleSync() {
+    preview.mutate(
+      { url: saved.url, api_key: saved.apiKey },
+      { onSuccess: (result) => onSync(result) },
+    );
+  }
+
+  return (
+    <div
+      style={{
+        ...card,
+        display: "flex",
+        flexDirection: "column",
+        gap: 14,
+        marginBottom: 28,
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <RefreshCw size={15} color="var(--color-accent)" />
+        <span style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>
+          Saved connection
+        </span>
+      </div>
+
+      <div
+        style={{
+          fontSize: 12,
+          color: "var(--color-text-secondary)",
+          fontFamily: "monospace",
+          background: "var(--color-bg-elevated)",
+          padding: "6px 10px",
+          borderRadius: 4,
+        }}
+      >
+        {saved.url}
+      </div>
+
+      {preview.error && (
+        <div
+          style={{
+            padding: "8px 12px",
+            background: "var(--color-danger-muted, rgba(239,68,68,0.08))",
+            border: "1px solid var(--color-danger, #ef4444)",
+            borderRadius: 6,
+            fontSize: 12,
+            color: "var(--color-danger, #ef4444)",
+          }}
+        >
+          {preview.error.message}
+        </div>
+      )}
+
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <button style={btnPrimary} onClick={handleSync} disabled={preview.isPending}>
+          {preview.isPending && (
+            <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} />
+          )}
+          {preview.isPending ? "Connecting…" : "Sync"}
+        </button>
+        <button
+          style={{ ...btnSecondary, padding: "8px 14px" }}
+          onClick={onChangeSetting}
+          disabled={preview.isPending}
+        >
+          Change settings
+        </button>
+        <button
+          onClick={onForget}
+          disabled={preview.isPending}
+          style={{
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            fontSize: 12,
+            color: "var(--color-text-muted)",
+            padding: 0,
+            marginLeft: "auto",
+          }}
+        >
+          Forget
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── Step 1: Connect ───────────────────────────────────────────────────────────
 
 function ConnectStep({
+  initialUrl,
+  initialApiKey,
   onPreview,
 }: {
-  onPreview: (url: string, apiKey: string, result: RadarrPreviewResult) => void;
+  initialUrl?: string;
+  initialApiKey?: string;
+  onPreview: (url: string, apiKey: string, result: RadarrPreviewResult, remember: boolean) => void;
 }) {
-  const [url, setUrl] = useState("http://localhost:7878");
-  const [apiKey, setApiKey] = useState("");
+  const [url, setUrl] = useState(initialUrl ?? "http://localhost:7878");
+  const [apiKey, setApiKey] = useState(initialApiKey ?? "");
   const [showKey, setShowKey] = useState(false);
+  const [remember, setRemember] = useState(Boolean(initialUrl));
   const preview = useRadarrPreview();
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     preview.mutate(
       { url: url.trim(), api_key: apiKey.trim() },
-      { onSuccess: (result) => onPreview(url.trim(), apiKey.trim(), result) },
+      { onSuccess: (result) => onPreview(url.trim(), apiKey.trim(), result, remember) },
     );
   }
 
@@ -154,6 +279,26 @@ function ConnectStep({
           {preview.error.message}
         </div>
       )}
+
+      <label
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          cursor: "pointer",
+          fontSize: 12,
+          color: "var(--color-text-secondary)",
+        }}
+      >
+        <input
+          type="checkbox"
+          checked={remember}
+          onChange={(e) => setRemember(e.target.checked)}
+          style={{ accentColor: "var(--color-accent)" }}
+        />
+        Remember this connection
+        <span style={{ color: "var(--color-text-muted)" }}>(stored locally in your browser)</span>
+      </label>
 
       <div>
         <button
@@ -592,18 +737,45 @@ function DoneStep({ result }: { result: RadarrImportResult }) {
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
+type Step = "connect" | "preview" | "done";
+
 export default function ImportPage() {
   const [step, setStep] = useState<Step>("connect");
   const [url, setUrl] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [preview, setPreview] = useState<RadarrPreviewResult | null>(null);
   const [importResult, setImportResult] = useState<RadarrImportResult | null>(null);
+  // Saved credentials from localStorage — loaded once on mount.
+  const [saved, setSaved] = useState(loadSaved);
+  // When true, show the manual form even if saved credentials exist.
+  const [showForm, setShowForm] = useState(false);
 
-  function handlePreview(u: string, k: string, result: RadarrPreviewResult) {
+  function handlePreview(u: string, k: string, result: RadarrPreviewResult, remember: boolean) {
+    if (remember) {
+      saveCreds(u, k);
+      setSaved({ url: u, apiKey: k });
+    } else {
+      clearCreds();
+      setSaved(null);
+    }
     setUrl(u);
     setApiKey(k);
     setPreview(result);
     setStep("preview");
+  }
+
+  function handleQuickSync(result: RadarrPreviewResult) {
+    if (!saved) return;
+    setUrl(saved.url);
+    setApiKey(saved.apiKey);
+    setPreview(result);
+    setStep("preview");
+  }
+
+  function handleForget() {
+    clearCreds();
+    setSaved(null);
+    setShowForm(false);
   }
 
   function handleDone(result: RadarrImportResult) {
@@ -616,6 +788,9 @@ export default function ImportPage() {
     { key: "preview", label: "2. Select" },
     { key: "done", label: "3. Done" },
   ];
+
+  // Whether to render the QuickSync card instead of the form.
+  const showQuickSync = step === "connect" && saved !== null && !showForm;
 
   return (
     <div style={{ padding: 24, maxWidth: 640 }}>
@@ -673,7 +848,45 @@ export default function ImportPage() {
       </div>
 
       {/* Step content */}
-      {step === "connect" && <ConnectStep onPreview={handlePreview} />}
+      {step === "connect" && showQuickSync && saved && (
+        <>
+          <QuickSyncCard
+            saved={saved}
+            onSync={handleQuickSync}
+            onChangeSetting={() => setShowForm(true)}
+            onForget={handleForget}
+          />
+        </>
+      )}
+
+      {step === "connect" && !showQuickSync && (
+        <>
+          {showForm && saved && (
+            <button
+              onClick={() => setShowForm(false)}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                fontSize: 12,
+                color: "var(--color-text-muted)",
+                padding: "0 0 16px",
+              }}
+            >
+              <ArrowLeft size={12} /> Back to saved connection
+            </button>
+          )}
+          <ConnectStep
+            initialUrl={saved?.url}
+            initialApiKey={saved?.apiKey}
+            onPreview={handlePreview}
+          />
+        </>
+      )}
+
       {step === "preview" && preview && (
         <PreviewStep
           url={url}

@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -17,6 +18,7 @@ import (
 	dbsqlite "github.com/davidfic/luminarr/internal/db/generated/sqlite"
 	"github.com/davidfic/luminarr/internal/events"
 	"github.com/davidfic/luminarr/internal/metadata/tmdb"
+	"github.com/davidfic/luminarr/pkg/plugin"
 )
 
 // Sentinel errors returned by Service methods.
@@ -563,6 +565,66 @@ func (s *Service) RefreshMetadata(ctx context.Context, id string) (Movie, error)
 
 	// Re-fetch to get the final state including the refreshed timestamp.
 	return s.Get(ctx, row.ID)
+}
+
+// GetByTMDBID returns a movie by its TMDB ID.
+// Returns ErrNotFound if no movie with that TMDB ID exists.
+func (s *Service) GetByTMDBID(ctx context.Context, tmdbID int) (Movie, error) {
+	row, err := s.q.GetMovieByTMDBID(ctx, int64(tmdbID))
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return Movie{}, ErrNotFound
+		}
+		return Movie{}, fmt.Errorf("fetching movie by tmdb_id %d: %w", tmdbID, err)
+	}
+	return rowToMovie(row)
+}
+
+// AttachFile links a file on disk to an existing movie record. It sets
+// movies.path to the file's parent directory, creates a movie_file record,
+// and marks the movie status as "downloaded".
+//
+// Callers are responsible for ensuring the file actually exists on disk before
+// calling this method.
+func (s *Service) AttachFile(ctx context.Context, movieID, filePath string, sizeBytes int64, quality plugin.Quality) error {
+	qualityJSON, err := json.Marshal(quality)
+	if err != nil {
+		return fmt.Errorf("marshaling quality: %w", err)
+	}
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	dir := filepath.Dir(filePath)
+
+	if _, err := s.q.UpdateMoviePath(ctx, dbsqlite.UpdateMoviePathParams{
+		Path:      &dir,
+		UpdatedAt: now,
+		ID:        movieID,
+	}); err != nil {
+		return fmt.Errorf("updating movie path for %q: %w", movieID, err)
+	}
+
+	if _, err := s.q.CreateMovieFile(ctx, dbsqlite.CreateMovieFileParams{
+		ID:          uuid.New().String(),
+		MovieID:     movieID,
+		Path:        filePath,
+		SizeBytes:   sizeBytes,
+		QualityJson: string(qualityJSON),
+		Edition:     nil,
+		ImportedAt:  now,
+		IndexedAt:   now,
+	}); err != nil {
+		return fmt.Errorf("creating movie file for %q: %w", movieID, err)
+	}
+
+	if _, err := s.q.UpdateMovieStatus(ctx, dbsqlite.UpdateMovieStatusParams{
+		Status:    "downloaded",
+		UpdatedAt: now,
+		ID:        movieID,
+	}); err != nil {
+		return fmt.Errorf("updating movie status for %q: %w", movieID, err)
+	}
+
+	return nil
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────

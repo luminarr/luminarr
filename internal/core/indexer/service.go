@@ -436,6 +436,11 @@ func (s *Service) GrabHistory(ctx context.Context, movieID string) ([]dbsqlite.G
 	return s.q.ListGrabHistoryByMovie(ctx, movieID)
 }
 
+// ListHistory returns the most recent grab history entries across all movies.
+func (s *Service) ListHistory(ctx context.Context, limit int) ([]dbsqlite.GrabHistory, error) {
+	return s.q.ListGrabHistory(ctx, int64(limit))
+}
+
 func rowToConfig(row dbsqlite.IndexerConfig) (Config, error) {
 	createdAt, err := time.Parse(time.RFC3339, row.CreatedAt)
 	if err != nil {

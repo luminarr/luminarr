@@ -3,12 +3,15 @@ package v1
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
 
 	"github.com/davidfic/luminarr/internal/core/library"
+	"github.com/davidfic/luminarr/internal/core/movie"
 )
 
 // ── Request / response shapes ────────────────────────────────────────────────
@@ -64,6 +67,37 @@ type libraryScanInput struct {
 }
 
 type libraryScanOutput struct{}
+
+// GET /api/v1/libraries/{id}/disk-scan
+type libraryDiskScanInput struct {
+	ID string `path:"id"`
+}
+
+type diskFileBody struct {
+	Path        string `json:"path"         doc:"Absolute path to the file"`
+	SizeBytes   int64  `json:"size_bytes"   doc:"File size in bytes"`
+	ParsedTitle string `json:"parsed_title" doc:"Title guessed from filename"`
+	ParsedYear  int    `json:"parsed_year"  doc:"Year guessed from filename; 0 if not found"`
+}
+
+type libraryDiskScanOutput struct {
+	Body []*diskFileBody
+}
+
+// POST /api/v1/libraries/{id}/import-file
+type libraryImportFileInput struct {
+	ID   string `path:"id"`
+	Body libraryImportFileBody
+}
+
+type libraryImportFileBody struct {
+	FilePath string `json:"file_path" doc:"Absolute path of the file to import"`
+	TmdbID   int    `json:"tmdb_id"   doc:"TMDB movie ID to associate with this file"`
+}
+
+type libraryImportFileOutput struct {
+	Body *movieBody
+}
 
 // Huma request wrappers.
 type libraryCreateInput struct {
@@ -125,7 +159,8 @@ func libInputToCreateRequest(in libraryInput) library.CreateRequest {
 // ── Route registration ───────────────────────────────────────────────────────
 
 // RegisterLibraryRoutes registers all /api/v1/libraries endpoints.
-func RegisterLibraryRoutes(api huma.API, svc *library.Service) {
+// movieSvc may be nil; the disk-import endpoints are skipped when it is.
+func RegisterLibraryRoutes(api huma.API, svc *library.Service, movieSvc *movie.Service) {
 	// GET /api/v1/libraries
 	huma.Register(api, huma.Operation{
 		OperationID: "list-libraries",
@@ -260,5 +295,99 @@ func RegisterLibraryRoutes(api huma.API, svc *library.Service) {
 				HealthMessage:  stats.HealthMessage,
 			},
 		}, nil
+	})
+
+	// GET /api/v1/libraries/{id}/disk-scan
+	// Walks the library root path and returns video files not yet in movie_files.
+	huma.Register(api, huma.Operation{
+		OperationID: "library-disk-scan",
+		Method:      http.MethodGet,
+		Path:        "/api/v1/libraries/{id}/disk-scan",
+		Summary:     "Scan library disk for untracked video files",
+		Description: "Returns video files found on disk that are not already tracked as movie files.",
+		Tags:        []string{"Libraries"},
+	}, func(ctx context.Context, input *libraryDiskScanInput) (*libraryDiskScanOutput, error) {
+		diskFiles, err := svc.ScanDisk(ctx, input.ID)
+		if err != nil {
+			if errors.Is(err, library.ErrNotFound) {
+				return nil, huma.Error404NotFound("library not found")
+			}
+			return nil, huma.NewError(http.StatusInternalServerError, "failed to scan library disk", err)
+		}
+		bodies := make([]*diskFileBody, len(diskFiles))
+		for i, f := range diskFiles {
+			bodies[i] = &diskFileBody{
+				Path:        f.Path,
+				SizeBytes:   f.SizeBytes,
+				ParsedTitle: f.ParsedTitle,
+				ParsedYear:  f.ParsedYear,
+			}
+		}
+		return &libraryDiskScanOutput{Body: bodies}, nil
+	})
+
+	if movieSvc == nil {
+		return
+	}
+
+	// POST /api/v1/libraries/{id}/import-file
+	// Adds a movie to the library (or finds the existing one) and links the file.
+	huma.Register(api, huma.Operation{
+		OperationID:   "library-import-file",
+		Method:        http.MethodPost,
+		Path:          "/api/v1/libraries/{id}/import-file",
+		Summary:       "Import a file into a library movie",
+		Description:   "Adds the movie (via TMDB ID) if not already present, then links the file on disk.",
+		Tags:          []string{"Libraries"},
+		DefaultStatus: http.StatusCreated,
+	}, func(ctx context.Context, input *libraryImportFileInput) (*libraryImportFileOutput, error) {
+		lib, err := svc.Get(ctx, input.ID)
+		if err != nil {
+			if errors.Is(err, library.ErrNotFound) {
+				return nil, huma.Error404NotFound("library not found")
+			}
+			return nil, huma.NewError(http.StatusInternalServerError, "failed to get library", err)
+		}
+
+		// Verify the file exists on disk before doing anything else.
+		info, err := os.Stat(input.Body.FilePath)
+		if err != nil {
+			return nil, huma.NewError(http.StatusBadRequest,
+				fmt.Sprintf("file not accessible: %s", input.Body.FilePath), err)
+		}
+		sizeBytes := info.Size()
+
+		// Use the library's default quality profile; fall back to an empty string
+		// which movie.Add will accept (profile validation is relaxed on import).
+		qpID := lib.DefaultQualityProfileID
+
+		// Add the movie if it does not exist yet; tolerate ErrAlreadyExists.
+		m, addErr := movieSvc.Add(ctx, movie.AddRequest{
+			TMDBID:           input.Body.TmdbID,
+			LibraryID:        lib.ID,
+			QualityProfileID: qpID,
+			Monitored:        true,
+		})
+		if addErr != nil && !errors.Is(addErr, movie.ErrAlreadyExists) {
+			return nil, huma.NewError(http.StatusInternalServerError, "failed to add movie", addErr)
+		}
+		if errors.Is(addErr, movie.ErrAlreadyExists) {
+			m, err = movieSvc.GetByTMDBID(ctx, input.Body.TmdbID)
+			if err != nil {
+				return nil, huma.NewError(http.StatusInternalServerError, "failed to get existing movie", err)
+			}
+		}
+
+		quality := library.ParseQualityFromPath(input.Body.FilePath)
+		if err := movieSvc.AttachFile(ctx, m.ID, input.Body.FilePath, sizeBytes, quality); err != nil {
+			return nil, huma.NewError(http.StatusInternalServerError, "failed to attach file to movie", err)
+		}
+
+		// Re-fetch to return the fully updated movie record.
+		updated, err := movieSvc.Get(ctx, m.ID)
+		if err != nil {
+			return nil, huma.NewError(http.StatusInternalServerError, "failed to read updated movie", err)
+		}
+		return &libraryImportFileOutput{Body: movieToBody(updated)}, nil
 	})
 }

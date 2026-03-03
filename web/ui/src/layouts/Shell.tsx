@@ -19,6 +19,7 @@ import {
   X,
 } from "lucide-react";
 import { useSystemHealth } from "@/api/system";
+import { useWebSocket } from "@/api/websocket";
 
 interface NavItem {
   to: string;
@@ -310,6 +311,8 @@ function Sidebar({
 }
 
 export function Shell() {
+  useWebSocket();
+
   const [collapsed, setCollapsed] = useState(() => {
     return localStorage.getItem("sidebar-collapsed") === "true";
   });

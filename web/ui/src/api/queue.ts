@@ -7,13 +7,9 @@ export function useQueue() {
   return useQuery({
     queryKey: ["queue"],
     queryFn: () => apiFetch<QueueItem[]>("/queue"),
-    refetchInterval: (query) => {
-      const items = query.state.data ?? [];
-      const hasActive = items.some(
-        (i) => i.status === "downloading" || i.status === "queued"
-      );
-      return hasActive ? 5_000 : 30_000;
-    },
+    // WebSocket events keep the queue fresh in real time; 60s polling is a
+    // fallback for the case where the WebSocket connection has dropped.
+    refetchInterval: 60_000,
   });
 }
 

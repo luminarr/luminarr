@@ -108,6 +108,8 @@ export interface GrabHistory {
   indexer_id?: string;
   release_guid: string;
   release_title: string;
+  release_source?: string;
+  release_resolution?: string;
   protocol: string;
   size: number;
   download_client_id?: string;
@@ -160,6 +162,15 @@ export interface LibraryRequest {
   naming_format?: string;
   min_free_space_gb?: number;
   tags?: string[];
+}
+
+// ── Library disk import ────────────────────────────────────────────────────
+
+export interface DiskFile {
+  path: string;
+  size_bytes: number;
+  parsed_title: string;
+  parsed_year: number;
 }
 
 // ── Quality Profiles ───────────────────────────────────────────────────────

@@ -13,29 +13,7 @@ import IndexerList from "@/pages/settings/indexers/IndexerList";
 import DownloadClientList from "@/pages/settings/download-clients/DownloadClientList";
 import NotificationList from "@/pages/settings/notifications/NotificationList";
 import ImportPage from "@/pages/settings/import/ImportPage";
-
-// No global history endpoint exists — stub for now
-function HistoryPage() {
-  return (
-    <div style={{ padding: 24 }}>
-      <h1
-        style={{
-          margin: 0,
-          fontSize: 20,
-          fontWeight: 600,
-          color: "var(--color-text-primary)",
-          letterSpacing: "-0.01em",
-        }}
-      >
-        History
-      </h1>
-      <p style={{ margin: "8px 0 0", fontSize: 13, color: "var(--color-text-secondary)" }}>
-        Per-movie grab history is visible on each movie&apos;s detail page. A global history
-        view is not yet available.
-      </p>
-    </div>
-  );
-}
+import HistoryPage from "@/pages/history/HistoryPage";
 
 const queryClient = new QueryClient({
   defaultOptions: {

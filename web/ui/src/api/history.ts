@@ -1,4 +1,11 @@
-// No global history endpoint exists in the API.
-// Grab history is recorded on POST /api/v1/movies/{id}/releases/{guid}/grab.
-// This file is reserved for future use if a global history endpoint is added.
-export {};
+import { useQuery } from "@tanstack/react-query";
+import { apiFetch } from "./client";
+import type { GrabHistory } from "@/types";
+
+export function useHistory(limit = 100) {
+  return useQuery({
+    queryKey: ["history", limit],
+    queryFn: () => apiFetch<GrabHistory[]>(`/history?limit=${limit}`),
+    staleTime: 30_000,
+  });
+}

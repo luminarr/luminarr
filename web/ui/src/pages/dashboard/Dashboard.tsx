@@ -133,49 +133,6 @@ function PosterCard({ movie }: { movie: Movie }) {
           </div>
         )}
 
-        {/* Corner badge: on-disk (green ✓) or monitored+missing (orange dot) */}
-        <div style={{ position: "absolute", top: 6, right: 6 }}>
-          {onDisk ? (
-            <span
-              title="File on disk"
-              style={{
-                display: "inline-flex",
-                width: 18,
-                height: 18,
-                borderRadius: "50%",
-                background: "var(--color-success)",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: 10,
-                color: "white",
-                fontWeight: 700,
-                boxShadow: "0 1px 3px rgba(0,0,0,0.4)",
-              }}
-            >
-              ✓
-            </span>
-          ) : movie.monitored ? (
-            <span
-              title="Monitored — searching for releases"
-              style={{
-                display: "inline-flex",
-                width: 18,
-                height: 18,
-                borderRadius: "50%",
-                background: "var(--color-warning)",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: 9,
-                color: "white",
-                fontWeight: 700,
-                boxShadow: "0 1px 3px rgba(0,0,0,0.4)",
-              }}
-            >
-              ●
-            </span>
-          ) : null}
-        </div>
-
         {/* Hover overlay */}
         {hovered && (
           <div
@@ -273,6 +230,48 @@ function PosterCard({ movie }: { movie: Movie }) {
             )}
           </div>
         )}
+
+        {/* Corner badge — rendered after overlay so it sits on top of it.
+            pointerEvents:none so it doesn't block the overlay's click handler. */}
+        <div style={{ position: "absolute", top: 6, right: 6, pointerEvents: "none" }}>
+          {onDisk ? (
+            <span
+              style={{
+                display: "inline-flex",
+                width: 18,
+                height: 18,
+                borderRadius: "50%",
+                background: "var(--color-success)",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 10,
+                color: "white",
+                fontWeight: 700,
+                boxShadow: "0 1px 3px rgba(0,0,0,0.4)",
+              }}
+            >
+              ✓
+            </span>
+          ) : movie.monitored ? (
+            <span
+              style={{
+                display: "inline-flex",
+                width: 18,
+                height: 18,
+                borderRadius: "50%",
+                background: "var(--color-warning)",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 9,
+                color: "white",
+                fontWeight: 700,
+                boxShadow: "0 1px 3px rgba(0,0,0,0.4)",
+              }}
+            >
+              ●
+            </span>
+          ) : null}
+        </div>
       </div>
 
       {/* Card footer */}
@@ -1683,6 +1682,52 @@ export default function Dashboard() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Legend — only shown in grid view with at least one movie */}
+      {viewMode === "grid" && filtered.length > 0 && (
+        <div style={{ display: "flex", gap: 20, alignItems: "center" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <span
+              style={{
+                display: "inline-flex",
+                width: 14,
+                height: 14,
+                borderRadius: "50%",
+                background: "var(--color-success)",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 8,
+                color: "white",
+                fontWeight: 700,
+                flexShrink: 0,
+              }}
+            >
+              ✓
+            </span>
+            <span style={{ fontSize: 11, color: "var(--color-text-muted)" }}>On disk</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <span
+              style={{
+                display: "inline-flex",
+                width: 14,
+                height: 14,
+                borderRadius: "50%",
+                background: "var(--color-warning)",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 8,
+                color: "white",
+                fontWeight: 700,
+                flexShrink: 0,
+              }}
+            >
+              ●
+            </span>
+            <span style={{ fontSize: 11, color: "var(--color-text-muted)" }}>Monitored, missing</span>
+          </div>
         </div>
       )}
 

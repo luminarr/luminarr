@@ -295,7 +295,7 @@ func (c *Client) addTorrentURL(ctx context.Context, torrentURL string) (string, 
 // errMagnetRedirect instead of following it (Go's HTTP client cannot do so).
 func (c *Client) fetchURL(ctx context.Context, rawURL string) ([]byte, error) {
 	client := &http.Client{
-		Transport: safedialer.Transport(),
+		Transport: safedialer.LANTransport(),
 		Timeout:   30 * time.Second,
 		CheckRedirect: func(req *http.Request, _ []*http.Request) error {
 			if strings.HasPrefix(req.URL.String(), "magnet:") {

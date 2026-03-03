@@ -259,7 +259,7 @@ function IndexerModal({ editing, onClose }: ModalProps) {
                 onChange={(e) => set("api_key", e.currentTarget.value)}
                 onFocus={focusBorder}
                 onBlur={blurBorder}
-                placeholder={editing ? "enter new key to change, leave blank to clear" : "optional"}
+                placeholder={editing ? "leave blank to keep existing key" : "optional"}
                 autoComplete="new-password"
               />
               {editing && (

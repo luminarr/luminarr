@@ -61,7 +61,7 @@ func New(cfg Config) *Indexer {
 		cfg: cfg,
 		client: &http.Client{
 			Timeout:   30 * time.Second,
-			Transport: safedialer.Transport(),
+			Transport: safedialer.LANTransport(),
 		},
 	}
 }

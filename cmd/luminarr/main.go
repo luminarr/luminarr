@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/davidfic/luminarr/internal/api"
+	"github.com/davidfic/luminarr/internal/api/ws"
 	"github.com/davidfic/luminarr/internal/config"
 	"github.com/davidfic/luminarr/internal/core/downloader"
 	"github.com/davidfic/luminarr/internal/core/health"
@@ -185,6 +186,10 @@ func run() error {
 	// ── Event bus ─────────────────────────────────────────────────────────────
 	bus := events.New(logger)
 
+	// ── WebSocket hub ─────────────────────────────────────────────────────────
+	wsHub := ws.NewHub(cfg.Auth.APIKey.Value(), logger)
+	bus.Subscribe(wsHub.HandleEvent)
+
 	// ── Services ──────────────────────────────────────────────────────────────
 	queries := dbsqlite.New(database.SQL)
 
@@ -239,6 +244,7 @@ func run() error {
 		NotificationService: notifSvc,
 		HealthService:       healthSvc,
 		RadarrImportService: radarrImportSvc,
+		WSHub:               wsHub,
 	})
 
 	// ── HTTP server ───────────────────────────────────────────────────────────

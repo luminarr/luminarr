@@ -13,6 +13,7 @@ import (
 
 	"github.com/davidfic/luminarr/internal/api/middleware"
 	v1 "github.com/davidfic/luminarr/internal/api/v1"
+	"github.com/davidfic/luminarr/internal/api/ws"
 	"github.com/davidfic/luminarr/internal/config"
 	"github.com/davidfic/luminarr/internal/core/downloader"
 	"github.com/davidfic/luminarr/internal/core/health"
@@ -47,6 +48,7 @@ type RouterConfig struct {
 	NotificationService *notification.Service
 	HealthService       *health.Service
 	RadarrImportService *radarrimport.Service
+	WSHub               *ws.Hub
 }
 
 // NewRouter builds and returns the application HTTP handler.
@@ -59,6 +61,13 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	r.Use(middleware.MaxRequestBodySize(1 << 20)) // 1 MiB max request body
 	r.Use(middleware.RequestLogger(cfg.Logger))
 	r.Use(middleware.Recovery(cfg.Logger))
+
+	// WebSocket event stream — auth is handled inside the hub (query param ?key=).
+	// Must be registered on the raw chi router before huma takes over so the huma
+	// auth middleware does not intercept the upgrade request.
+	if cfg.WSHub != nil {
+		r.Get("/api/v1/ws", cfg.WSHub.ServeHTTP)
+	}
 
 	// Unauthenticated health check for load balancers / container probes.
 	r.Get("/health", func(w http.ResponseWriter, _ *http.Request) {
@@ -112,7 +121,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	}
 
 	if cfg.LibraryService != nil {
-		v1.RegisterLibraryRoutes(humaAPI, cfg.LibraryService)
+		v1.RegisterLibraryRoutes(humaAPI, cfg.LibraryService, cfg.MovieService)
 	}
 
 	if cfg.MovieService != nil {
@@ -122,6 +131,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	if cfg.IndexerService != nil {
 		v1.RegisterIndexerRoutes(humaAPI, cfg.IndexerService)
 		v1.RegisterReleaseRoutes(humaAPI, cfg.IndexerService, cfg.MovieService, cfg.DownloaderService, cfg.Logger)
+		v1.RegisterHistoryRoutes(humaAPI, cfg.IndexerService)
 	}
 
 	if cfg.DownloaderService != nil {

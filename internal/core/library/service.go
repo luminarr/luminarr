@@ -229,6 +229,28 @@ func (s *Service) Stats(ctx context.Context, id string) (Stats, error) {
 	}, nil
 }
 
+// ScanDisk walks the library's root path and returns video files that are not
+// yet tracked in the movie_files table. It is the read-only counterpart to
+// Scan — callers may use the result to let users select files for import.
+func (s *Service) ScanDisk(ctx context.Context, libraryID string) ([]DiskFile, error) {
+	lib, err := s.Get(ctx, libraryID)
+	if err != nil {
+		return nil, err
+	}
+
+	existingFiles, err := s.q.ListMovieFilesByLibrary(ctx, libraryID)
+	if err != nil {
+		return nil, fmt.Errorf("listing existing files for library %q: %w", libraryID, err)
+	}
+
+	knownPaths := make(map[string]bool, len(existingFiles))
+	for _, f := range existingFiles {
+		knownPaths[f.Path] = true
+	}
+
+	return scanDisk(lib.RootPath, knownPaths)
+}
+
 // Scan walks a library's root path and reconciles tracked movie files against
 // what is actually on disk:
 //
