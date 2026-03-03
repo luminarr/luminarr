@@ -34,13 +34,13 @@ var emptySanitizer SanitizerFunc = func(_ json.RawMessage) json.RawMessage {
 // Registry maps plugin kind strings to their factory functions.
 // Use Default for the application-wide singleton.
 type Registry struct {
-	mu                  sync.RWMutex
-	indexers            map[string]IndexerFactory
-	indexerSanitizers   map[string]SanitizerFunc
-	downloaders         map[string]DownloaderFactory
+	mu                   sync.RWMutex
+	indexers             map[string]IndexerFactory
+	indexerSanitizers    map[string]SanitizerFunc
+	downloaders          map[string]DownloaderFactory
 	downloaderSanitizers map[string]SanitizerFunc
-	notifiers           map[string]NotifierFactory
-	notifierSanitizers  map[string]SanitizerFunc
+	notifiers            map[string]NotifierFactory
+	notifierSanitizers   map[string]SanitizerFunc
 }
 
 // New returns an empty, ready-to-use Registry.

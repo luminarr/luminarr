@@ -282,8 +282,8 @@ func parseAgeDays(pubDate string) float64 {
 
 // rssResponse is the top-level RSS document returned by Torznab.
 type rssResponse struct {
-	XMLName xml.Name    `xml:"rss"`
-	Channel rssChannel  `xml:"channel"`
+	XMLName xml.Name   `xml:"rss"`
+	Channel rssChannel `xml:"channel"`
 }
 
 type rssChannel struct {
@@ -292,13 +292,13 @@ type rssChannel struct {
 
 // rssItem represents a single release entry in the Torznab RSS feed.
 type rssItem struct {
-	Title     string      `xml:"title"`
-	GUID      rssGUID     `xml:"guid"`
-	Link      string      `xml:"link"`
-	PubDate   string      `xml:"pubDate"`
-	Enclosure enclosure   `xml:"enclosure"`
+	Title     string    `xml:"title"`
+	GUID      rssGUID   `xml:"guid"`
+	Link      string    `xml:"link"`
+	PubDate   string    `xml:"pubDate"`
+	Enclosure enclosure `xml:"enclosure"`
 	// Torznab attributes use the namespace http://torznab.com/schemas/2015/feed.
-	Attrs     []torznabAttr `xml:"http://torznab.com/schemas/2015/feed attr"`
+	Attrs []torznabAttr `xml:"http://torznab.com/schemas/2015/feed attr"`
 }
 
 // rssGUID holds the guid element, which may carry an isPermaLink attribute.
@@ -322,8 +322,8 @@ type torznabAttr struct {
 
 // capsResponse is the top-level capabilities document.
 type capsResponse struct {
-	XMLName    xml.Name      `xml:"caps"`
-	Searching  capsSearching `xml:"searching"`
+	XMLName    xml.Name       `xml:"caps"`
+	Searching  capsSearching  `xml:"searching"`
 	Categories capsCategories `xml:"categories"`
 }
 

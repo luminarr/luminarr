@@ -49,7 +49,7 @@ func init() {
 // Config holds the user-supplied settings for an email notifier.
 type Config struct {
 	Host     string   `json:"host"`
-	Port     int      `json:"port"`               // default: 587
+	Port     int      `json:"port"` // default: 587
 	Username string   `json:"username,omitempty"`
 	Password string   `json:"password,omitempty"`
 	From     string   `json:"from"`

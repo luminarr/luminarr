@@ -92,4 +92,3 @@ func subscribesTo(onEventsJSON string, eventType string) bool {
 	}
 	return false
 }
-

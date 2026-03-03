@@ -4,9 +4,10 @@ import (
 	"database/sql"
 	"testing"
 
+	_ "modernc.org/sqlite"
+
 	"github.com/davidfic/luminarr/internal/db"
 	dbsqlite "github.com/davidfic/luminarr/internal/db/generated/sqlite"
-	_ "modernc.org/sqlite"
 )
 
 const testDSN = ":memory:?_foreign_keys=ON"

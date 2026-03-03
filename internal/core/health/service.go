@@ -40,10 +40,10 @@ type Report struct {
 
 // Service runs health checks against the system's subsystems.
 type Service struct {
-	libSvc  *library.Service
-	dlSvc   *downloader.Service
-	idxSvc  *indexer.Service
-	logger  *slog.Logger
+	libSvc *library.Service
+	dlSvc  *downloader.Service
+	idxSvc *indexer.Service
+	logger *slog.Logger
 }
 
 // NewService creates a new health Service.

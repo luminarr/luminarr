@@ -47,9 +47,9 @@ func init() {
 
 // Config holds the connection settings for a Deluge Web UI instance.
 type Config struct {
-	URL      string `json:"url"`               // e.g. "http://localhost:8112"
-	Password string `json:"password"`          // Web UI password (default: "deluge")
-	Label    string `json:"label,omitempty"`   // label/category applied to added torrents
+	URL      string `json:"url"`                 // e.g. "http://localhost:8112"
+	Password string `json:"password"`            // Web UI password (default: "deluge")
+	Label    string `json:"label,omitempty"`     // label/category applied to added torrents
 	SavePath string `json:"save_path,omitempty"` // custom save path (empty = Deluge default)
 }
 
@@ -71,7 +71,7 @@ func New(cfg Config) *Client {
 	}
 }
 
-func (c *Client) Name() string             { return "Deluge" }
+func (c *Client) Name() string              { return "Deluge" }
 func (c *Client) Protocol() plugin.Protocol { return plugin.ProtocolTorrent }
 
 // Test verifies connectivity and authentication.

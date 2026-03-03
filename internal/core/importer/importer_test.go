@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/davidfic/luminarr/internal/core/importer"
 	dbsqlite "github.com/davidfic/luminarr/internal/db/generated/sqlite"
 	"github.com/davidfic/luminarr/internal/events"
-	"github.com/davidfic/luminarr/internal/core/importer"
 	"github.com/davidfic/luminarr/internal/logging"
 )
 

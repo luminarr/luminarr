@@ -22,8 +22,8 @@ import (
 
 // PreviewResult summarises what would be imported from a Radarr instance.
 type PreviewResult struct {
-	Version         string          `json:"version"`
-	MovieCount      int             `json:"movie_count"`
+	Version         string           `json:"version"`
+	MovieCount      int              `json:"movie_count"`
 	QualityProfiles []ProfilePreview `json:"quality_profiles"`
 	RootFolders     []FolderPreview  `json:"root_folders"`
 	Indexers        []IndexerPreview `json:"indexers"`

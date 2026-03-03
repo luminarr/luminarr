@@ -33,15 +33,14 @@ func q2160pWEB() plugin.Quality {
 	return plugin.Quality{Resolution: plugin.Resolution2160p, Source: plugin.SourceWEBDL, Codec: plugin.CodecX265}
 }
 
-
 func ptr(q plugin.Quality) *plugin.Quality { return &q }
 
 // standardProfile builds a typical HD profile: accepts 720p WEB through
 // 1080p Remux, cutoff at 1080p WEB-DL, upgrades allowed up to 1080p Remux.
 func standardProfile(upgradeAllowed bool, upgradeUntil *plugin.Quality) *quality.Profile {
 	return &quality.Profile{
-		ID:   "hd",
-		Name: "HD",
+		ID:     "hd",
+		Name:   "HD",
 		Cutoff: q1080pWEB(),
 		Qualities: []plugin.Quality{
 			q1080pRemux(),
@@ -176,15 +175,15 @@ func TestWantRelease(t *testing.T) {
 			want:           false,
 		},
 		{
-			name:    "upgrade ceiling reached, current exceeds ceiling → no grab",
-			profile: standardProfile(true, ptr(q1080pBluRay())),
+			name:           "upgrade ceiling reached, current exceeds ceiling → no grab",
+			profile:        standardProfile(true, ptr(q1080pBluRay())),
 			releaseQuality: q1080pRemux(),
 			currentFile:    ptr(q1080pRemux()),
 			want:           false,
 		},
 		{
-			name:    "upgrade ceiling not reached, release at ceiling → grab",
-			profile: standardProfile(true, ptr(q1080pRemux())),
+			name:           "upgrade ceiling not reached, release at ceiling → grab",
+			profile:        standardProfile(true, ptr(q1080pRemux())),
 			releaseQuality: q1080pRemux(),
 			currentFile:    ptr(q1080pWEB()),
 			want:           true,

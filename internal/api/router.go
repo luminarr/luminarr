@@ -30,23 +30,23 @@ import (
 
 // RouterConfig holds everything the router needs to function.
 type RouterConfig struct {
-	Auth              config.Secret
-	Logger            *slog.Logger
-	StartTime         time.Time
-	DBType            string
-	DBPath            string
-	ConfigFile        string
-	AIEnabled         bool
-	QualityService    *quality.Service
-	LibraryService    *library.Service
-	MovieService      *movie.Service
-	IndexerService    *indexer.Service
-	DownloaderService *downloader.Service
-	QueueService         *queue.Service
-	Scheduler            *scheduler.Scheduler
-	NotificationService  *notification.Service
-	HealthService        *health.Service
-	RadarrImportService  *radarrimport.Service
+	Auth                config.Secret
+	Logger              *slog.Logger
+	StartTime           time.Time
+	DBType              string
+	DBPath              string
+	ConfigFile          string
+	AIEnabled           bool
+	QualityService      *quality.Service
+	LibraryService      *library.Service
+	MovieService        *movie.Service
+	IndexerService      *indexer.Service
+	DownloaderService   *downloader.Service
+	QueueService        *queue.Service
+	Scheduler           *scheduler.Scheduler
+	NotificationService *notification.Service
+	HealthService       *health.Service
+	RadarrImportService *radarrimport.Service
 }
 
 // NewRouter builds and returns the application HTTP handler.

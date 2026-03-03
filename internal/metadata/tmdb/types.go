@@ -6,9 +6,9 @@ type SearchResult struct {
 	Title         string
 	OriginalTitle string
 	Overview      string
-	ReleaseDate   string  // "YYYY-MM-DD" or empty
-	Year          int     // parsed from ReleaseDate; 0 if unavailable
-	PosterPath    string  // TMDB path; prefix with image base URL before use
+	ReleaseDate   string // "YYYY-MM-DD" or empty
+	Year          int    // parsed from ReleaseDate; 0 if unavailable
+	PosterPath    string // TMDB path; prefix with image base URL before use
 	BackdropPath  string
 	Popularity    float64
 }
@@ -21,7 +21,7 @@ type MovieDetail struct {
 	OriginalTitle  string
 	Overview       string
 	ReleaseDate    string
-	Year           int    // parsed from ReleaseDate; 0 if unavailable
+	Year           int // parsed from ReleaseDate; 0 if unavailable
 	RuntimeMinutes int
 	Genres         []string
 	PosterPath     string

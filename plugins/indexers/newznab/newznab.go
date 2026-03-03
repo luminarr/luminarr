@@ -261,11 +261,11 @@ type rssChannel struct {
 
 // rssItem represents a single release entry in the Newznab RSS feed.
 type rssItem struct {
-	Title     string      `xml:"title"`
-	GUID      rssGUID     `xml:"guid"`
-	Link      string      `xml:"link"`
-	PubDate   string      `xml:"pubDate"`
-	Enclosure enclosure   `xml:"enclosure"`
+	Title     string    `xml:"title"`
+	GUID      rssGUID   `xml:"guid"`
+	Link      string    `xml:"link"`
+	PubDate   string    `xml:"pubDate"`
+	Enclosure enclosure `xml:"enclosure"`
 	// Newznab attributes use the namespace http://www.newznab.com/DTD/2010/feeds/attributes/.
 	Attrs []newznabAttr `xml:"http://www.newznab.com/DTD/2010/feeds/attributes/ attr"`
 }

@@ -17,7 +17,7 @@ type DownloadClient struct {
 	Calls []string
 }
 
-func (m *DownloadClient) Name() string             { return "MockDownloadClient" }
+func (m *DownloadClient) Name() string              { return "MockDownloadClient" }
 func (m *DownloadClient) Protocol() plugin.Protocol { return plugin.ProtocolTorrent }
 
 func (m *DownloadClient) Add(ctx context.Context, r plugin.Release) (string, error) {

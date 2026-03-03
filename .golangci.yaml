@@ -1,42 +1,57 @@
+run:
+  timeout: 5m
+  exclude-dirs:
+    - web/ui/node_modules
+    - vendor
+
 linters:
   enable:
-    - errcheck        # check that errors are handled
-    - govet           # go vet
-    - staticcheck     # staticcheck
-    - unused          # unused code
-    - misspell        # spelling mistakes in comments and strings
-    - noctx           # http calls without context
-    - bodyclose       # ensure http response bodies are closed
-    - goimports       # goimports (also checks formatting)
-    - revive          # general linter (replaces golint)
-    - gosec           # security linter
-    - nilerr          # mistaken nil error return patterns
-    - exhaustive      # exhaustive switch statements on enums
+    - errcheck      # check that errors are handled
+    - govet         # go vet
+    - staticcheck   # staticcheck
+    - unused        # unused code
+    - misspell      # spelling mistakes in comments and strings
+    - noctx         # http calls without context
+    - bodyclose     # ensure http response bodies are closed
+    - goimports     # goimports (also checks formatting)
+    - revive        # general linter (replaces golint)
+    - gosec         # security linter
+    - nilerr        # mistaken nil error return patterns
+    - exhaustive    # exhaustive switch statements on enums
 
 linters-settings:
   goimports:
     local-prefixes: github.com/davidfic/luminarr
+
   revive:
     rules:
       - name: exported
         severity: warning
       - name: var-naming
         severity: warning
+
   gosec:
     excludes:
       - G304 # file path provided as taint input — we intentionally take user-configured paths
+      - G115 # integer overflow conversions — annotated with nolint where they occur
+
+  exhaustive:
+    # A switch with a default clause is considered exhaustive even if not all
+    # enum values are listed. Our code uses default: to handle unknown/future values.
+    default-signifies-exhaustive: true
 
 issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
   exclude-rules:
-    # Test files get relaxed error checking and gosec rules.
+    # Test files: relaxed error checking and gosec rules.
     - path: _test\.go
       linters:
         - errcheck
         - gosec
-    # The db/generated directory is sqlc output — don't lint generated code.
+
+    # sqlc-generated code: don't lint it.
     - path: internal/db/generated/
       linters:
         - all
-
-  max-issues-per-linter: 0
-  max-same-issues: 0

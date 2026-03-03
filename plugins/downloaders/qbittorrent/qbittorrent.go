@@ -47,7 +47,7 @@ func init() {
 
 // Config holds the connection settings for a qBittorrent instance.
 type Config struct {
-	URL      string `json:"url"`                // e.g. "http://localhost:8080"
+	URL      string `json:"url"` // e.g. "http://localhost:8080"
 	Username string `json:"username"`
 	Password string `json:"password"`
 	Category string `json:"category,omitempty"` // label applied to added torrents
@@ -80,7 +80,7 @@ func NewWithHTTPClient(cfg Config, client *http.Client) *Client {
 	return &Client{cfg: cfg, http: client}
 }
 
-func (c *Client) Name() string             { return "qBittorrent" }
+func (c *Client) Name() string              { return "qBittorrent" }
 func (c *Client) Protocol() plugin.Protocol { return plugin.ProtocolTorrent }
 
 // Test verifies connectivity and authentication to the qBittorrent instance.
@@ -548,8 +548,8 @@ func base32Decode(s string) ([]byte, error) {
 		bits += 5
 		if bits >= 8 {
 			bits -= 8
-			out = append(out, byte(buf>>uint(bits)))    //nolint:gosec // G115: bits is 0-7 after subtraction, safe
-			buf &= (1 << uint(bits)) - 1                //nolint:gosec // G115: bits is 0-7, safe
+			out = append(out, byte(buf>>uint(bits))) //nolint:gosec // G115: bits is 0-7 after subtraction, safe
+			buf &= (1 << uint(bits)) - 1             //nolint:gosec // G115: bits is 0-7, safe
 		}
 	}
 	return out, nil

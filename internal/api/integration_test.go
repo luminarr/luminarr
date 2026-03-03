@@ -63,7 +63,7 @@ func registerTestPlugins(reg *registry.Registry) {
 type testIndexer struct{}
 
 func (m *testIndexer) Name() string              { return "test-indexer" }
-func (m *testIndexer) Protocol() plugin.Protocol  { return plugin.ProtocolTorrent }
+func (m *testIndexer) Protocol() plugin.Protocol { return plugin.ProtocolTorrent }
 func (m *testIndexer) Capabilities(_ context.Context) (plugin.Capabilities, error) {
 	return plugin.Capabilities{SearchAvailable: true, MovieSearch: true}, nil
 }

@@ -14,11 +14,11 @@ import (
 )
 
 const (
-	DefaultHost         = "0.0.0.0"
-	DefaultPort         = 8282
-	DefaultDBDriver     = "sqlite"
-	DefaultLogLevel     = "info"
-	DefaultLogFormat    = "json"
+	DefaultHost          = "0.0.0.0"
+	DefaultPort          = 8282
+	DefaultDBDriver      = "sqlite"
+	DefaultLogLevel      = "info"
+	DefaultLogFormat     = "json"
 	DefaultAIMatchModel  = "claude-sonnet-4-6"
 	DefaultAIScoreModel  = "claude-haiku-4-5-20251001"
 	DefaultAIFilterModel = "claude-haiku-4-5-20251001"

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
+
 	"github.com/davidfic/luminarr/internal/config"
 	"github.com/davidfic/luminarr/internal/core/movie"
 	"github.com/davidfic/luminarr/internal/metadata/tmdb"

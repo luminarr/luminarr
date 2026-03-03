@@ -57,9 +57,9 @@ type SearchResult struct {
 
 // Service manages indexer configuration and search orchestration.
 type Service struct {
-	q        dbsqlite.Querier
-	reg      *registry.Registry
-	bus      *events.Bus
+	q   dbsqlite.Querier
+	reg *registry.Registry
+	bus *events.Bus
 }
 
 // NewService creates a new Service.

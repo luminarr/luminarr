@@ -20,7 +20,7 @@ type Indexer struct {
 	Calls []string
 }
 
-func (m *Indexer) Name() string             { return "MockIndexer" }
+func (m *Indexer) Name() string              { return "MockIndexer" }
 func (m *Indexer) Protocol() plugin.Protocol { return plugin.ProtocolTorrent }
 
 func (m *Indexer) Capabilities(ctx context.Context) (plugin.Capabilities, error) {

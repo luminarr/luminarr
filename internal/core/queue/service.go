@@ -17,16 +17,16 @@ import (
 // Item is the queue-service view of an active download, enriching the raw
 // plugin.QueueItem with grab_history context.
 type Item struct {
-	GrabID          string
-	MovieID         string
-	ReleaseTitle    string
-	Protocol        string
-	Size            int64
-	DownloadedBytes int64
-	Status          string
-	ClientItemID    string
+	GrabID           string
+	MovieID          string
+	ReleaseTitle     string
+	Protocol         string
+	Size             int64
+	DownloadedBytes  int64
+	Status           string
+	ClientItemID     string
 	DownloadClientID string
-	GrabbedAt       time.Time
+	GrabbedAt        time.Time
 }
 
 // DownloaderClient is the minimal interface the queue service needs from the
@@ -60,14 +60,14 @@ func (s *Service) GetQueue(ctx context.Context) ([]Item, error) {
 	for _, g := range grabs {
 		grabbedAt, _ := time.Parse(time.RFC3339, g.GrabbedAt)
 		item := Item{
-			GrabID:       g.ID,
-			MovieID:      g.MovieID,
-			ReleaseTitle: g.ReleaseTitle,
-			Protocol:     g.Protocol,
-			Size:         g.Size,
+			GrabID:          g.ID,
+			MovieID:         g.MovieID,
+			ReleaseTitle:    g.ReleaseTitle,
+			Protocol:        g.Protocol,
+			Size:            g.Size,
 			DownloadedBytes: g.DownloadedBytes,
-			Status:       g.DownloadStatus,
-			GrabbedAt:    grabbedAt,
+			Status:          g.DownloadStatus,
+			GrabbedAt:       grabbedAt,
 		}
 		if g.ClientItemID != nil {
 			item.ClientItemID = *g.ClientItemID
@@ -221,5 +221,7 @@ func (s *Service) fireTransitionEvent(ctx context.Context, g dbsqlite.GrabHistor
 			"movie_id", g.MovieID,
 			"release", g.ReleaseTitle,
 		)
+	default:
+		// StatusQueued, StatusDownloading, StatusPaused — no event to fire.
 	}
 }

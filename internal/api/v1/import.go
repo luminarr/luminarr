@@ -24,8 +24,8 @@ type radarrPreviewOutput struct {
 
 type radarrExecuteInput struct {
 	Body struct {
-		URL     string                    `json:"url"     doc:"Radarr base URL"`
-		APIKey  string                    `json:"api_key" doc:"Radarr API key"`
+		URL     string                     `json:"url"     doc:"Radarr base URL"`
+		APIKey  string                     `json:"api_key" doc:"Radarr API key"`
 		Options radarrimport.ImportOptions `json:"options" doc:"Which categories to import"`
 	}
 }

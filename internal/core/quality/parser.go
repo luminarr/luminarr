@@ -178,6 +178,7 @@ func parseCodec(norm string) plugin.Codec {
 //	"DVD-SD XviD"
 //	"CAM x264"
 //	"Telecine"
+//
 // BuildName constructs the human-readable quality label from its components.
 // Other packages (e.g. importer) use this to reconstruct a quality name from
 // the fields stored in grab_history.

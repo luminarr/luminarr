@@ -65,7 +65,6 @@ type libraryScanInput struct {
 
 type libraryScanOutput struct{}
 
-
 // Huma request wrappers.
 type libraryCreateInput struct {
 	Body libraryInput

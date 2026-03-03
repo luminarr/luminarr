@@ -13,10 +13,10 @@ import (
 )
 
 const (
-	defaultBaseURL   = "https://api.themoviedb.org/3"
-	httpTimeout      = 30 * time.Second
-	userAgent        = "Luminarr/0.1.0"
-	redactedAPIKey   = "***"
+	defaultBaseURL = "https://api.themoviedb.org/3"
+	httpTimeout    = 30 * time.Second
+	userAgent      = "Luminarr/0.1.0"
+	redactedAPIKey = "***"
 )
 
 // Client is a TMDB API v3 HTTP client.

@@ -41,7 +41,7 @@ func init() {
 // Config holds the user-supplied settings for a Discord notifier.
 type Config struct {
 	WebhookURL string `json:"webhook_url"`
-	Username   string `json:"username,omitempty"`  // override webhook display name
+	Username   string `json:"username,omitempty"`   // override webhook display name
 	AvatarURL  string `json:"avatar_url,omitempty"` // override webhook avatar
 }
 
@@ -66,15 +66,15 @@ func (n *Notifier) Name() string { return "Discord" }
 
 // discordPayload is the JSON structure Discord's webhook API accepts.
 type discordPayload struct {
-	Username  string          `json:"username,omitempty"`
-	AvatarURL string          `json:"avatar_url,omitempty"`
-	Embeds    []discordEmbed  `json:"embeds"`
+	Username  string         `json:"username,omitempty"`
+	AvatarURL string         `json:"avatar_url,omitempty"`
+	Embeds    []discordEmbed `json:"embeds"`
 }
 
 type discordEmbed struct {
 	Title       string `json:"title"`
 	Description string `json:"description,omitempty"`
-	Color       int    `json:"color"` // decimal RGB
+	Color       int    `json:"color"`               // decimal RGB
 	Timestamp   string `json:"timestamp,omitempty"` // ISO 8601
 }
 
@@ -103,10 +103,10 @@ func (n *Notifier) Notify(ctx context.Context, event plugin.NotificationEvent) e
 		AvatarURL: n.cfg.AvatarURL,
 		Embeds: []discordEmbed{
 			{
-				Title:     fmt.Sprintf("[Luminarr] %s", event.Type),
+				Title:       fmt.Sprintf("[Luminarr] %s", event.Type),
 				Description: event.Message,
-				Color:     colorForEvent(event.Type),
-				Timestamp: event.Timestamp.UTC().Format(time.RFC3339),
+				Color:       colorForEvent(event.Type),
+				Timestamp:   event.Timestamp.UTC().Format(time.RFC3339),
 			},
 		},
 	}

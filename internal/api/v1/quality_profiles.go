@@ -14,20 +14,20 @@ import (
 // ── Request / response shapes ────────────────────────────────────────────────
 
 type qualityProfileBody struct {
-	ID             string          `json:"id"              doc:"Profile UUID"`
-	Name           string          `json:"name"            doc:"Human-readable profile name"`
-	Cutoff         plugin.Quality  `json:"cutoff"          doc:"Minimum acceptable quality"`
+	ID             string           `json:"id"              doc:"Profile UUID"`
+	Name           string           `json:"name"            doc:"Human-readable profile name"`
+	Cutoff         plugin.Quality   `json:"cutoff"          doc:"Minimum acceptable quality"`
 	Qualities      []plugin.Quality `json:"qualities"       doc:"Ordered list of accepted qualities"`
-	UpgradeAllowed bool            `json:"upgrade_allowed" doc:"Whether upgrades are permitted"`
-	UpgradeUntil   *plugin.Quality `json:"upgrade_until,omitempty" doc:"Quality ceiling for upgrades"`
+	UpgradeAllowed bool             `json:"upgrade_allowed" doc:"Whether upgrades are permitted"`
+	UpgradeUntil   *plugin.Quality  `json:"upgrade_until,omitempty" doc:"Quality ceiling for upgrades"`
 }
 
 type qualityProfileInput struct {
-	Name           string          `json:"name"            doc:"Human-readable profile name"`
-	Cutoff         plugin.Quality  `json:"cutoff"          doc:"Minimum acceptable quality"`
+	Name           string           `json:"name"            doc:"Human-readable profile name"`
+	Cutoff         plugin.Quality   `json:"cutoff"          doc:"Minimum acceptable quality"`
 	Qualities      []plugin.Quality `json:"qualities"       doc:"Ordered list of accepted qualities"`
-	UpgradeAllowed bool            `json:"upgrade_allowed" doc:"Whether upgrades are permitted"`
-	UpgradeUntil   *plugin.Quality `json:"upgrade_until,omitempty" doc:"Quality ceiling for upgrades"`
+	UpgradeAllowed bool             `json:"upgrade_allowed" doc:"Whether upgrades are permitted"`
+	UpgradeUntil   *plugin.Quality  `json:"upgrade_until,omitempty" doc:"Quality ceiling for upgrades"`
 }
 
 // Single-item output.

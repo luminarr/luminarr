@@ -17,10 +17,10 @@ import (
 
 	"github.com/google/uuid"
 
-	dbsqlite "github.com/davidfic/luminarr/internal/db/generated/sqlite"
-	"github.com/davidfic/luminarr/internal/events"
 	"github.com/davidfic/luminarr/internal/core/quality"
 	"github.com/davidfic/luminarr/internal/core/renamer"
+	dbsqlite "github.com/davidfic/luminarr/internal/db/generated/sqlite"
+	"github.com/davidfic/luminarr/internal/events"
 	"github.com/davidfic/luminarr/pkg/plugin"
 )
 
@@ -263,7 +263,7 @@ func resolveSourceFile(contentPath string) (string, error) {
 		}
 		fi, err := d.Info()
 		if err != nil {
-			return nil
+			return err
 		}
 		candidates = append(candidates, candidate{path: path, size: fi.Size()})
 		return nil

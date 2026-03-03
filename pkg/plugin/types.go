@@ -17,17 +17,17 @@ type Resolution string
 
 const (
 	ResolutionUnknown Resolution = "unknown"
-	ResolutionSD       Resolution = "sd"      // 480p and below
-	Resolution720p     Resolution = "720p"
-	Resolution1080p    Resolution = "1080p"
-	Resolution2160p    Resolution = "2160p"   // 4K
+	ResolutionSD      Resolution = "sd" // 480p and below
+	Resolution720p    Resolution = "720p"
+	Resolution1080p   Resolution = "1080p"
+	Resolution2160p   Resolution = "2160p" // 4K
 )
 
 // Source is the origin/format of a release.
 type Source string
 
 const (
-	SourceUnknown Source = "unknown"
+	SourceUnknown  Source = "unknown"
 	SourceCAM      Source = "cam"
 	SourceTELECINE Source = "telecine"
 	SourceDVD      Source = "dvd"
