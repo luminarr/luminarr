@@ -436,9 +436,21 @@ function DiskScanModal({ library, onClose }: DiskScanModalProps) {
   useEffect(() => {
     if (!diskFiles) return;
     setRows((prev) => {
-      const next = new Map(prev);
+      const next = new Map<string, FileRowState>();
+
+      // Always keep imported rows — they should remain visible with "✓ Imported".
+      for (const [path, row] of prev) {
+        if (row.imported) next.set(path, row);
+      }
+
+      // Sync with the current candidate list: add new files, preserve existing
+      // row state (user's match selections etc.), drop rows no longer present.
       for (const f of diskFiles) {
-        if (!next.has(f.path)) {
+        if (next.has(f.path)) continue; // already kept as imported
+        const existing = prev.get(f.path);
+        if (existing) {
+          next.set(f.path, existing); // preserve match/selected state
+        } else {
           const preMatch = dbMatchToResult(f.tmdb_match);
           next.set(f.path, {
             file: f,
@@ -454,6 +466,7 @@ function DiskScanModal({ library, onClose }: DiskScanModalProps) {
           });
         }
       }
+
       return next;
     });
   }, [diskFiles]);
