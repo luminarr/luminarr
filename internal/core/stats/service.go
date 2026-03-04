@@ -68,7 +68,7 @@ type CutoffCounter interface {
 
 // Service provides library statistics.
 type Service struct {
-	q            dbsqlite.Querier
+	q             dbsqlite.Querier
 	cutoffCounter cutoffUnmetLister
 }
 
