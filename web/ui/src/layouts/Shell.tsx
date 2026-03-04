@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { NavLink, Outlet, useLocation } from "react-router-dom";
+import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import {
   LayoutDashboard,
   Film,
@@ -172,35 +172,40 @@ function Sidebar({
           flexShrink: 0,
         }}
       >
-        <div
-          style={{
-            width: 32,
-            height: 32,
-            borderRadius: "8px",
-            background: "var(--color-accent)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            flexShrink: 0,
-          }}
+        <Link
+          to="/"
+          style={{ display: "flex", alignItems: "center", textDecoration: "none" }}
         >
-          <Film size={18} color="white" strokeWidth={2} />
-        </div>
-        {(!collapsed || isMobile) && (
-          <span
+          <div
             style={{
-              marginLeft: "10px",
-              fontSize: "16px",
-              fontWeight: 700,
-              color: "var(--color-text-primary)",
-              letterSpacing: "-0.01em",
-              whiteSpace: "nowrap",
-              flex: 1,
+              width: 32,
+              height: 32,
+              borderRadius: "8px",
+              background: "var(--color-accent)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
             }}
           >
-            Luminarr
-          </span>
-        )}
+            <Film size={18} color="white" strokeWidth={2} />
+          </div>
+          {(!collapsed || isMobile) && (
+            <span
+              style={{
+                marginLeft: "10px",
+                fontSize: "16px",
+                fontWeight: 700,
+                color: "var(--color-text-primary)",
+                letterSpacing: "-0.01em",
+                whiteSpace: "nowrap",
+                flex: 1,
+              }}
+            >
+              Luminarr
+            </span>
+          )}
+        </Link>
         {isMobile && (
           <button
             onClick={onClose}
@@ -417,29 +422,34 @@ export function Shell() {
             >
               <Menu size={20} />
             </button>
-            <div
-              style={{
-                width: 24,
-                height: 24,
-                borderRadius: "6px",
-                background: "var(--color-accent)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
+            <Link
+              to="/"
+              style={{ display: "flex", alignItems: "center", gap: 8, textDecoration: "none" }}
             >
-              <Film size={14} color="white" strokeWidth={2} />
-            </div>
-            <span
-              style={{
-                fontSize: "15px",
-                fontWeight: 700,
-                color: "var(--color-text-primary)",
-                letterSpacing: "-0.01em",
-              }}
-            >
-              Luminarr
-            </span>
+              <div
+                style={{
+                  width: 24,
+                  height: 24,
+                  borderRadius: "6px",
+                  background: "var(--color-accent)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Film size={14} color="white" strokeWidth={2} />
+              </div>
+              <span
+                style={{
+                  fontSize: "15px",
+                  fontWeight: 700,
+                  color: "var(--color-text-primary)",
+                  letterSpacing: "-0.01em",
+                }}
+              >
+                Luminarr
+              </span>
+            </Link>
           </div>
         )}
 
