@@ -623,10 +623,13 @@ func (s *Service) SuggestMatches(ctx context.Context, id string) ([]tmdb.SearchR
 		return nil, ParsedFilename{}, ErrTMDBNotConfigured
 	}
 
-	// Use the file path if available (richer signal); fall back to stored title.
+	// Use the actual video file path if one is attached (richer signal than the
+	// stored title).  m.Path is the movie *directory*, not the filename, so we
+	// query movie_files instead.  Fall back to m.Title (the raw filename stem
+	// stored at import time) if no file record exists yet.
 	source := m.Title
-	if m.Path != "" {
-		source = m.Path
+	if files, ferr := s.ListFiles(ctx, id); ferr == nil && len(files) > 0 {
+		source = files[0].Path
 	}
 	parsed := ParseFilename(source)
 
