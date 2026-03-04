@@ -277,12 +277,25 @@ func TestIntegration_QualityProfiles_CRUD(t *testing.T) {
 func TestIntegration_Libraries_CRUD(t *testing.T) {
 	h := newIntegrationRouter(t)
 
-	// Create requires a quality profile ID; any non-empty string is accepted —
-	// the library service does not validate existence against the DB.
+	// Create a quality profile first — the libraries table has a FK constraint
+	// on default_quality_profile_id (added in migration 00010).
+	qpRec := do(t, h, http.MethodPost, "/api/v1/quality-profiles", map[string]any{
+		"name":            "Test Profile",
+		"cutoff":          qualityBody("1080p", "webdl", "x264", "none", "WEBDL-1080p"),
+		"qualities":       []map[string]any{qualityBody("1080p", "webdl", "x264", "none", "WEBDL-1080p")},
+		"upgrade_allowed": false,
+	})
+	if qpRec.Code != http.StatusCreated {
+		t.Fatalf("POST /api/v1/quality-profiles = %d; body: %s", qpRec.Code, qpRec.Body)
+	}
+	var qp map[string]any
+	mustDecode(t, qpRec, &qp)
+	profileID, _ := qp["id"].(string)
+
 	rec := do(t, h, http.MethodPost, "/api/v1/libraries", map[string]any{
 		"name":                       "Movies",
 		"root_path":                  "/movies",
-		"default_quality_profile_id": "any-profile-id",
+		"default_quality_profile_id": profileID,
 		"min_free_space_gb":          10,
 		"tags":                       []string{},
 	})

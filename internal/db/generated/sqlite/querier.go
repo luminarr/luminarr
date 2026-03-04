@@ -63,6 +63,7 @@ type Querier interface {
 	ListMovies(ctx context.Context, arg ListMoviesParams) ([]Movie, error)
 	ListMoviesByLibrary(ctx context.Context, arg ListMoviesByLibraryParams) ([]Movie, error)
 	ListNotificationConfigs(ctx context.Context) ([]NotificationConfig, error)
+	ListQualityDefinitions(ctx context.Context) ([]QualityDefinition, error)
 	ListQualityProfiles(ctx context.Context) ([]QualityProfile, error)
 	MarkGrabRemoved(ctx context.Context, id string) error
 	QualityProfileInUse(ctx context.Context, arg QualityProfileInUseParams) (int64, error)
@@ -79,6 +80,7 @@ type Querier interface {
 	UpdateMovieStatus(ctx context.Context, arg UpdateMovieStatusParams) (Movie, error)
 	UpdateMovieTMDBID(ctx context.Context, arg UpdateMovieTMDBIDParams) error
 	UpdateNotificationConfig(ctx context.Context, arg UpdateNotificationConfigParams) (NotificationConfig, error)
+	UpdateQualityDefinitionSizes(ctx context.Context, arg UpdateQualityDefinitionSizesParams) error
 	UpdateQualityProfile(ctx context.Context, arg UpdateQualityProfileParams) (QualityProfile, error)
 }
 

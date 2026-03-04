@@ -6,8 +6,10 @@ import (
 	"log/slog"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/davidfic/luminarr/internal/core/movie"
+	dbsqlite "github.com/davidfic/luminarr/internal/db/generated/sqlite"
 	"github.com/davidfic/luminarr/internal/events"
 	"github.com/davidfic/luminarr/internal/metadata/tmdb"
 	"github.com/davidfic/luminarr/internal/testutil"
@@ -31,12 +33,49 @@ func (m *mockTMDB) GetMovie(_ context.Context, _ int) (*tmdb.MovieDetail, error)
 
 // ── Test helpers ─────────────────────────────────────────────────────────────
 
-func newTestService(t *testing.T, meta movie.MetadataProvider) *movie.Service {
+func newTestService(t *testing.T, meta movie.MetadataProvider) (*movie.Service, *dbsqlite.Queries) {
 	t.Helper()
 	q := testutil.NewTestDB(t)
 	bus := events.New(slog.New(slog.NewTextHandler(os.Stderr, nil)))
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
-	return movie.NewService(q, meta, bus, logger)
+	return movie.NewService(q, meta, bus, logger), q
+}
+
+// seedTestFixtures creates the FK prerequisites (quality profile + library)
+// required by the movies table since migration 00010 added REFERENCES constraints.
+// Returns the libraryID and profileID to use when adding movies.
+func seedTestFixtures(t *testing.T, q *dbsqlite.Queries) (libraryID, profileID string) {
+	t.Helper()
+	ctx := context.Background()
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	qp, err := q.CreateQualityProfile(ctx, dbsqlite.CreateQualityProfileParams{
+		ID:            "qp-test",
+		Name:          "Test Profile",
+		CutoffJson:    `{}`,
+		QualitiesJson: `[]`,
+		CreatedAt:     now,
+		UpdatedAt:     now,
+	})
+	if err != nil {
+		t.Fatalf("seedTestFixtures: CreateQualityProfile: %v", err)
+	}
+
+	lib, err := q.CreateLibrary(ctx, dbsqlite.CreateLibraryParams{
+		ID:                      "lib-test",
+		Name:                    "Test Library",
+		RootPath:                "/test",
+		DefaultQualityProfileID: qp.ID,
+		MinFreeSpaceGb:          0,
+		TagsJson:                "[]",
+		CreatedAt:               now,
+		UpdatedAt:               now,
+	})
+	if err != nil {
+		t.Fatalf("seedTestFixtures: CreateLibrary: %v", err)
+	}
+
+	return lib.ID, qp.ID
 }
 
 func sampleDetail() *tmdb.MovieDetail {
@@ -76,15 +115,13 @@ func addTestMovie(t *testing.T, svc *movie.Service, libraryID, profileID string)
 func TestAdd_Success(t *testing.T) {
 	detail := sampleDetail()
 	meta := &mockTMDB{movieDetail: detail}
-	svc := newTestService(t, meta)
+	svc, q := newTestService(t, meta)
+	libID, profID := seedTestFixtures(t, q)
 
-	// The DB has FK enforcement on but the library_id and quality_profile_id
-	// columns are plain strings with no FK constraint in the schema, so we
-	// can use arbitrary values.
 	m, err := svc.Add(context.Background(), movie.AddRequest{
 		TMDBID:           550,
-		LibraryID:        "lib-1",
-		QualityProfileID: "qp-1",
+		LibraryID:        libID,
+		QualityProfileID: profID,
 		Monitored:        true,
 	})
 	if err != nil {
@@ -115,8 +152,8 @@ func TestAdd_Success(t *testing.T) {
 	if !m.Monitored {
 		t.Error("Add: Monitored = false, want true")
 	}
-	if m.LibraryID != "lib-1" {
-		t.Errorf("Add: LibraryID = %q, want %q", m.LibraryID, "lib-1")
+	if m.LibraryID != libID {
+		t.Errorf("Add: LibraryID = %q, want %q", m.LibraryID, libID)
 	}
 }
 
@@ -124,9 +161,10 @@ func TestAdd_Success(t *testing.T) {
 // provider by inserting a stub record. The stub title is "tmdb:<id>" and
 // MetadataRefreshedAt is nil until a refresh is performed.
 func TestAdd_DegradedMode(t *testing.T) {
-	svc := newTestService(t, nil)
+	svc, q := newTestService(t, nil)
+	libID, profID := seedTestFixtures(t, q)
 
-	m, err := svc.Add(context.Background(), movie.AddRequest{TMDBID: 550, LibraryID: "lib-1", QualityProfileID: "qp-1", Monitored: true})
+	m, err := svc.Add(context.Background(), movie.AddRequest{TMDBID: 550, LibraryID: libID, QualityProfileID: profID, Monitored: true})
 	if err != nil {
 		t.Fatalf("Add: unexpected error in degraded mode: %v", err)
 	}
@@ -149,9 +187,10 @@ func TestAdd_DegradedMode(t *testing.T) {
 func TestAdd_Duplicate(t *testing.T) {
 	detail := sampleDetail()
 	meta := &mockTMDB{movieDetail: detail}
-	svc := newTestService(t, meta)
+	svc, q := newTestService(t, meta)
+	libID, profID := seedTestFixtures(t, q)
 
-	req := movie.AddRequest{TMDBID: 550, LibraryID: "lib-1", QualityProfileID: "qp-1"}
+	req := movie.AddRequest{TMDBID: 550, LibraryID: libID, QualityProfileID: profID}
 	if _, err := svc.Add(context.Background(), req); err != nil {
 		t.Fatalf("Add (first): %v", err)
 	}
@@ -166,9 +205,10 @@ func TestAdd_Duplicate(t *testing.T) {
 func TestGet_Success(t *testing.T) {
 	detail := sampleDetail()
 	meta := &mockTMDB{movieDetail: detail}
-	svc := newTestService(t, meta)
+	svc, q := newTestService(t, meta)
+	libID, profID := seedTestFixtures(t, q)
 
-	added := addTestMovie(t, svc, "lib-1", "qp-1")
+	added := addTestMovie(t, svc, libID, profID)
 
 	got, err := svc.Get(context.Background(), added.ID)
 	if err != nil {
@@ -184,7 +224,7 @@ func TestGet_Success(t *testing.T) {
 
 // TestGet_NotFound verifies that Get returns ErrNotFound for a missing ID.
 func TestGet_NotFound(t *testing.T) {
-	svc := newTestService(t, nil)
+	svc, _ := newTestService(t, nil)
 
 	_, err := svc.Get(context.Background(), "does-not-exist")
 	if !errors.Is(err, movie.ErrNotFound) {
@@ -194,7 +234,7 @@ func TestGet_NotFound(t *testing.T) {
 
 // TestList_Empty verifies that List returns an empty result on a fresh DB.
 func TestList_Empty(t *testing.T) {
-	svc := newTestService(t, nil)
+	svc, _ := newTestService(t, nil)
 
 	result, err := svc.List(context.Background(), movie.ListRequest{})
 	if err != nil {
@@ -212,9 +252,10 @@ func TestList_Empty(t *testing.T) {
 func TestList_WithResults(t *testing.T) {
 	detail := sampleDetail()
 	meta := &mockTMDB{movieDetail: detail}
-	svc := newTestService(t, meta)
+	svc, q := newTestService(t, meta)
+	libID, profID := seedTestFixtures(t, q)
 
-	addTestMovie(t, svc, "lib-1", "qp-1")
+	addTestMovie(t, svc, libID, profID)
 
 	result, err := svc.List(context.Background(), movie.ListRequest{Page: 1, PerPage: 10})
 	if err != nil {
@@ -235,9 +276,10 @@ func TestList_WithResults(t *testing.T) {
 func TestDelete_Success(t *testing.T) {
 	detail := sampleDetail()
 	meta := &mockTMDB{movieDetail: detail}
-	svc := newTestService(t, meta)
+	svc, q := newTestService(t, meta)
+	libID, profID := seedTestFixtures(t, q)
 
-	added := addTestMovie(t, svc, "lib-1", "qp-1")
+	added := addTestMovie(t, svc, libID, profID)
 
 	if err := svc.Delete(context.Background(), added.ID); err != nil {
 		t.Fatalf("Delete: unexpected error: %v", err)
@@ -253,7 +295,7 @@ func TestDelete_Success(t *testing.T) {
 // TestDelete_NotFound verifies that deleting a non-existent movie returns
 // ErrNotFound.
 func TestDelete_NotFound(t *testing.T) {
-	svc := newTestService(t, nil)
+	svc, _ := newTestService(t, nil)
 
 	err := svc.Delete(context.Background(), "does-not-exist")
 	if !errors.Is(err, movie.ErrNotFound) {
@@ -269,7 +311,7 @@ func TestLookup_Success(t *testing.T) {
 			{ID: 807, Title: "Se7en", Year: 1995},
 		},
 	}
-	svc := newTestService(t, meta)
+	svc, _ := newTestService(t, meta)
 
 	results, err := svc.Lookup(context.Background(), movie.LookupRequest{Query: "fight"})
 	if err != nil {
@@ -285,7 +327,7 @@ func TestLookup_Success(t *testing.T) {
 
 // TestLookup_TMDBNotConfigured verifies the nil-provider guard in Lookup.
 func TestLookup_TMDBNotConfigured(t *testing.T) {
-	svc := newTestService(t, nil)
+	svc, _ := newTestService(t, nil)
 
 	_, err := svc.Lookup(context.Background(), movie.LookupRequest{Query: "anything"})
 	if !errors.Is(err, movie.ErrTMDBNotConfigured) {
