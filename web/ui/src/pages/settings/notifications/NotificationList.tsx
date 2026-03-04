@@ -88,6 +88,10 @@ interface FormState {
   dc_webhook_url: string;
   dc_username: string;
   dc_avatar_url: string;
+  // slack
+  sl_webhook_url: string;
+  sl_username: string;
+  sl_icon_emoji: string;
   // webhook
   wh_url: string;
   wh_method: string;
@@ -106,6 +110,7 @@ function emptyForm(): FormState {
     name: "", kind: "discord", enabled: true,
     on_events: new Set(["grab_started", "download_done", "import_complete"]),
     dc_webhook_url: "", dc_username: "", dc_avatar_url: "",
+    sl_webhook_url: "", sl_username: "", sl_icon_emoji: "",
     wh_url: "", wh_method: "POST",
     em_host: "", em_port: "587", em_username: "", em_password: "",
     em_from: "", em_to: "", em_tls: false,
@@ -122,6 +127,9 @@ function notifToForm(cfg: NotificationConfig): FormState {
     dc_webhook_url: cfg.kind === "discord" ? strSetting(s, "webhook_url") : "",
     dc_username: cfg.kind === "discord" ? strSetting(s, "username") : "",
     dc_avatar_url: cfg.kind === "discord" ? strSetting(s, "avatar_url") : "",
+    sl_webhook_url: cfg.kind === "slack" ? strSetting(s, "webhook_url") : "",
+    sl_username: cfg.kind === "slack" ? strSetting(s, "username") : "",
+    sl_icon_emoji: cfg.kind === "slack" ? strSetting(s, "icon_emoji") : "",
     wh_url: cfg.kind === "webhook" ? strSetting(s, "url") : "",
     wh_method: cfg.kind === "webhook" ? (strSetting(s, "method") || "POST") : "POST",
     em_host: cfg.kind === "email" ? strSetting(s, "host") : "",
@@ -146,6 +154,10 @@ function formToRequest(f: FormState): NotificationRequest {
     settings = { webhook_url: f.dc_webhook_url.trim() };
     if (f.dc_username.trim()) settings.username = f.dc_username.trim();
     if (f.dc_avatar_url.trim()) settings.avatar_url = f.dc_avatar_url.trim();
+  } else if (f.kind === "slack") {
+    settings = { webhook_url: f.sl_webhook_url.trim() };
+    if (f.sl_username.trim()) settings.username = f.sl_username.trim();
+    if (f.sl_icon_emoji.trim()) settings.icon_emoji = f.sl_icon_emoji.trim();
   } else if (f.kind === "webhook") {
     settings = { url: f.wh_url.trim(), method: f.wh_method };
   } else {
@@ -222,6 +234,55 @@ function DiscordSettings({ form, set, editing, focusBorder, blurBorder }: SubFor
             onFocus={focusBorder}
             onBlur={blurBorder}
             placeholder="https://…/avatar.png"
+          />
+        </div>
+      </div>
+    </>
+  );
+}
+
+function SlackSettings({ form, set, editing, focusBorder, blurBorder }: SubFormProps) {
+  return (
+    <>
+      <div style={fieldStyle}>
+        <label style={labelStyle}>Webhook URL *</label>
+        <input
+          style={inputStyle}
+          type="password"
+          value={form.sl_webhook_url}
+          onChange={(e) => set("sl_webhook_url", e.currentTarget.value)}
+          onFocus={focusBorder}
+          onBlur={blurBorder}
+          placeholder={editing ? "enter to change" : "https://hooks.slack.com/services/…"}
+          autoComplete="new-password"
+        />
+        {editing && (
+          <p style={{ margin: "4px 0 0", fontSize: 11, color: "var(--color-text-muted)" }}>
+            Webhook URL is masked. Enter a new value to update.
+          </p>
+        )}
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+        <div style={fieldStyle}>
+          <label style={labelStyle}>Bot Name</label>
+          <input
+            style={inputStyle}
+            value={form.sl_username}
+            onChange={(e) => set("sl_username", e.currentTarget.value)}
+            onFocus={focusBorder}
+            onBlur={blurBorder}
+            placeholder="Luminarr"
+          />
+        </div>
+        <div style={fieldStyle}>
+          <label style={labelStyle}>Icon Emoji</label>
+          <input
+            style={inputStyle}
+            value={form.sl_icon_emoji}
+            onChange={(e) => set("sl_icon_emoji", e.currentTarget.value)}
+            onFocus={focusBorder}
+            onBlur={blurBorder}
+            placeholder=":clapper:"
           />
         </div>
       </div>
@@ -399,6 +460,9 @@ function NotificationModal({ editing, onClose }: ModalProps) {
     if (form.kind === "discord" && !form.dc_webhook_url.trim()) {
       setError("Webhook URL is required."); return;
     }
+    if (form.kind === "slack" && !form.sl_webhook_url.trim()) {
+      setError("Webhook URL is required."); return;
+    }
     if (form.kind === "webhook" && !form.wh_url.trim()) {
       setError("URL is required."); return;
     }
@@ -509,6 +573,7 @@ function NotificationModal({ editing, onClose }: ModalProps) {
                 onBlur={blurBorder}
               >
                 <option value="discord">Discord</option>
+                <option value="slack">Slack</option>
                 <option value="webhook">Webhook</option>
                 <option value="email">Email</option>
               </select>
@@ -558,9 +623,10 @@ function NotificationModal({ editing, onClose }: ModalProps) {
             }}
           >
             <p style={{ margin: 0, fontSize: 11, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--color-text-muted)" }}>
-              {form.kind === "discord" ? "Discord Settings" : form.kind === "webhook" ? "Webhook Settings" : "Email Settings"}
+              {{ discord: "Discord Settings", slack: "Slack Settings", webhook: "Webhook Settings", email: "Email Settings" }[form.kind] ?? `${form.kind} Settings`}
             </p>
             {form.kind === "discord" && <DiscordSettings {...subFormProps} />}
+            {form.kind === "slack" && <SlackSettings {...subFormProps} />}
             {form.kind === "webhook" && <WebhookSettings {...subFormProps} />}
             {form.kind === "email" && <EmailSettings {...subFormProps} />}
           </div>
@@ -727,11 +793,12 @@ function RowActions({ notif, onEdit }: RowActionsProps) {
 function KindBadge({ kind }: { kind: string }) {
   const colors: Record<string, string> = {
     discord: "var(--color-accent)",
+    slack: "#E01E5A",
     webhook: "var(--color-success)",
     email: "var(--color-warning)",
   };
   const color = colors[kind] ?? "var(--color-text-secondary)";
-  const labels: Record<string, string> = { discord: "Discord", webhook: "Webhook", email: "Email" };
+  const labels: Record<string, string> = { discord: "Discord", slack: "Slack", webhook: "Webhook", email: "Email" };
 
   return (
     <span
@@ -774,7 +841,7 @@ export default function NotificationList() {
             Notifications
           </h1>
           <p style={{ margin: "4px 0 0", fontSize: 13, color: "var(--color-text-secondary)" }}>
-            Discord, webhook, and email alerts for movie events.
+            Discord, Slack, webhook, and email alerts for movie events.
           </p>
         </div>
         <button
@@ -823,7 +890,7 @@ export default function NotificationList() {
               No notifications configured
             </p>
             <p style={{ margin: "6px 0 0", fontSize: 13, color: "var(--color-text-muted)" }}>
-              Add Discord, webhook, or email alerts for movie events.
+              Add Discord, Slack, webhook, or email alerts for movie events.
             </p>
           </div>
         ) : (
