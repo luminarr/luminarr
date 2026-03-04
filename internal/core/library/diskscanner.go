@@ -46,6 +46,12 @@ func scanDisk(root string, knownPaths map[string]bool) ([]DiskFile, error) {
 			return nil //nolint:nilerr // skip unreadable entries and continue the walk
 		}
 		if d.IsDir() {
+			// Skip hidden directories (dot-prefixed) and NAS special directories
+			// such as Synology's #recycle and #snapshot.
+			name := d.Name()
+			if len(name) > 0 && (name[0] == '.' || name[0] == '#') {
+				return fs.SkipDir
+			}
 			return nil
 		}
 		ext := strings.ToLower(filepath.Ext(path))
