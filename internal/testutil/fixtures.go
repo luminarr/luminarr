@@ -129,3 +129,26 @@ func SeedMovieInLibrary(t *testing.T, q *dbsqlite.Queries, libraryID, profileID 
 	}
 	return row
 }
+
+// SeedGrabHistory inserts one grab_history row for movieID and returns it.
+func SeedGrabHistory(t *testing.T, q *dbsqlite.Queries, movieID, title string) dbsqlite.GrabHistory {
+	t.Helper()
+	ctx := context.Background()
+	now := time.Now().UTC().Format(time.RFC3339)
+	row, err := q.CreateGrabHistory(ctx, dbsqlite.CreateGrabHistoryParams{
+		ID:                uuid.New().String(),
+		MovieID:           movieID,
+		ReleaseGuid:       uuid.New().String(),
+		ReleaseTitle:      title,
+		ReleaseSource:     "bluray",
+		ReleaseResolution: "1080p",
+		Protocol:          "torrent",
+		Size:              8_000_000_000,
+		GrabbedAt:         now,
+		DownloadStatus:    "completed",
+	})
+	if err != nil {
+		t.Fatalf("testutil.SeedGrabHistory: %v", err)
+	}
+	return row
+}

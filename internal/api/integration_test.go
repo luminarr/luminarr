@@ -25,6 +25,7 @@ import (
 	"github.com/davidfic/luminarr/internal/core/notification"
 	"github.com/davidfic/luminarr/internal/core/quality"
 	"github.com/davidfic/luminarr/internal/core/queue"
+	dbsqlite "github.com/davidfic/luminarr/internal/db/generated/sqlite"
 	"github.com/davidfic/luminarr/internal/events"
 	"github.com/davidfic/luminarr/internal/registry"
 	"github.com/davidfic/luminarr/internal/scheduler"
@@ -89,10 +90,10 @@ func (m *testDownloadClient) Status(_ context.Context, id string) (plugin.QueueI
 func (m *testDownloadClient) GetQueue(_ context.Context) ([]plugin.QueueItem, error) { return nil, nil }
 func (m *testDownloadClient) Remove(_ context.Context, _ string, _ bool) error       { return nil }
 
-// newIntegrationRouter builds a fully-wired router backed by an in-memory DB.
-func newIntegrationRouter(t *testing.T) http.Handler {
+// newIntegrationRouterFromDB builds a fully-wired router using the provided
+// queries so that callers can seed data directly into the same DB.
+func newIntegrationRouterFromDB(t *testing.T, q *dbsqlite.Queries) http.Handler {
 	t.Helper()
-	q := testutil.NewTestDB(t)
 	logger := slog.Default()
 	bus := events.New(logger)
 	reg := registry.New()
@@ -124,6 +125,13 @@ func newIntegrationRouter(t *testing.T) http.Handler {
 		NotificationService: notifSvc,
 		HealthService:       healthSvc,
 	})
+}
+
+// newIntegrationRouter builds a fully-wired router backed by an in-memory DB.
+func newIntegrationRouter(t *testing.T) http.Handler {
+	t.Helper()
+	q := testutil.NewTestDB(t)
+	return newIntegrationRouterFromDB(t, q)
 }
 
 // do performs a request against the given handler.
@@ -660,6 +668,65 @@ func TestIntegration_OpenAPIDocs(t *testing.T) {
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("GET /api/docs = %d, want 200", rec.Code)
+	}
+}
+
+// ── /api/v1/movies/{id}/history ──────────────────────────────────────────────
+
+func TestIntegration_MovieHistory_Empty(t *testing.T) {
+	q := testutil.NewTestDB(t)
+	h := newIntegrationRouterFromDB(t, q)
+
+	m := testutil.SeedMovie(t, q)
+
+	rec := do(t, h, http.MethodGet, "/api/v1/movies/"+m.ID+"/history", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /movies/%s/history = %d; body: %s", m.ID, rec.Code, rec.Body)
+	}
+	var items []any
+	mustDecode(t, rec, &items)
+	if len(items) != 0 {
+		t.Errorf("expected empty history, got %d items", len(items))
+	}
+}
+
+func TestIntegration_MovieHistory_Entries(t *testing.T) {
+	q := testutil.NewTestDB(t)
+	h := newIntegrationRouterFromDB(t, q)
+
+	m := testutil.SeedMovie(t, q)
+
+	// Seed two grab_history entries for this movie.
+	testutil.SeedGrabHistory(t, q, m.ID, "Batman Begins BluRay-1080p")
+	testutil.SeedGrabHistory(t, q, m.ID, "Batman Begins WEB-1080p")
+
+	// Seed a grab for a different movie — must not appear.
+	other := testutil.SeedMovie(t, q, testutil.WithTMDBID(999))
+	testutil.SeedGrabHistory(t, q, other.ID, "Other Movie BluRay-1080p")
+
+	rec := do(t, h, http.MethodGet, "/api/v1/movies/"+m.ID+"/history", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /movies/%s/history = %d; body: %s", m.ID, rec.Code, rec.Body)
+	}
+	var items []map[string]any
+	mustDecode(t, rec, &items)
+	if len(items) != 2 {
+		t.Fatalf("expected 2 history items, got %d", len(items))
+	}
+	// Verify required fields are present.
+	for _, item := range items {
+		if _, ok := item["id"]; !ok {
+			t.Error("history item missing 'id'")
+		}
+		if _, ok := item["movie_id"]; !ok {
+			t.Error("history item missing 'movie_id'")
+		}
+		if _, ok := item["grabbed_at"]; !ok {
+			t.Error("history item missing 'grabbed_at'")
+		}
+		if _, ok := item["download_status"]; !ok {
+			t.Error("history item missing 'download_status'")
+		}
 	}
 }
 
