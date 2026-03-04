@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/davidfic/luminarr/internal/core/renamer"
 	dbsqlite "github.com/davidfic/luminarr/internal/db/generated/sqlite"
 	"github.com/davidfic/luminarr/internal/events"
 	"github.com/davidfic/luminarr/internal/metadata/tmdb"
@@ -110,20 +112,40 @@ type LookupRequest struct {
 	Year   int // optional year filter for query search
 }
 
+// RenamePreviewItem describes a single proposed or completed file rename.
+type RenamePreviewItem struct {
+	FileID  string
+	OldPath string
+	NewPath string
+}
+
+// RenameSettings carries the naming format options used by RenameFiles.
+type RenameSettings struct {
+	Format           string
+	ColonReplacement renamer.ColonReplacement
+}
+
 // Service manages movie records.
 type Service struct {
-	q      dbsqlite.Querier
-	meta   MetadataProvider
-	mu     sync.RWMutex
-	bus    *events.Bus
-	logger *slog.Logger
+	q          dbsqlite.Querier
+	meta       MetadataProvider
+	mu         sync.RWMutex
+	bus        *events.Bus
+	logger     *slog.Logger
+	renameFile func(oldPath, newPath string) error // injectable for tests; defaults to os.Rename
 }
 
 // NewService creates a new Service backed by the given querier, metadata
 // provider, event bus, and logger. meta may be nil when TMDB is not configured;
 // methods that require it return ErrTMDBNotConfigured.
 func NewService(q dbsqlite.Querier, meta MetadataProvider, bus *events.Bus, logger *slog.Logger) *Service {
-	return &Service{q: q, meta: meta, bus: bus, logger: logger}
+	return &Service{q: q, meta: meta, bus: bus, logger: logger, renameFile: os.Rename}
+}
+
+// SetRenameFunc replaces the function used to rename files on disk. Intended
+// for use in tests to inject a mock without touching the real filesystem.
+func (s *Service) SetRenameFunc(fn func(oldPath, newPath string) error) {
+	s.renameFile = fn
 }
 
 // SetMetadataProvider replaces the metadata provider at runtime without
@@ -879,6 +901,131 @@ func (s *Service) AttachFile(ctx context.Context, movieID, filePath string, size
 	}
 
 	return nil
+}
+
+// RenameFiles computes the standard-format destination filename for every file
+// belonging to movieID using the supplied settings. Files whose current name
+// already matches the computed name are skipped.
+//
+// If dryRun is true, no disk or DB operations are performed; the returned slice
+// describes what would happen. If dryRun is false, each file is renamed on disk
+// and the DB record is updated. Errors for individual files are logged and
+// skipped; a combined error is returned if any file could not be renamed.
+//
+// Returns ErrNotFound if the movie does not exist.
+func (s *Service) RenameFiles(ctx context.Context, movieID string, settings RenameSettings, dryRun bool) ([]RenamePreviewItem, error) {
+	movie, err := s.q.GetMovie(ctx, movieID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("fetching movie %q: %w", movieID, err)
+	}
+
+	files, err := s.q.ListMovieFiles(ctx, movieID)
+	if err != nil {
+		return nil, fmt.Errorf("listing files for movie %q: %w", movieID, err)
+	}
+	if len(files) == 0 {
+		return nil, nil
+	}
+
+	format := settings.Format
+	if format == "" {
+		format = renamer.DefaultFileFormat
+	}
+	colon := settings.ColonReplacement
+	if colon == "" {
+		colon = renamer.ColonDelete
+	}
+
+	rm := renamer.Movie{
+		Title:         movie.Title,
+		OriginalTitle: movie.OriginalTitle,
+		Year:          int(movie.Year),
+	}
+
+	var items []RenamePreviewItem
+	for _, f := range files {
+		var qual plugin.Quality
+		_ = json.Unmarshal([]byte(f.QualityJson), &qual)
+
+		ext := filepath.Ext(f.Path)
+		newFilename := renamer.ApplyWithOptions(format, rm, qual, colon) + ext
+		newPath := filepath.Join(filepath.Dir(f.Path), newFilename)
+
+		if newPath == f.Path {
+			continue // already correctly named
+		}
+		items = append(items, RenamePreviewItem{
+			FileID:  f.ID,
+			OldPath: f.Path,
+			NewPath: newPath,
+		})
+	}
+
+	if dryRun || len(items) == 0 {
+		return items, nil
+	}
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	var errs []string
+	var done []RenamePreviewItem
+
+	for _, item := range items {
+		if _, statErr := os.Stat(item.NewPath); statErr == nil {
+			// Target already exists — skip to avoid clobbering.
+			s.logger.WarnContext(ctx, "rename skipped: target path already exists",
+				slog.String("old", item.OldPath),
+				slog.String("new", item.NewPath),
+			)
+			errs = append(errs, fmt.Sprintf("target exists: %s", item.NewPath))
+			continue
+		}
+
+		if renameErr := s.renameFile(item.OldPath, item.NewPath); renameErr != nil {
+			s.logger.ErrorContext(ctx, "rename failed",
+				slog.String("old", item.OldPath),
+				slog.String("new", item.NewPath),
+				slog.Any("error", renameErr),
+			)
+			errs = append(errs, renameErr.Error())
+			continue
+		}
+
+		if dbErr := s.q.UpdateMovieFilePath(ctx, dbsqlite.UpdateMovieFilePathParams{
+			Path: item.NewPath,
+			ID:   item.FileID,
+		}); dbErr != nil {
+			s.logger.ErrorContext(ctx, "failed to update movie_files path after rename",
+				slog.String("file_id", item.FileID),
+				slog.Any("error", dbErr),
+			)
+			errs = append(errs, dbErr.Error())
+			continue
+		}
+
+		// Keep movies.path in sync if this file's old path matches it.
+		if movie.Path != nil && *movie.Path == item.OldPath {
+			if _, pathErr := s.q.UpdateMoviePath(ctx, dbsqlite.UpdateMoviePathParams{
+				Path:      &item.NewPath,
+				UpdatedAt: now,
+				ID:        movieID,
+			}); pathErr != nil {
+				s.logger.WarnContext(ctx, "failed to sync movies.path after rename",
+					slog.String("movie_id", movieID),
+					slog.Any("error", pathErr),
+				)
+			}
+		}
+
+		done = append(done, item)
+	}
+
+	if len(errs) > 0 {
+		return done, fmt.Errorf("rename: %d file(s) failed: %s", len(errs), strings.Join(errs, "; "))
+	}
+	return done, nil
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────

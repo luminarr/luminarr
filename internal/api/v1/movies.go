@@ -8,11 +8,31 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 
+	"github.com/davidfic/luminarr/internal/core/mediamanagement"
 	"github.com/davidfic/luminarr/internal/core/movie"
+	"github.com/davidfic/luminarr/internal/core/renamer"
 	"github.com/davidfic/luminarr/internal/metadata/tmdb"
 )
 
 // ── Movie file shapes ─────────────────────────────────────────────────────────
+
+type renamePreviewItemBody struct {
+	FileID  string `json:"file_id"`
+	OldPath string `json:"old_path"`
+	NewPath string `json:"new_path"`
+}
+
+type renameMovieInput struct {
+	ID     string `path:"id"`
+	DryRun bool   `query:"dry_run"`
+}
+
+type renameMovieOutput struct {
+	Body struct {
+		DryRun  bool                    `json:"dry_run"`
+		Renamed []renamePreviewItemBody `json:"renamed"`
+	}
+}
 
 type movieFileBody struct {
 	ID         string    `json:"id"`
@@ -444,7 +464,7 @@ func RegisterMovieRoutes(api huma.API, svc *movie.Service) {
 }
 
 // RegisterMovieFileRoutes registers file management endpoints for a movie.
-func RegisterMovieFileRoutes(api huma.API, svc *movie.Service) {
+func RegisterMovieFileRoutes(api huma.API, svc *movie.Service, mmSvc *mediamanagement.Service) {
 	// GET /api/v1/movies/{id}/files
 	huma.Register(api, huma.Operation{
 		OperationID: "list-movie-files",
@@ -494,5 +514,44 @@ func RegisterMovieFileRoutes(api huma.API, svc *movie.Service) {
 			return nil, huma.NewError(http.StatusInternalServerError, "failed to delete movie file", err)
 		}
 		return nil, nil
+	})
+
+	// POST /api/v1/movies/{id}/rename
+	huma.Register(api, huma.Operation{
+		OperationID: "rename-movie-files",
+		Method:      http.MethodPost,
+		Path:        "/api/v1/movies/{id}/rename",
+		Summary:     "Rename movie files to the configured standard format",
+		Tags:        []string{"Movies"},
+	}, func(ctx context.Context, input *renameMovieInput) (*renameMovieOutput, error) {
+		mm, err := mmSvc.Get(ctx)
+		if err != nil {
+			return nil, huma.NewError(http.StatusInternalServerError, "failed to load media management settings", err)
+		}
+
+		settings := movie.RenameSettings{
+			Format:           mm.StandardMovieFormat,
+			ColonReplacement: renamer.ColonReplacement(mm.ColonReplacement),
+		}
+
+		items, err := svc.RenameFiles(ctx, input.ID, settings, input.DryRun)
+		if err != nil {
+			if errors.Is(err, movie.ErrNotFound) {
+				return nil, huma.Error404NotFound("movie not found")
+			}
+			return nil, huma.NewError(http.StatusUnprocessableEntity, "rename failed", err)
+		}
+
+		out := &renameMovieOutput{}
+		out.Body.DryRun = input.DryRun
+		out.Body.Renamed = make([]renamePreviewItemBody, len(items))
+		for i, item := range items {
+			out.Body.Renamed[i] = renamePreviewItemBody{
+				FileID:  item.FileID,
+				OldPath: item.OldPath,
+				NewPath: item.NewPath,
+			}
+		}
+		return out, nil
 	})
 }

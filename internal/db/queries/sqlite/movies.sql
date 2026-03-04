@@ -98,6 +98,9 @@ SELECT * FROM movie_files WHERE movie_id = ? ORDER BY imported_at DESC;
 -- name: UpdateMovieFileIndexed :exec
 UPDATE movie_files SET indexed_at = ? WHERE id = ?;
 
+-- name: UpdateMovieFilePath :exec
+UPDATE movie_files SET path = ? WHERE id = ?;
+
 -- name: DeleteMovieFile :exec
 DELETE FROM movie_files WHERE id = ?;
 

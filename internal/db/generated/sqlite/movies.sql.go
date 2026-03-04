@@ -808,6 +808,20 @@ func (q *Queries) UpdateMovieFileIndexed(ctx context.Context, arg UpdateMovieFil
 	return err
 }
 
+const updateMovieFilePath = `-- name: UpdateMovieFilePath :exec
+UPDATE movie_files SET path = ? WHERE id = ?
+`
+
+type UpdateMovieFilePathParams struct {
+	Path string `json:"path"`
+	ID   string `json:"id"`
+}
+
+func (q *Queries) UpdateMovieFilePath(ctx context.Context, arg UpdateMovieFilePathParams) error {
+	_, err := q.db.ExecContext(ctx, updateMovieFilePath, arg.Path, arg.ID)
+	return err
+}
+
 const updateMovieMetadataRefreshed = `-- name: UpdateMovieMetadataRefreshed :exec
 UPDATE movies SET metadata_refreshed_at = ?, updated_at = ? WHERE id = ?
 `

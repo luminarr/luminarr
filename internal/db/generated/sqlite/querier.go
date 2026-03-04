@@ -74,6 +74,8 @@ type Querier interface {
 	ListRemotePathMappings(ctx context.Context) ([]RemotePathMapping, error)
 	ListUnmatchedLibraryFileCandidates(ctx context.Context, libraryID string) ([]LibraryFileCandidate, error)
 	MarkGrabRemoved(ctx context.Context, id string) error
+	// Removes candidates that were not seen in the current scan (scanned_at < cutoff).
+	PruneStaleLibraryFileCandidates(ctx context.Context, arg PruneStaleLibraryFileCandidatesParams) error
 	QualityProfileInUse(ctx context.Context, arg QualityProfileInUseParams) (int64, error)
 	SetLibraryFileCandidateMatch(ctx context.Context, arg SetLibraryFileCandidateMatchParams) error
 	SumMovieFileSizesByLibrary(ctx context.Context, libraryID string) (interface{}, error)
@@ -86,6 +88,7 @@ type Querier interface {
 	UpdateMediaManagement(ctx context.Context, arg UpdateMediaManagementParams) (MediaManagement, error)
 	UpdateMovie(ctx context.Context, arg UpdateMovieParams) (Movie, error)
 	UpdateMovieFileIndexed(ctx context.Context, arg UpdateMovieFileIndexedParams) error
+	UpdateMovieFilePath(ctx context.Context, arg UpdateMovieFilePathParams) error
 	UpdateMovieMetadataRefreshed(ctx context.Context, arg UpdateMovieMetadataRefreshedParams) error
 	UpdateMoviePath(ctx context.Context, arg UpdateMoviePathParams) (Movie, error)
 	UpdateMovieStatus(ctx context.Context, arg UpdateMovieStatusParams) (Movie, error)

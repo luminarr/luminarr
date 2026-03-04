@@ -156,7 +156,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 
 	if cfg.MovieService != nil {
 		v1.RegisterMovieRoutes(humaAPI, cfg.MovieService)
-		v1.RegisterMovieFileRoutes(humaAPI, cfg.MovieService)
+		v1.RegisterMovieFileRoutes(humaAPI, cfg.MovieService, cfg.MediaManagementService)
 		v1.RegisterWantedRoutes(humaAPI, cfg.MovieService)
 	}
 
