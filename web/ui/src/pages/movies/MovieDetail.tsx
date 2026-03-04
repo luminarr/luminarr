@@ -733,7 +733,7 @@ function DeleteConfirmBar({ movieId, onCancel }: { movieId: string; onCancel: ()
         Remove this movie from Luminarr? (Files on disk are not deleted.)
       </span>
       <button
-        onClick={() => del.mutate(movieId, { onSuccess: () => navigate("/movies") })}
+        onClick={() => del.mutate(movieId, { onSuccess: () => navigate("/") })}
         disabled={del.isPending}
         style={actionBtn("var(--color-danger)", "color-mix(in srgb, var(--color-danger) 15%, transparent)")}
       >
@@ -814,7 +814,7 @@ export default function MovieDetail() {
   if (error || !movie) {
     return (
       <div style={{ padding: 24 }}>
-        <Link to="/movies" style={{ fontSize: 13, color: "var(--color-accent)", textDecoration: "none" }}>
+        <Link to="/" style={{ fontSize: 13, color: "var(--color-accent)", textDecoration: "none" }}>
           ← Movies
         </Link>
         <p style={{ marginTop: 24, fontSize: 13, color: "var(--color-text-muted)" }}>
@@ -830,7 +830,7 @@ export default function MovieDetail() {
     <div style={{ padding: 24, maxWidth: 1000 }}>
       {/* Back link */}
       <Link
-        to="/movies"
+        to="/"
         style={{ fontSize: 13, color: "var(--color-text-muted)", textDecoration: "none", display: "inline-block", marginBottom: 20 }}
         onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = "var(--color-text-primary)"; }}
         onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = "var(--color-text-muted)"; }}
