@@ -637,6 +637,23 @@ func (s *Service) SuggestMatches(ctx context.Context, id string) ([]tmdb.SearchR
 	if err != nil {
 		return nil, parsed, fmt.Errorf("searching TMDB: %w", err)
 	}
+
+	// If no results, retry by progressively dropping words from the front of
+	// the title (up to 3 attempts).  This handles filenames where the parser
+	// cannot split concatenated words — e.g. "The Hungergames Mockingjay Part
+	// 1" yields nothing, but "Mockingjay Part 1" does.
+	if len(results) == 0 {
+		words := strings.Fields(parsed.Title)
+		maxRetries := min(3, len(words)-1)
+		for i := 1; i <= maxRetries && len(results) == 0; i++ {
+			suffix := strings.Join(words[i:], " ")
+			if len(strings.TrimSpace(suffix)) < 3 {
+				break
+			}
+			results, _ = meta.SearchMovies(ctx, suffix, parsed.Year)
+		}
+	}
+
 	return results, parsed, nil
 }
 
