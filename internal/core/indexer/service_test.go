@@ -378,7 +378,7 @@ func TestService_Grab_RecordsHistory(t *testing.T) {
 		Size:     1_073_741_824,
 	}
 
-	history, err := svc.Grab(ctx, "movie-1", "", release, "", "")
+	history, err := svc.Grab(ctx, "movie-1", "", release, "", "", "")
 	if err != nil {
 		t.Fatalf("Grab() error = %v", err)
 	}

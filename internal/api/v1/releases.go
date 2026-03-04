@@ -21,18 +21,18 @@ import (
 // ── Request / response shapes ────────────────────────────────────────────────
 
 type releaseBody struct {
-	GUID           string               `json:"guid"`
-	Title          string               `json:"title"`
-	Indexer        string               `json:"indexer"`
-	Protocol       string               `json:"protocol"`
-	DownloadURL    string               `json:"download_url"`
-	InfoURL        string               `json:"info_url,omitempty"`
-	Size           int64                `json:"size"`
-	Seeds          int                  `json:"seeds,omitempty"`
-	Peers          int                  `json:"peers,omitempty"`
-	AgeDays        float64              `json:"age_days,omitempty"`
-	Quality        plugin.Quality       `json:"quality"`
-	QualityScore   int                  `json:"quality_score"`
+	GUID           string                `json:"guid"`
+	Title          string                `json:"title"`
+	Indexer        string                `json:"indexer"`
+	Protocol       string                `json:"protocol"`
+	DownloadURL    string                `json:"download_url"`
+	InfoURL        string                `json:"info_url,omitempty"`
+	Size           int64                 `json:"size"`
+	Seeds          int                   `json:"seeds,omitempty"`
+	Peers          int                   `json:"peers,omitempty"`
+	AgeDays        float64               `json:"age_days,omitempty"`
+	Quality        plugin.Quality        `json:"quality"`
+	QualityScore   int                   `json:"quality_score"`
 	ScoreBreakdown plugin.ScoreBreakdown `json:"score_breakdown"`
 }
 
