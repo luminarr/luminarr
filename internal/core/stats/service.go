@@ -240,6 +240,110 @@ func (s *Service) GrabPerformance(ctx context.Context) (GrabStats, []IndexerStat
 	return grabStats, indexers, nil
 }
 
+// DecadeBucket is a movie count for one decade.
+type DecadeBucket struct {
+	Decade string `json:"decade"` // e.g. "1990s"
+	Count  int64  `json:"count"`
+}
+
+// GrowthPoint is the number of movies added in a calendar month.
+type GrowthPoint struct {
+	Month      string `json:"month"`      // "YYYY-MM"
+	Added      int64  `json:"added"`      // new movies that month
+	Cumulative int64  `json:"cumulative"` // running total
+}
+
+// GenreBucket is a movie count for one genre.
+type GenreBucket struct {
+	Genre string `json:"genre"`
+	Count int64  `json:"count"`
+}
+
+// DecadeDistribution returns movie counts grouped by decade.
+func (s *Service) DecadeDistribution(ctx context.Context) ([]DecadeBucket, error) {
+	rows, err := s.q.GetMovieYearDistribution(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("getting year distribution: %w", err)
+	}
+	totals := make(map[int]int64)
+	for _, r := range rows {
+		decade := (int(r.Year) / 10) * 10
+		totals[decade] += r.Count
+	}
+	buckets := make([]DecadeBucket, 0, len(totals))
+	for decade, count := range totals {
+		buckets = append(buckets, DecadeBucket{
+			Decade: fmt.Sprintf("%ds", decade),
+			Count:  count,
+		})
+	}
+	// Sort chronologically.
+	for i := 1; i < len(buckets); i++ {
+		for j := i; j > 0 && buckets[j].Decade < buckets[j-1].Decade; j-- {
+			buckets[j], buckets[j-1] = buckets[j-1], buckets[j]
+		}
+	}
+	return buckets, nil
+}
+
+// LibraryGrowth returns movies-added-per-month with a running cumulative total.
+func (s *Service) LibraryGrowth(ctx context.Context) ([]GrowthPoint, error) {
+	rows, err := s.q.GetMoviesAddedByMonth(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("getting monthly growth: %w", err)
+	}
+	points := make([]GrowthPoint, len(rows))
+	var cumulative int64
+	for i, r := range rows {
+		month := ""
+		if s, ok := r.Month.(string); ok {
+			month = s
+		}
+		cumulative += r.Count
+		points[i] = GrowthPoint{
+			Month:      month,
+			Added:      r.Count,
+			Cumulative: cumulative,
+		}
+	}
+	return points, nil
+}
+
+// GenreDistribution returns the top 15 genres by movie count.
+func (s *Service) GenreDistribution(ctx context.Context) ([]GenreBucket, error) {
+	rows, err := s.q.ListMovieGenresJSON(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("listing genres: %w", err)
+	}
+	counts := make(map[string]int64)
+	for _, raw := range rows {
+		var genres []string
+		if err := json.Unmarshal([]byte(raw), &genres); err != nil {
+			continue
+		}
+		for _, g := range genres {
+			if g != "" {
+				counts[g]++
+			}
+		}
+	}
+	buckets := make([]GenreBucket, 0, len(counts))
+	for genre, count := range counts {
+		buckets = append(buckets, GenreBucket{Genre: genre, Count: count})
+	}
+	// Sort by count descending.
+	for i := 1; i < len(buckets); i++ {
+		for j := i; j > 0 && buckets[j].Count > buckets[j-1].Count; j-- {
+			buckets[j], buckets[j-1] = buckets[j-1], buckets[j]
+		}
+	}
+	const maxGenres = 15
+	if len(buckets) > maxGenres {
+		buckets = buckets[:maxGenres]
+	}
+	return buckets, nil
+}
+
 // TakeSnapshot records the current total storage as a point-in-time snapshot.
 func (s *Service) TakeSnapshot(ctx context.Context) error {
 	totals, err := s.q.GetStorageTotals(ctx)

@@ -74,6 +74,34 @@ type statsGrabsOutput struct {
 	Body statsGrabsBody
 }
 
+type statsDecadeBucketBody struct {
+	Decade string `json:"decade"`
+	Count  int64  `json:"count"`
+}
+
+type statsDecadesOutput struct {
+	Body []statsDecadeBucketBody
+}
+
+type statsGrowthPointBody struct {
+	Month      string `json:"month"`
+	Added      int64  `json:"added"`
+	Cumulative int64  `json:"cumulative"`
+}
+
+type statsGrowthOutput struct {
+	Body []statsGrowthPointBody
+}
+
+type statsGenreBucketBody struct {
+	Genre string `json:"genre"`
+	Count int64  `json:"count"`
+}
+
+type statsGenresOutput struct {
+	Body []statsGenreBucketBody
+}
+
 // ── Route registration ────────────────────────────────────────────────────────
 
 // RegisterStatsRoutes registers the four statistics endpoints.
@@ -159,6 +187,69 @@ func RegisterStatsRoutes(api huma.API, svc *stats.Service) {
 			FileCount:  storage.FileCount,
 			Trend:      trendBody,
 		}
+		return out, nil
+	})
+
+	// GET /api/v1/stats/decades
+	huma.Register(api, huma.Operation{
+		OperationID: "get-stats-decades",
+		Method:      http.MethodGet,
+		Path:        "/api/v1/stats/decades",
+		Summary:     "Movie count by decade",
+		Tags:        []string{"Statistics"},
+	}, func(ctx context.Context, _ *struct{}) (*statsDecadesOutput, error) {
+		buckets, err := svc.DecadeDistribution(ctx)
+		if err != nil {
+			return nil, huma.NewError(http.StatusInternalServerError, "failed to get decade distribution", err)
+		}
+		body := make([]statsDecadeBucketBody, len(buckets))
+		for i, b := range buckets {
+			body[i] = statsDecadeBucketBody{Decade: b.Decade, Count: b.Count}
+		}
+		out := &statsDecadesOutput{}
+		out.Body = body
+		return out, nil
+	})
+
+	// GET /api/v1/stats/growth
+	huma.Register(api, huma.Operation{
+		OperationID: "get-stats-growth",
+		Method:      http.MethodGet,
+		Path:        "/api/v1/stats/growth",
+		Summary:     "Library growth over time (monthly)",
+		Tags:        []string{"Statistics"},
+	}, func(ctx context.Context, _ *struct{}) (*statsGrowthOutput, error) {
+		points, err := svc.LibraryGrowth(ctx)
+		if err != nil {
+			return nil, huma.NewError(http.StatusInternalServerError, "failed to get library growth", err)
+		}
+		body := make([]statsGrowthPointBody, len(points))
+		for i, p := range points {
+			body[i] = statsGrowthPointBody{Month: p.Month, Added: p.Added, Cumulative: p.Cumulative}
+		}
+		out := &statsGrowthOutput{}
+		out.Body = body
+		return out, nil
+	})
+
+	// GET /api/v1/stats/genres
+	huma.Register(api, huma.Operation{
+		OperationID: "get-stats-genres",
+		Method:      http.MethodGet,
+		Path:        "/api/v1/stats/genres",
+		Summary:     "Top genres by movie count",
+		Tags:        []string{"Statistics"},
+	}, func(ctx context.Context, _ *struct{}) (*statsGenresOutput, error) {
+		buckets, err := svc.GenreDistribution(ctx)
+		if err != nil {
+			return nil, huma.NewError(http.StatusInternalServerError, "failed to get genre distribution", err)
+		}
+		body := make([]statsGenreBucketBody, len(buckets))
+		for i, b := range buckets {
+			body[i] = statsGenreBucketBody{Genre: b.Genre, Count: b.Count}
+		}
+		out := &statsGenresOutput{}
+		out.Body = body
 		return out, nil
 	})
 

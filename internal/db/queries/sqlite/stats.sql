@@ -48,3 +48,22 @@ WHERE gh.indexer_id IS NOT NULL AND gh.indexer_id != ''
 GROUP BY gh.indexer_id
 ORDER BY grab_count DESC
 LIMIT 10;
+
+-- name: GetMovieYearDistribution :many
+SELECT year, COUNT(*) AS count
+FROM movies
+WHERE year > 0
+GROUP BY year
+ORDER BY year ASC;
+
+-- name: GetMoviesAddedByMonth :many
+SELECT
+    strftime('%Y-%m', added_at) AS month,
+    COUNT(*)                     AS count
+FROM movies
+WHERE added_at IS NOT NULL
+GROUP BY month
+ORDER BY month ASC;
+
+-- name: ListMovieGenresJSON :many
+SELECT genres_json FROM movies WHERE genres_json IS NOT NULL AND genres_json != '[]';

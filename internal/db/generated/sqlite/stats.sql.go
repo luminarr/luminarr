@@ -62,6 +62,80 @@ func (q *Queries) GetGrabStats(ctx context.Context) (GetGrabStatsRow, error) {
 	return i, err
 }
 
+const getMovieYearDistribution = `-- name: GetMovieYearDistribution :many
+SELECT year, COUNT(*) AS count
+FROM movies
+WHERE year > 0
+GROUP BY year
+ORDER BY year ASC
+`
+
+type GetMovieYearDistributionRow struct {
+	Year  int64 `json:"year"`
+	Count int64 `json:"count"`
+}
+
+func (q *Queries) GetMovieYearDistribution(ctx context.Context) ([]GetMovieYearDistributionRow, error) {
+	rows, err := q.db.QueryContext(ctx, getMovieYearDistribution)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetMovieYearDistributionRow
+	for rows.Next() {
+		var i GetMovieYearDistributionRow
+		if err := rows.Scan(&i.Year, &i.Count); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getMoviesAddedByMonth = `-- name: GetMoviesAddedByMonth :many
+SELECT
+    strftime('%Y-%m', added_at) AS month,
+    COUNT(*)                     AS count
+FROM movies
+WHERE added_at IS NOT NULL
+GROUP BY month
+ORDER BY month ASC
+`
+
+type GetMoviesAddedByMonthRow struct {
+	Month interface{} `json:"month"`
+	Count int64       `json:"count"`
+}
+
+func (q *Queries) GetMoviesAddedByMonth(ctx context.Context) ([]GetMoviesAddedByMonthRow, error) {
+	rows, err := q.db.QueryContext(ctx, getMoviesAddedByMonth)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetMoviesAddedByMonthRow
+	for rows.Next() {
+		var i GetMoviesAddedByMonthRow
+		if err := rows.Scan(&i.Month, &i.Count); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getStorageTotals = `-- name: GetStorageTotals :one
 SELECT
     COALESCE(SUM(size_bytes), 0) AS total_bytes,
@@ -169,6 +243,33 @@ func (q *Queries) ListMovieFileQualities(ctx context.Context) ([]string, error) 
 			return nil, err
 		}
 		items = append(items, quality_json)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMovieGenresJSON = `-- name: ListMovieGenresJSON :many
+SELECT genres_json FROM movies WHERE genres_json IS NOT NULL AND genres_json != '[]'
+`
+
+func (q *Queries) ListMovieGenresJSON(ctx context.Context) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, listMovieGenresJSON)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var genres_json string
+		if err := rows.Scan(&genres_json); err != nil {
+			return nil, err
+		}
+		items = append(items, genres_json)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err
