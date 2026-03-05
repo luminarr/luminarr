@@ -124,6 +124,7 @@ func newIntegrationRouterFromDB(t *testing.T, q *dbsqlite.Queries) http.Handler 
 		Scheduler:           sched,
 		NotificationService: notifSvc,
 		HealthService:       healthSvc,
+		Bus:                 bus,
 	})
 }
 
@@ -727,6 +728,67 @@ func TestIntegration_MovieHistory_Entries(t *testing.T) {
 		if _, ok := item["download_status"]; !ok {
 			t.Error("history item missing 'download_status'")
 		}
+	}
+}
+
+// ── /hooks ────────────────────────────────────────────────────────────────────
+
+func TestIntegration_HooksScan_AllLibraries(t *testing.T) {
+	h := newIntegrationRouter(t)
+	rec := do(t, h, http.MethodPost, "/api/v1/hooks/scan", map[string]any{})
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("POST /hooks/scan = %d, want 202; body: %s", rec.Code, rec.Body)
+	}
+}
+
+func TestIntegration_HooksScan_SpecificLibrary_NotFound(t *testing.T) {
+	h := newIntegrationRouter(t)
+	rec := do(t, h, http.MethodPost, "/api/v1/hooks/scan", map[string]any{
+		"library_id": "nonexistent",
+	})
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("POST /hooks/scan with bad library = %d, want 404; body: %s", rec.Code, rec.Body)
+	}
+}
+
+func TestIntegration_HooksRefresh_AllMovies(t *testing.T) {
+	h := newIntegrationRouter(t)
+	rec := do(t, h, http.MethodPost, "/api/v1/hooks/refresh", map[string]any{})
+	// refresh_metadata job is not registered in test scheduler, so RunNow returns error → 500.
+	// That's expected — we're just testing the endpoint is reachable and routed correctly.
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("POST /hooks/refresh = %d, want 500 (no scheduler job); body: %s", rec.Code, rec.Body)
+	}
+}
+
+func TestIntegration_HooksRefresh_SpecificMovie_NotFound(t *testing.T) {
+	h := newIntegrationRouter(t)
+	rec := do(t, h, http.MethodPost, "/api/v1/hooks/refresh", map[string]any{
+		"movie_id": "nonexistent",
+	})
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("POST /hooks/refresh with bad movie = %d, want 404; body: %s", rec.Code, rec.Body)
+	}
+}
+
+func TestIntegration_HooksNotify(t *testing.T) {
+	h := newIntegrationRouter(t)
+	rec := do(t, h, http.MethodPost, "/api/v1/hooks/notify", map[string]any{
+		"type":    "custom",
+		"message": "hello from test",
+	})
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("POST /hooks/notify = %d, want 202; body: %s", rec.Code, rec.Body)
+	}
+}
+
+func TestIntegration_HooksNotify_MissingType(t *testing.T) {
+	h := newIntegrationRouter(t)
+	rec := do(t, h, http.MethodPost, "/api/v1/hooks/notify", map[string]any{
+		"message": "no type field",
+	})
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("POST /hooks/notify without type = %d, want 422; body: %s", rec.Code, rec.Body)
 	}
 }
 
