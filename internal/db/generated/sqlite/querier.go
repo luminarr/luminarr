@@ -17,6 +17,7 @@ type Querier interface {
 	CountMoviesByLibrary(ctx context.Context, libraryID string) (int64, error)
 	CountMoviesInLibrary(ctx context.Context, libraryID string) (int64, error)
 	CreateBlocklistEntry(ctx context.Context, arg CreateBlocklistEntryParams) (Blocklist, error)
+	CreateCollection(ctx context.Context, arg CreateCollectionParams) (Collection, error)
 	CreateDownloadClientConfig(ctx context.Context, arg CreateDownloadClientConfigParams) (DownloadClientConfig, error)
 	CreateGrabHistory(ctx context.Context, arg CreateGrabHistoryParams) (GrabHistory, error)
 	CreateIndexerConfig(ctx context.Context, arg CreateIndexerConfigParams) (IndexerConfig, error)
@@ -27,6 +28,7 @@ type Querier interface {
 	CreateQualityProfile(ctx context.Context, arg CreateQualityProfileParams) (QualityProfile, error)
 	CreateRemotePathMapping(ctx context.Context, arg CreateRemotePathMappingParams) (RemotePathMapping, error)
 	DeleteBlocklistEntry(ctx context.Context, id string) error
+	DeleteCollection(ctx context.Context, id string) error
 	DeleteDownloadClientConfig(ctx context.Context, id string) error
 	DeleteIndexerConfig(ctx context.Context, id string) error
 	DeleteLibrary(ctx context.Context, id string) error
@@ -36,6 +38,8 @@ type Querier interface {
 	DeleteNotificationConfig(ctx context.Context, id string) error
 	DeleteQualityProfile(ctx context.Context, id string) error
 	DeleteRemotePathMapping(ctx context.Context, id string) error
+	GetCollection(ctx context.Context, id string) (Collection, error)
+	GetCollectionByPerson(ctx context.Context, arg GetCollectionByPersonParams) (Collection, error)
 	GetCollectionStats(ctx context.Context) (GetCollectionStatsRow, error)
 	GetDownloadClientConfig(ctx context.Context, id string) (DownloadClientConfig, error)
 	GetDownloadHandling(ctx context.Context) (DownloadHandling, error)
@@ -58,6 +62,7 @@ type Querier interface {
 	IsBlocklistedByTitle(ctx context.Context, releaseTitle string) (int64, error)
 	ListActiveGrabs(ctx context.Context) ([]GrabHistory, error)
 	ListBlocklist(ctx context.Context, arg ListBlocklistParams) ([]ListBlocklistRow, error)
+	ListCollections(ctx context.Context) ([]Collection, error)
 	ListDownloadClientConfigs(ctx context.Context) ([]DownloadClientConfig, error)
 	ListEnabledDownloadClients(ctx context.Context) ([]DownloadClientConfig, error)
 	ListEnabledIndexers(ctx context.Context) ([]IndexerConfig, error)

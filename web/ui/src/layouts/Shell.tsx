@@ -16,6 +16,7 @@ import {
   Ban,
   Bookmark,
   CalendarDays,
+  Users,
   ChevronLeft,
   ChevronRight,
   Activity,
@@ -35,9 +36,10 @@ interface NavItem {
 
 const mainNav: NavItem[] = [
   { to: "/",          icon: LayoutDashboard, label: "Dashboard" },
-  { to: "/calendar",  icon: CalendarDays,    label: "Calendar" },
-  { to: "/wanted",    icon: Bookmark,        label: "Wanted" },
-  { to: "/stats",     icon: BarChart2,        label: "Statistics" },
+  { to: "/calendar",     icon: CalendarDays, label: "Calendar" },
+  { to: "/wanted",       icon: Bookmark,     label: "Wanted" },
+  { to: "/collections",  icon: Users,        label: "Collections" },
+  { to: "/stats",        icon: BarChart2,    label: "Statistics" },
   { to: "/queue",     icon: Download,        label: "Queue" },
   { to: "/history",   icon: History,         label: "History" },
 ];
@@ -265,7 +267,7 @@ function Sidebar({
             transition: "opacity 150ms ease",
           }}
         >
-          Configuration
+          Settings
         </div>
 
         {settingsNav.map((item) => (

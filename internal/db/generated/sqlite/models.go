@@ -20,6 +20,14 @@ type Blocklist struct {
 	Notes        string    `json:"notes"`
 }
 
+type Collection struct {
+	ID         string    `json:"id"`
+	Name       string    `json:"name"`
+	PersonID   int64     `json:"personId"`
+	PersonType string    `json:"personType"`
+	CreatedAt  time.Time `json:"createdAt"`
+}
+
 type DownloadClientConfig struct {
 	ID        string `json:"id"`
 	Name      string `json:"name"`

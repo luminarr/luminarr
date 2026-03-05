@@ -129,6 +129,109 @@ func (c *Client) GetMovie(ctx context.Context, tmdbID int) (*MovieDetail, error)
 	}, nil
 }
 
+// GetPerson fetches a TMDB person by ID.
+func (c *Client) GetPerson(ctx context.Context, personID int) (*Person, error) {
+	var raw struct {
+		ID                 int    `json:"id"`
+		Name               string `json:"name"`
+		ProfilePath        string `json:"profile_path"`
+		KnownForDepartment string `json:"known_for_department"`
+	}
+	path := fmt.Sprintf("/person/%d", personID)
+	if err := c.get(ctx, path, nil, &raw); err != nil {
+		return nil, fmt.Errorf("tmdb get person %d: %w", personID, err)
+	}
+	return &Person{
+		ID:                 raw.ID,
+		Name:               raw.Name,
+		ProfilePath:        raw.ProfilePath,
+		KnownForDepartment: raw.KnownForDepartment,
+	}, nil
+}
+
+// GetPersonFilmography returns directed films (personType="director") or
+// top-billed acted films (personType="actor") for the given TMDB person.
+// For actors, only credits where billing order < 5 are returned.
+func (c *Client) GetPersonFilmography(ctx context.Context, personID int, personType string) ([]FilmographyItem, error) {
+	var envelope struct {
+		Cast []struct {
+			ID          int    `json:"id"`
+			Title       string `json:"title"`
+			ReleaseDate string `json:"release_date"`
+			PosterPath  string `json:"poster_path"`
+			Order       int    `json:"order"`
+		} `json:"cast"`
+		Crew []struct {
+			ID          int    `json:"id"`
+			Title       string `json:"title"`
+			ReleaseDate string `json:"release_date"`
+			PosterPath  string `json:"poster_path"`
+			Job         string `json:"job"`
+		} `json:"crew"`
+	}
+	path := fmt.Sprintf("/person/%d/movie_credits", personID)
+	if err := c.get(ctx, path, nil, &envelope); err != nil {
+		return nil, fmt.Errorf("tmdb get person filmography %d: %w", personID, err)
+	}
+
+	var items []FilmographyItem
+	if personType == "director" {
+		for _, cr := range envelope.Crew {
+			if cr.Job != "Director" {
+				continue
+			}
+			items = append(items, FilmographyItem{
+				TMDBID:     cr.ID,
+				Title:      cr.Title,
+				Year:       parseYear(cr.ReleaseDate),
+				PosterPath: cr.PosterPath,
+			})
+		}
+	} else {
+		// actor: only top-5 billed credits
+		for _, cr := range envelope.Cast {
+			if cr.Order >= 5 {
+				continue
+			}
+			items = append(items, FilmographyItem{
+				TMDBID:     cr.ID,
+				Title:      cr.Title,
+				Year:       parseYear(cr.ReleaseDate),
+				PosterPath: cr.PosterPath,
+				Order:      cr.Order,
+			})
+		}
+	}
+	return items, nil
+}
+
+// SearchPeople searches TMDB for people by name.
+func (c *Client) SearchPeople(ctx context.Context, query string) ([]PersonSearchResult, error) {
+	params := url.Values{}
+	params.Set("query", query)
+	var envelope struct {
+		Results []struct {
+			ID                 int    `json:"id"`
+			Name               string `json:"name"`
+			ProfilePath        string `json:"profile_path"`
+			KnownForDepartment string `json:"known_for_department"`
+		} `json:"results"`
+	}
+	if err := c.get(ctx, "/search/person", params, &envelope); err != nil {
+		return nil, fmt.Errorf("tmdb search people: %w", err)
+	}
+	results := make([]PersonSearchResult, 0, len(envelope.Results))
+	for _, r := range envelope.Results {
+		results = append(results, PersonSearchResult{
+			ID:                 r.ID,
+			Name:               r.Name,
+			ProfilePath:        r.ProfilePath,
+			KnownForDepartment: r.KnownForDepartment,
+		})
+	}
+	return results, nil
+}
+
 // get performs a GET against the TMDB API, decodes the JSON body into dst,
 // and returns a structured error on non-200 responses.
 func (c *Client) get(ctx context.Context, path string, params url.Values, dst any) error {

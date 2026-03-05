@@ -461,3 +461,34 @@ export interface RadarrImportResult {
   movies: CategoryResult;
   errors: string[];
 }
+
+// ── Collections ────────────────────────────────────────────────────────────
+
+export interface PersonSearchResult {
+  person_id: number;
+  name: string;
+  profile_path: string;
+  known_for_department: string;
+}
+
+export interface CollectionItem {
+  tmdb_id: number;
+  title: string;
+  year: number;
+  poster_path: string;
+  in_library: boolean;
+  movie_id: string;
+  monitored: boolean;
+}
+
+export interface Collection {
+  id: string;
+  name: string;
+  person_id: number;
+  person_type: string;
+  created_at: string;
+  items?: CollectionItem[];
+  total: number;
+  in_library: number;
+  missing: number;
+}

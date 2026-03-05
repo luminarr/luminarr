@@ -13,6 +13,31 @@ type SearchResult struct {
 	Popularity    float64
 }
 
+// Person is summary info for a TMDB person.
+type Person struct {
+	ID                 int
+	Name               string
+	ProfilePath        string
+	KnownForDepartment string
+}
+
+// PersonSearchResult is a single result from the TMDB person search endpoint.
+type PersonSearchResult struct {
+	ID                 int
+	Name               string
+	ProfilePath        string
+	KnownForDepartment string
+}
+
+// FilmographyItem is one film entry in a person's filmography.
+type FilmographyItem struct {
+	TMDBID     int
+	Title      string
+	Year       int
+	PosterPath string
+	Order      int // cast billing order (0 for directors)
+}
+
 // MovieDetail is the full response from the TMDB /movie/{id} endpoint.
 type MovieDetail struct {
 	ID             int

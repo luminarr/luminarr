@@ -46,6 +46,7 @@ export function useAddMovie() {
       library_id: string;
       quality_profile_id: string;
       monitored?: boolean;
+      minimum_availability?: string;
     }) => apiFetch<Movie>("/movies", { method: "POST", body: JSON.stringify(body) }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["movies"] });

@@ -16,6 +16,7 @@ import (
 	"github.com/davidfic/luminarr/internal/api/ws"
 	"github.com/davidfic/luminarr/internal/config"
 	"github.com/davidfic/luminarr/internal/core/blocklist"
+	"github.com/davidfic/luminarr/internal/core/collection"
 	"github.com/davidfic/luminarr/internal/core/downloader"
 	"github.com/davidfic/luminarr/internal/core/downloadhandling"
 	"github.com/davidfic/luminarr/internal/core/health"
@@ -216,9 +217,15 @@ func run() error {
 	qualitySvc := quality.NewService(queries, bus)
 	qualityDefSvc := quality.NewDefinitionService(queries)
 
-	var tmdbClient movie.MetadataProvider
+	var rawTMDB *tmdb.Client
 	if !cfg.TMDB.APIKey.IsEmpty() {
-		tmdbClient = tmdb.New(cfg.TMDB.APIKey.Value(), logger)
+		rawTMDB = tmdb.New(cfg.TMDB.APIKey.Value(), logger)
+	}
+	// tmdbClient is the interface used by movie and library services.
+	// Declared separately to keep the nil-interface semantics correct.
+	var tmdbClient movie.MetadataProvider
+	if rawTMDB != nil {
+		tmdbClient = rawTMDB
 	}
 
 	librarySvc := library.NewService(queries, bus, tmdbClient)
@@ -258,6 +265,11 @@ func run() error {
 
 	radarrImportSvc := radarrimport.NewService(movieSvc, qualitySvc, librarySvc, indexerSvc, downloaderSvc)
 	statsSvc := stats.NewService(queries, movieSvc)
+
+	var collectionSvc *collection.Service
+	if rawTMDB != nil {
+		collectionSvc = collection.NewService(queries, rawTMDB, movieSvc)
+	}
 
 	// ── Scheduler ─────────────────────────────────────────────────────────────
 	// Load queue poll interval from download handling settings. Default to 60s
@@ -302,6 +314,7 @@ func run() error {
 		RadarrImportService:      radarrImportSvc,
 		StatsService:             statsSvc,
 		MediaInfoService:         mediainfoSvc,
+		CollectionService:        collectionSvc,
 		WSHub:                    wsHub,
 	})
 
