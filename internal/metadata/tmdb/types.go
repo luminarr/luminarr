@@ -38,6 +38,20 @@ type FilmographyItem struct {
 	Order      int // cast billing order (0 for directors)
 }
 
+// FranchiseSearchResult is a single result from the TMDB /search/collection endpoint.
+type FranchiseSearchResult struct {
+	ID         int
+	Name       string
+	PosterPath string
+}
+
+// FranchiseDetail is the full response from the TMDB /collection/{id} endpoint.
+type FranchiseDetail struct {
+	ID    int
+	Name  string
+	Parts []FilmographyItem
+}
+
 // MovieDetail is the full response from the TMDB /movie/{id} endpoint.
 type MovieDetail struct {
 	ID             int

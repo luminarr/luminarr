@@ -321,28 +321,21 @@ function FilmCard({
         </div>
       )}
 
-      {/* Hover overlay for missing, un-selected films */}
+      {/* Hover indicator — empty checkbox in top-left, same position as selected checkmark */}
       {!item.in_library && !selected && hovered && (
         <div
           style={{
             position: "absolute",
-            inset: 0,
-            background: "rgba(0,0,0,0.4)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
+            top: 6,
+            left: 6,
+            width: 18,
+            height: 18,
+            border: "2px solid rgba(255,255,255,0.85)",
+            borderRadius: 3,
+            background: "rgba(0,0,0,0.25)",
             pointerEvents: "none",
           }}
-        >
-          <div
-            style={{
-              width: 20,
-              height: 20,
-              border: "2px solid rgba(255,255,255,0.8)",
-              borderRadius: 4,
-            }}
-          />
-        </div>
+        />
       )}
     </div>
   );
@@ -441,7 +434,7 @@ export default function CollectionDetail() {
     );
   }
 
-  const roleLabel = coll.person_type === "director" ? "Director" : "Actor";
+  const roleLabel = coll.person_type === "franchise" ? "Franchise" : coll.person_type === "director" ? "Director" : "Actor";
   const missingCount = coll.missing ?? 0;
   const selectedCount = selected.size;
   const selectedIds = Array.from(selected);

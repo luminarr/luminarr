@@ -232,6 +232,63 @@ func (c *Client) SearchPeople(ctx context.Context, query string) ([]PersonSearch
 	return results, nil
 }
 
+// SearchFranchises searches TMDB for movie collections (franchises) by name.
+func (c *Client) SearchFranchises(ctx context.Context, query string) ([]FranchiseSearchResult, error) {
+	params := url.Values{}
+	params.Set("query", query)
+	var envelope struct {
+		Results []struct {
+			ID         int    `json:"id"`
+			Name       string `json:"name"`
+			PosterPath string `json:"poster_path"`
+		} `json:"results"`
+	}
+	if err := c.get(ctx, "/search/collection", params, &envelope); err != nil {
+		return nil, fmt.Errorf("tmdb search franchises: %w", err)
+	}
+	results := make([]FranchiseSearchResult, 0, len(envelope.Results))
+	for _, r := range envelope.Results {
+		results = append(results, FranchiseSearchResult{
+			ID:         r.ID,
+			Name:       r.Name,
+			PosterPath: r.PosterPath,
+		})
+	}
+	return results, nil
+}
+
+// GetFranchise fetches the full details of a TMDB movie collection by ID.
+func (c *Client) GetFranchise(ctx context.Context, collectionID int) (*FranchiseDetail, error) {
+	var raw struct {
+		ID    int    `json:"id"`
+		Name  string `json:"name"`
+		Parts []struct {
+			ID          int    `json:"id"`
+			Title       string `json:"title"`
+			ReleaseDate string `json:"release_date"`
+			PosterPath  string `json:"poster_path"`
+		} `json:"parts"`
+	}
+	path := fmt.Sprintf("/collection/%d", collectionID)
+	if err := c.get(ctx, path, nil, &raw); err != nil {
+		return nil, fmt.Errorf("tmdb get franchise %d: %w", collectionID, err)
+	}
+	parts := make([]FilmographyItem, 0, len(raw.Parts))
+	for _, p := range raw.Parts {
+		parts = append(parts, FilmographyItem{
+			TMDBID:     p.ID,
+			Title:      p.Title,
+			Year:       parseYear(p.ReleaseDate),
+			PosterPath: p.PosterPath,
+		})
+	}
+	return &FranchiseDetail{
+		ID:    raw.ID,
+		Name:  raw.Name,
+		Parts: parts,
+	}, nil
+}
+
 // get performs a GET against the TMDB API, decodes the JSON body into dst,
 // and returns a structured error on non-200 responses.
 func (c *Client) get(ctx context.Context, path string, params url.Values, dst any) error {

@@ -4,15 +4,18 @@ import {
   useCollections,
   useCreateCollection,
   useDeleteCollection,
-  useSearchPeople,
+  useSearchAll,
 } from "@/api/collections";
-import type { PersonSearchResult } from "@/types";
+import type { EntitySearchResult } from "@/types";
+
+const TMDB_IMG_BASE = "https://image.tmdb.org/t/p/w45";
 
 // ── Add Collection Modal ───────────────────────────────────────────────────
 
 function AddCollectionModal({ onClose }: { onClose: () => void }) {
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
+  // For person results: track whether each person is being added as director or actor.
   const [selectedType, setSelectedType] = useState<Record<number, "director" | "actor">>({});
   const createCollection = useCreateCollection();
 
@@ -21,12 +24,15 @@ function AddCollectionModal({ onClose }: { onClose: () => void }) {
     return () => clearTimeout(t);
   }, [query]);
 
-  const { data: results, isFetching } = useSearchPeople(debouncedQuery);
+  const { data: results, isFetching } = useSearchAll(debouncedQuery);
 
-  function handleAdd(person: PersonSearchResult) {
-    const personType = selectedType[person.person_id] ?? "director";
+  function handleAdd(result: EntitySearchResult, overrideType?: string) {
+    const personType =
+      result.result_type === "franchise"
+        ? "franchise"
+        : (overrideType ?? selectedType[result.id] ?? "director");
     createCollection.mutate(
-      { person_id: person.person_id, person_type: personType },
+      { person_id: result.id, person_type: personType },
       { onSuccess: onClose }
     );
   }
@@ -72,15 +78,7 @@ function AddCollectionModal({ onClose }: { onClose: () => void }) {
           </span>
           <button
             onClick={onClose}
-            style={{
-              background: "none",
-              border: "none",
-              color: "var(--color-text-muted)",
-              cursor: "pointer",
-              fontSize: 18,
-              lineHeight: 1,
-              padding: 2,
-            }}
+            style={{ background: "none", border: "none", color: "var(--color-text-muted)", cursor: "pointer", fontSize: 18, lineHeight: 1, padding: 2 }}
           >
             ×
           </button>
@@ -92,7 +90,7 @@ function AddCollectionModal({ onClose }: { onClose: () => void }) {
             autoFocus
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search for a director or actor…"
+            placeholder="Search for a director, actor, or franchise (e.g. Alien)…"
             style={{
               width: "100%",
               padding: "8px 12px",
@@ -119,14 +117,14 @@ function AddCollectionModal({ onClose }: { onClose: () => void }) {
               No results for "{debouncedQuery}"
             </div>
           )}
-          {results?.map((person) => {
-            const type = selectedType[person.person_id] ?? "director";
-            const profileSrc = person.profile_path
-              ? `https://image.tmdb.org/t/p/w45${person.profile_path}`
-              : null;
+          {results?.map((result) => {
+            const isFranchise = result.result_type === "franchise";
+            const imageSrc = result.image_path ? `${TMDB_IMG_BASE}${result.image_path}` : null;
+            const personType = selectedType[result.id] ?? "director";
+
             return (
               <div
-                key={person.person_id}
+                key={`${result.result_type}-${result.id}`}
                 style={{
                   display: "flex",
                   alignItems: "center",
@@ -135,54 +133,88 @@ function AddCollectionModal({ onClose }: { onClose: () => void }) {
                   borderBottom: "1px solid var(--color-border-subtle)",
                 }}
               >
-                {profileSrc ? (
+                {/* Thumbnail */}
+                {imageSrc ? (
                   <img
-                    src={profileSrc}
-                    alt={person.name}
-                    style={{ width: 36, height: 36, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }}
+                    src={imageSrc}
+                    alt={result.name}
+                    style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: isFranchise ? 4 : "50%",
+                      objectFit: "cover",
+                      flexShrink: 0,
+                    }}
                   />
                 ) : (
                   <div
                     style={{
                       width: 36,
                       height: 36,
-                      borderRadius: "50%",
+                      borderRadius: isFranchise ? 4 : "50%",
                       background: "var(--color-bg-surface)",
                       flexShrink: 0,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: 16,
                     }}
-                  />
-                )}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 500, color: "var(--color-text-primary)" }}>
-                    {person.name}
+                  >
+                    {isFranchise ? "🎬" : "👤"}
                   </div>
-                  <div style={{ fontSize: 11, color: "var(--color-text-muted)" }}>
-                    {person.known_for_department}
+                )}
+
+                {/* Name + subtitle */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: "var(--color-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {result.name}
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span
+                      style={{
+                        fontSize: 10,
+                        fontWeight: 500,
+                        padding: "1px 5px",
+                        borderRadius: 3,
+                        background: isFranchise ? "rgba(139,92,246,0.15)" : "rgba(59,130,246,0.12)",
+                        color: isFranchise ? "#8b5cf6" : "#60a5fa",
+                      }}
+                    >
+                      {isFranchise ? "Franchise" : "Person"}
+                    </span>
+                    <span style={{ fontSize: 11, color: "var(--color-text-muted)" }}>
+                      {result.subtitle}
+                    </span>
                   </div>
                 </div>
-                <select
-                  value={type}
-                  onChange={(e) =>
-                    setSelectedType((prev) => ({
-                      ...prev,
-                      [person.person_id]: e.target.value as "director" | "actor",
-                    }))
-                  }
-                  style={{
-                    background: "var(--color-bg-surface)",
-                    border: "1px solid var(--color-border-default)",
-                    borderRadius: 4,
-                    color: "var(--color-text-secondary)",
-                    fontSize: 11,
-                    padding: "3px 6px",
-                    cursor: "pointer",
-                  }}
-                >
-                  <option value="director">Director</option>
-                  <option value="actor">Actor</option>
-                </select>
+
+                {/* Director/Actor selector — only for persons */}
+                {!isFranchise && (
+                  <select
+                    value={personType}
+                    onChange={(e) =>
+                      setSelectedType((prev) => ({
+                        ...prev,
+                        [result.id]: e.target.value as "director" | "actor",
+                      }))
+                    }
+                    style={{
+                      background: "var(--color-bg-surface)",
+                      border: "1px solid var(--color-border-default)",
+                      borderRadius: 4,
+                      color: "var(--color-text-secondary)",
+                      fontSize: 11,
+                      padding: "3px 6px",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <option value="director">Director</option>
+                    <option value="actor">Actor</option>
+                  </select>
+                )}
+
                 <button
-                  onClick={() => handleAdd(person)}
+                  onClick={() => handleAdd(result, isFranchise ? "franchise" : personType)}
                   disabled={createCollection.isPending}
                   style={{
                     background: "var(--color-accent)",
@@ -193,6 +225,7 @@ function AddCollectionModal({ onClose }: { onClose: () => void }) {
                     fontSize: 12,
                     fontWeight: 500,
                     cursor: createCollection.isPending ? "not-allowed" : "pointer",
+                    whiteSpace: "nowrap",
                   }}
                 >
                   Add
@@ -228,7 +261,7 @@ function CollectionCard({
   const [hovered, setHovered] = useState(false);
 
   const pct = total > 0 ? Math.round((inLibrary / total) * 100) : 0;
-  const roleLabel = personType === "director" ? "Director" : "Actor";
+  const roleLabel = personType === "franchise" ? "Franchise" : personType === "director" ? "Director" : "Actor";
 
   return (
     <div

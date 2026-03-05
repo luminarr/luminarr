@@ -91,6 +91,18 @@ type personSearchOutput struct {
 	Body []personSearchResult
 }
 
+type entitySearchResult struct {
+	ID         int    `json:"id"`
+	Name       string `json:"name"`
+	ImagePath  string `json:"image_path"`
+	Subtitle   string `json:"subtitle"`
+	ResultType string `json:"result_type"`
+}
+
+type entitySearchOutput struct {
+	Body []entitySearchResult
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 func toCollectionBody(c collection.Collection) collectionBody {
@@ -296,6 +308,35 @@ func RegisterCollectionRoutes(api huma.API, svc *collection.Service) {
 				Name:               r.Name,
 				ProfilePath:        r.ProfilePath,
 				KnownForDepartment: r.KnownForDepartment,
+			})
+		}
+		return out, nil
+	})
+
+	// GET /api/v1/tmdb/search?q=<query>
+	// Searches both people and movie franchises, returning a unified list.
+	huma.Register(api, huma.Operation{
+		OperationID: "search-tmdb-unified",
+		Method:      http.MethodGet,
+		Path:        "/api/v1/tmdb/search",
+		Summary:     "Search TMDB for people and movie franchises",
+		Tags:        []string{"Collections"},
+	}, func(ctx context.Context, input *personSearchInput) (*entitySearchOutput, error) {
+		if svc == nil {
+			return nil, huma.NewError(http.StatusServiceUnavailable, "TMDB not configured")
+		}
+		results, err := svc.SearchAll(ctx, input.Q)
+		if err != nil {
+			return nil, huma.NewError(http.StatusInternalServerError, err.Error())
+		}
+		out := &entitySearchOutput{Body: make([]entitySearchResult, 0, len(results))}
+		for _, r := range results {
+			out.Body = append(out.Body, entitySearchResult{
+				ID:         r.ID,
+				Name:       r.Name,
+				ImagePath:  r.ImagePath,
+				Subtitle:   r.Subtitle,
+				ResultType: r.ResultType,
 			})
 		}
 		return out, nil

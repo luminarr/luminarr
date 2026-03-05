@@ -471,6 +471,14 @@ export interface PersonSearchResult {
   known_for_department: string;
 }
 
+export interface EntitySearchResult {
+  id: number;
+  name: string;
+  image_path: string;
+  subtitle: string;
+  result_type: "person" | "franchise";
+}
+
 export interface CollectionItem {
   tmdb_id: number;
   title: string;

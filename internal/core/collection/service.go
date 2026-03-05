@@ -23,6 +23,17 @@ type MetadataProvider interface {
 	GetPerson(ctx context.Context, personID int) (*tmdb.Person, error)
 	GetPersonFilmography(ctx context.Context, personID int, personType string) ([]tmdb.FilmographyItem, error)
 	SearchPeople(ctx context.Context, query string) ([]tmdb.PersonSearchResult, error)
+	SearchFranchises(ctx context.Context, query string) ([]tmdb.FranchiseSearchResult, error)
+	GetFranchise(ctx context.Context, collectionID int) (*tmdb.FranchiseDetail, error)
+}
+
+// EntitySearchResult is a unified result from searching both people and franchises.
+type EntitySearchResult struct {
+	ID         int // TMDB ID
+	Name       string
+	ImagePath  string // profile_path for persons, poster_path for franchises
+	Subtitle   string // known_for_department for persons, "Movie franchise" for franchises
+	ResultType string // "person" | "franchise"
 }
 
 // Sentinel errors.
@@ -99,6 +110,43 @@ func (s *Service) SearchPeople(ctx context.Context, query string) ([]tmdb.Person
 	return s.provider.SearchPeople(ctx, query)
 }
 
+// SearchAll searches TMDB for both people and movie franchises, returning a
+// unified list (people first, then franchises).
+func (s *Service) SearchAll(ctx context.Context, query string) ([]EntitySearchResult, error) {
+	if s.provider == nil {
+		return nil, errors.New("TMDB not configured")
+	}
+
+	// Run both searches. Failures are non-fatal so partial results are still useful.
+	people, peopleErr := s.provider.SearchPeople(ctx, query)
+	franchises, franchiseErr := s.provider.SearchFranchises(ctx, query)
+
+	if peopleErr != nil && franchiseErr != nil {
+		return nil, fmt.Errorf("search failed: %w", peopleErr)
+	}
+
+	results := make([]EntitySearchResult, 0, len(people)+len(franchises))
+	for _, p := range people {
+		results = append(results, EntitySearchResult{
+			ID:         p.ID,
+			Name:       p.Name,
+			ImagePath:  p.ProfilePath,
+			Subtitle:   p.KnownForDepartment,
+			ResultType: "person",
+		})
+	}
+	for _, f := range franchises {
+		results = append(results, EntitySearchResult{
+			ID:         f.ID,
+			Name:       f.Name,
+			ImagePath:  f.PosterPath,
+			Subtitle:   "Movie franchise",
+			ResultType: "franchise",
+		})
+	}
+	return results, nil
+}
+
 // Create fetches the person's name from TMDB and inserts a collection record.
 // Returns ErrAlreadyExists if a collection for that person+type already exists.
 // After inserting, a background goroutine scans the current library for matches
@@ -118,14 +166,24 @@ func (s *Service) Create(ctx context.Context, personID int, personType string) (
 		return nil, fmt.Errorf("checking for existing collection: %w", err)
 	}
 
-	person, err := s.provider.GetPerson(ctx, personID)
-	if err != nil {
-		return nil, fmt.Errorf("fetching person from TMDB: %w", err)
+	var entityName string
+	if personType == "franchise" {
+		detail, err := s.provider.GetFranchise(ctx, personID)
+		if err != nil {
+			return nil, fmt.Errorf("fetching franchise from TMDB: %w", err)
+		}
+		entityName = detail.Name
+	} else {
+		person, err := s.provider.GetPerson(ctx, personID)
+		if err != nil {
+			return nil, fmt.Errorf("fetching person from TMDB: %w", err)
+		}
+		entityName = person.Name
 	}
 
 	row, err := s.q.CreateCollection(ctx, dbsqlite.CreateCollectionParams{
 		ID:         uuid.New().String(),
-		Name:       person.Name,
+		Name:       entityName,
 		PersonID:   int64(personID),
 		PersonType: personType,
 		CreatedAt:  time.Now().UTC(),
@@ -149,11 +207,23 @@ func (s *Service) scanAndStoreCounts(ctx context.Context, collID string, personI
 	if s.provider == nil {
 		return
 	}
-	items, err := s.provider.GetPersonFilmography(ctx, personID, personType)
-	if err != nil {
-		s.logger.Warn("collection background scan: filmography fetch failed",
-			"collection_id", collID, "err", err)
-		return
+	var items []tmdb.FilmographyItem
+	if personType == "franchise" {
+		detail, err := s.provider.GetFranchise(ctx, personID)
+		if err != nil {
+			s.logger.Warn("collection background scan: franchise fetch failed",
+				"collection_id", collID, "err", err)
+			return
+		}
+		items = detail.Parts
+	} else {
+		var err error
+		items, err = s.provider.GetPersonFilmography(ctx, personID, personType)
+		if err != nil {
+			s.logger.Warn("collection background scan: filmography fetch failed",
+				"collection_id", collID, "err", err)
+			return
+		}
 	}
 	total := int64(len(items))
 	var inLibrary int64
@@ -202,9 +272,19 @@ func (s *Service) Get(ctx context.Context, id string) (*Collection, error) {
 		return coll, nil
 	}
 
-	items, err := s.provider.GetPersonFilmography(ctx, int(row.PersonID), row.PersonType)
-	if err != nil {
-		return nil, fmt.Errorf("fetching filmography: %w", err)
+	var items []tmdb.FilmographyItem
+	if row.PersonType == "franchise" {
+		detail, err := s.provider.GetFranchise(ctx, int(row.PersonID))
+		if err != nil {
+			return nil, fmt.Errorf("fetching franchise: %w", err)
+		}
+		items = detail.Parts
+	} else {
+		var err error
+		items, err = s.provider.GetPersonFilmography(ctx, int(row.PersonID), row.PersonType)
+		if err != nil {
+			return nil, fmt.Errorf("fetching filmography: %w", err)
+		}
 	}
 
 	collItems := make([]Item, 0, len(items))

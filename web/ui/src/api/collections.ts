@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { apiFetch } from "./client";
-import type { Collection, PersonSearchResult } from "@/types";
+import type { Collection, PersonSearchResult, EntitySearchResult } from "@/types";
 
 export function useCollections() {
   return useQuery({
@@ -84,6 +84,16 @@ export function useSearchPeople(query: string) {
     queryKey: ["tmdb-people", query],
     queryFn: () =>
       apiFetch<PersonSearchResult[]>(`/tmdb/people/search?q=${encodeURIComponent(query)}`),
+    enabled: query.trim().length >= 2,
+    staleTime: 60_000,
+  });
+}
+
+export function useSearchAll(query: string) {
+  return useQuery({
+    queryKey: ["tmdb-search", query],
+    queryFn: () =>
+      apiFetch<EntitySearchResult[]>(`/tmdb/search?q=${encodeURIComponent(query)}`),
     enabled: query.trim().length >= 2,
     staleTime: 60_000,
   });
