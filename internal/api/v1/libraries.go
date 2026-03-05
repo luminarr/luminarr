@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"log/slog"
+
 	"github.com/danielgtaylor/huma/v2"
 
 	"github.com/davidfic/luminarr/internal/core/library"
@@ -440,6 +442,7 @@ func RegisterLibraryRoutes(api huma.API, svc *library.Service, movieSvc *movie.S
 				QualityProfileID: qpID,
 			})
 			if addErr != nil {
+				slog.Error("import-file: AddUnmatched failed", "path", input.Body.FilePath, "err", addErr)
 				return nil, huma.NewError(http.StatusInternalServerError, "failed to add unmatched movie", addErr)
 			}
 		} else {
@@ -451,6 +454,7 @@ func RegisterLibraryRoutes(api huma.API, svc *library.Service, movieSvc *movie.S
 				Monitored:        true,
 			})
 			if addErr != nil && !errors.Is(addErr, movie.ErrAlreadyExists) {
+				slog.Error("import-file: Add failed", "path", input.Body.FilePath, "tmdb_id", input.Body.TmdbID, "err", addErr)
 				return nil, huma.NewError(http.StatusInternalServerError, "failed to add movie", addErr)
 			}
 			if errors.Is(addErr, movie.ErrAlreadyExists) {
@@ -463,6 +467,7 @@ func RegisterLibraryRoutes(api huma.API, svc *library.Service, movieSvc *movie.S
 
 		quality := library.ParseQualityFromPath(input.Body.FilePath)
 		if err := movieSvc.AttachFile(ctx, m.ID, input.Body.FilePath, sizeBytes, quality); err != nil {
+			slog.Error("import-file: AttachFile failed", "path", input.Body.FilePath, "movie_id", m.ID, "err", err)
 			return nil, huma.NewError(http.StatusInternalServerError, "failed to attach file to movie", err)
 		}
 

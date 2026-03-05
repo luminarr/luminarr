@@ -98,8 +98,12 @@ func parseFilename(name string) (title string, year int) {
 	// Strip extension.
 	name = strings.TrimSuffix(name, filepath.Ext(name))
 
-	// Locate year. Everything before it is treated as the title.
-	if m := yearRe.FindStringIndex(name); m != nil {
+	// Locate the release year. We use the *last* match so that titles
+	// containing year-like numbers (e.g. "2001 A Space Odyssey", "1917",
+	// "Blade Runner 2049") are not truncated.
+	allYears := yearRe.FindAllStringIndex(name, -1)
+	if len(allYears) > 0 {
+		m := allYears[len(allYears)-1]
 		year, _ = strconv.Atoi(name[m[0]:m[1]])
 		name = name[:m[0]]
 	}

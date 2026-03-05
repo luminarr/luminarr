@@ -776,7 +776,9 @@ func (s *Service) GetByTMDBID(ctx context.Context, tmdbID int) (Movie, error) {
 }
 
 // GetByFilePath returns the movie that owns the given file path, or
-// ErrNotFound if no movie_files row exists for that path.
+// ErrNotFound if no movie_files row exists for that path. If the
+// movie_files row exists but the parent movie has been deleted
+// (orphaned row), the orphan is cleaned up and ErrNotFound is returned.
 func (s *Service) GetByFilePath(ctx context.Context, filePath string) (Movie, error) {
 	mf, err := s.q.GetMovieFileByPath(ctx, filePath)
 	if err != nil {
@@ -785,7 +787,16 @@ func (s *Service) GetByFilePath(ctx context.Context, filePath string) (Movie, er
 		}
 		return Movie{}, fmt.Errorf("looking up movie file %q: %w", filePath, err)
 	}
-	return s.Get(ctx, mf.MovieID)
+	m, err := s.Get(ctx, mf.MovieID)
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			// Orphaned movie_files row — parent movie was deleted but
+			// CASCADE didn't fire. Clean it up.
+			_ = s.q.DeleteMovieFile(ctx, mf.ID)
+		}
+		return Movie{}, err
+	}
+	return m, nil
 }
 
 // FileInfo is the domain representation of a movie_files record.
