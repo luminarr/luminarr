@@ -81,6 +81,7 @@ func (n *Notifier) Notify(ctx context.Context, event plugin.NotificationEvent) e
 	}
 
 	cmd := exec.CommandContext(ctx, scriptPath) //nolint:gosec // path validated via resolveScript
+	cmd.WaitDelay = 3 * time.Second // give pipes time to drain after kill
 	cmd.Stdin = bytes.NewReader(payload)
 	cmd.Env = append(os.Environ(),
 		"LUMINARR_EVENT_TYPE="+string(event.Type),
@@ -89,9 +90,15 @@ func (n *Notifier) Notify(ctx context.Context, event plugin.NotificationEvent) e
 		"LUMINARR_TIMESTAMP="+event.Timestamp.Format(time.RFC3339),
 	)
 
-	out, err := cmd.CombinedOutput()
-	if len(out) > 0 {
-		slog.Info("command notifier output", "script", n.cfg.ScriptName, "output", string(out))
+	// Use a buffer for combined output instead of CombinedOutput() which
+	// can hang on context cancellation waiting for pipe reads.
+	var outBuf bytes.Buffer
+	cmd.Stdout = &outBuf
+	cmd.Stderr = &outBuf
+
+	err = cmd.Run()
+	if outBuf.Len() > 0 {
+		slog.Info("command notifier output", "script", n.cfg.ScriptName, "output", outBuf.String())
 	}
 	if err != nil {
 		return fmt.Errorf("command: script %q failed: %w", n.cfg.ScriptName, err)
