@@ -49,6 +49,9 @@ const tooltipStyle = {
     fontSize: 12,
     color: "var(--color-text-primary)",
   },
+  // Disable the CSS transition so the tooltip snaps to cursor position
+  // instead of animating/chasing it, which causes visible jitter.
+  wrapperStyle: { transition: "none" },
   cursor: { fill: "color-mix(in srgb, var(--color-accent) 8%, transparent)" },
 };
 
@@ -193,6 +196,7 @@ function DecadesCard({ data }: { data: DecadeBucket[] }) {
           <YAxis tick={axisStyle} axisLine={false} tickLine={false} allowDecimals={false} />
           <Tooltip
             contentStyle={tooltipStyle.contentStyle}
+            wrapperStyle={tooltipStyle.wrapperStyle}
             cursor={tooltipStyle.cursor}
             formatter={(v: number | undefined) => [(v ?? 0).toLocaleString(), "Movies"]}
           />
@@ -250,6 +254,7 @@ function GrowthCard({ data }: { data: GrowthPoint[] }) {
           <YAxis tick={axisStyle} axisLine={false} tickLine={false} allowDecimals={false} />
           <Tooltip
             contentStyle={tooltipStyle.contentStyle}
+            wrapperStyle={tooltipStyle.wrapperStyle}
             formatter={(v: number | undefined, name: string | undefined) => [
               (v ?? 0).toLocaleString(),
               name === "cumulative" ? "Total" : "Added",
@@ -343,6 +348,7 @@ function QualityMiniChart({
           />
           <Tooltip
             contentStyle={tooltipStyle.contentStyle}
+            wrapperStyle={tooltipStyle.wrapperStyle}
             cursor={tooltipStyle.cursor}
             formatter={(v: number | undefined) => [(v ?? 0).toLocaleString(), "Files"]}
           />
@@ -448,6 +454,7 @@ function StorageCard({ data }: { data: StorageStats }) {
               />
               <Tooltip
                 contentStyle={tooltipStyle.contentStyle}
+                wrapperStyle={tooltipStyle.wrapperStyle}
                 formatter={(v: number | undefined) => [formatBytes(v ?? 0), "Storage"]}
               />
               <Area
@@ -490,7 +497,7 @@ function GrabsCard({ data }: { data: GrabStats }) {
       <div style={{ display: "flex", gap: 16, alignItems: "flex-start", flexWrap: "wrap" }}>
         {/* Donut chart */}
         {pieData.length > 0 && (
-          <div style={{ flexShrink: 0 }}>
+          <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
             <PieChart width={120} height={120}>
               <Pie
                 data={pieData}
@@ -504,11 +511,15 @@ function GrabsCard({ data }: { data: GrabStats }) {
                 <Cell fill={GRAB_COLORS.success} />
                 <Cell fill={GRAB_COLORS.failed} />
               </Pie>
-              <Tooltip
-                contentStyle={tooltipStyle.contentStyle}
-                formatter={(v: number | undefined) => [(v ?? 0).toLocaleString()]}
-              />
             </PieChart>
+            <div style={{ display: "flex", gap: 12, fontSize: 11, color: "var(--color-text-muted)" }}>
+              <span>
+                <span style={{ color: GRAB_COLORS.success }}>● </span>OK
+              </span>
+              <span>
+                <span style={{ color: GRAB_COLORS.failed }}>● </span>Failed
+              </span>
+            </div>
           </div>
         )}
 
@@ -649,6 +660,7 @@ function GenresCard({ data }: { data: GenreBucket[] }) {
           />
           <Tooltip
             contentStyle={tooltipStyle.contentStyle}
+            wrapperStyle={tooltipStyle.wrapperStyle}
             cursor={tooltipStyle.cursor}
             formatter={(v: number | undefined) => [(v ?? 0).toLocaleString(), "Movies"]}
           />
