@@ -3,8 +3,10 @@ INSERT INTO library_file_candidates
     (library_id, file_path, file_size, parsed_title, parsed_year, scanned_at)
 VALUES (?, ?, ?, ?, ?, ?)
 ON CONFLICT(library_id, file_path) DO UPDATE SET
-    file_size  = excluded.file_size,
-    scanned_at = excluded.scanned_at;
+    file_size    = excluded.file_size,
+    parsed_title = excluded.parsed_title,
+    parsed_year  = excluded.parsed_year,
+    scanned_at   = excluded.scanned_at;
 
 -- name: SetLibraryFileCandidateMatch :exec
 UPDATE library_file_candidates

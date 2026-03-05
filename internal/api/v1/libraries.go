@@ -414,6 +414,13 @@ func RegisterLibraryRoutes(api huma.API, svc *library.Service, movieSvc *movie.S
 		}
 		sizeBytes := info.Size()
 
+		// If this file is already attached to a movie, return it directly
+		// instead of creating a duplicate.
+		if existing, err := movieSvc.GetByFilePath(ctx, input.Body.FilePath); err == nil {
+			_ = svc.DeleteCandidate(ctx, input.ID, input.Body.FilePath)
+			return &libraryImportFileOutput{Body: movieToBody(existing)}, nil
+		}
+
 		// Use the library's default quality profile; fall back to an empty string
 		// which movie.Add will accept (profile validation is relaxed on import).
 		qpID := lib.DefaultQualityProfileID

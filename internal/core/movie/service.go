@@ -775,6 +775,19 @@ func (s *Service) GetByTMDBID(ctx context.Context, tmdbID int) (Movie, error) {
 	return rowToMovie(row)
 }
 
+// GetByFilePath returns the movie that owns the given file path, or
+// ErrNotFound if no movie_files row exists for that path.
+func (s *Service) GetByFilePath(ctx context.Context, filePath string) (Movie, error) {
+	mf, err := s.q.GetMovieFileByPath(ctx, filePath)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return Movie{}, ErrNotFound
+		}
+		return Movie{}, fmt.Errorf("looking up movie file %q: %w", filePath, err)
+	}
+	return s.Get(ctx, mf.MovieID)
+}
+
 // FileInfo is the domain representation of a movie_files record.
 type FileInfo struct {
 	ID            string
