@@ -317,6 +317,7 @@ func run() error {
 		MediaInfoService:         mediainfoSvc,
 		CollectionService:        collectionSvc,
 		WSHub:                    wsHub,
+		Bus:                      bus,
 	})
 
 	// ── HTTP server ───────────────────────────────────────────────────────────

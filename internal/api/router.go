@@ -30,6 +30,7 @@ import (
 	"github.com/davidfic/luminarr/internal/core/quality"
 	"github.com/davidfic/luminarr/internal/core/queue"
 	"github.com/davidfic/luminarr/internal/core/stats"
+	"github.com/davidfic/luminarr/internal/events"
 	"github.com/davidfic/luminarr/internal/radarrimport"
 	"github.com/davidfic/luminarr/internal/scheduler"
 	"github.com/davidfic/luminarr/internal/version"
@@ -64,6 +65,7 @@ type RouterConfig struct {
 	MediaInfoService         *mediainfo.Service
 	CollectionService        *collection.Service
 	WSHub                    *ws.Hub
+	Bus                      *events.Bus
 }
 
 // NewRouter builds and returns the application HTTP handler.
@@ -215,6 +217,10 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	}
 
 	v1.RegisterCollectionRoutes(humaAPI, cfg.CollectionService)
+
+	if cfg.LibraryService != nil && cfg.MovieService != nil && cfg.Bus != nil && cfg.Scheduler != nil {
+		v1.RegisterHookRoutes(humaAPI, cfg.LibraryService, cfg.MovieService, cfg.Bus, cfg.Scheduler)
+	}
 
 	v1.RegisterFilesystemRoutes(humaAPI)
 	v1.RegisterParseRoutes(humaAPI)
