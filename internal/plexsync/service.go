@@ -115,7 +115,7 @@ func (s *Service) Preview(ctx context.Context, mediaServerID, sectionKey string)
 	}
 
 	// Compute diff.
-	var inPlexOnly []SyncMovie
+	inPlexOnly := make([]SyncMovie, 0)
 	var alreadySynced int
 	for tmdbID, pm := range plexByTmdb {
 		if _, inLuminarr := luminarrByTmdb[tmdbID]; inLuminarr {
@@ -129,7 +129,7 @@ func (s *Service) Preview(ctx context.Context, mediaServerID, sectionKey string)
 		}
 	}
 
-	var inLuminarrOnly []LuminarrMovie
+	inLuminarrOnly := make([]LuminarrMovie, 0)
 	for tmdbID, lm := range luminarrByTmdb {
 		if _, inPlex := plexByTmdb[tmdbID]; !inPlex {
 			inLuminarrOnly = append(inLuminarrOnly, LuminarrMovie{
