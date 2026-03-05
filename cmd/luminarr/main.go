@@ -49,6 +49,7 @@ import (
 	// them with the default registry before any service is constructed.
 	_ "github.com/davidfic/luminarr/plugins/downloaders/deluge"
 	_ "github.com/davidfic/luminarr/plugins/downloaders/qbittorrent"
+	_ "github.com/davidfic/luminarr/plugins/downloaders/transmission"
 	_ "github.com/davidfic/luminarr/plugins/indexers/newznab"
 	_ "github.com/davidfic/luminarr/plugins/indexers/torznab"
 	_ "github.com/davidfic/luminarr/plugins/notifications/command"
