@@ -33,8 +33,8 @@ type LuminarrMovie struct {
 	Status string `json:"status"`
 }
 
-// PreviewResult summarises the library diff between Plex and Luminarr.
-type PreviewResult struct {
+// SyncPreview summarises the library diff between Plex and Luminarr.
+type SyncPreview struct {
 	PlexTotal      int             `json:"plex_total"`
 	InPlexOnly     []SyncMovie     `json:"in_plex_only"`
 	InLuminarrOnly []LuminarrMovie `json:"in_luminarr_only"`
@@ -42,16 +42,16 @@ type PreviewResult struct {
 	Unmatched      int             `json:"unmatched"`
 }
 
-// ImportOptions controls what gets imported from Plex.
-type ImportOptions struct {
+// SyncImportOptions controls what gets imported from Plex.
+type SyncImportOptions struct {
 	TmdbIDs          []int  `json:"tmdb_ids"`
 	LibraryID        string `json:"library_id"`
 	QualityProfileID string `json:"quality_profile_id"`
 	Monitored        bool   `json:"monitored"`
 }
 
-// ImportResult reports what happened during import.
-type ImportResult struct {
+// SyncImportResult reports what happened during import.
+type SyncImportResult struct {
 	Imported int      `json:"imported"`
 	Skipped  int      `json:"skipped"`
 	Failed   int      `json:"failed"`
@@ -82,7 +82,7 @@ func (s *Service) Sections(ctx context.Context, mediaServerID string) ([]plexpkg
 }
 
 // Preview fetches movies from a Plex section and compares against Luminarr's library.
-func (s *Service) Preview(ctx context.Context, mediaServerID, sectionKey string) (*PreviewResult, error) {
+func (s *Service) Preview(ctx context.Context, mediaServerID, sectionKey string) (*SyncPreview, error) {
 	srv, err := s.instantiatePlex(ctx, mediaServerID)
 	if err != nil {
 		return nil, err
@@ -142,7 +142,7 @@ func (s *Service) Preview(ctx context.Context, mediaServerID, sectionKey string)
 		}
 	}
 
-	return &PreviewResult{
+	return &SyncPreview{
 		PlexTotal:      len(plexMovies),
 		InPlexOnly:     inPlexOnly,
 		InLuminarrOnly: inLuminarrOnly,
@@ -152,8 +152,8 @@ func (s *Service) Preview(ctx context.Context, mediaServerID, sectionKey string)
 }
 
 // Import adds selected Plex movies to Luminarr.
-func (s *Service) Import(ctx context.Context, opts ImportOptions) (*ImportResult, error) {
-	result := &ImportResult{Errors: []string{}}
+func (s *Service) Import(ctx context.Context, opts SyncImportOptions) (*SyncImportResult, error) {
+	result := &SyncImportResult{Errors: []string{}}
 	for _, tmdbID := range opts.TmdbIDs {
 		req := movie.AddRequest{
 			TMDBID:           tmdbID,

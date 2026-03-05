@@ -28,16 +28,16 @@ type plexSyncPreviewInput struct {
 }
 
 type plexSyncPreviewOutput struct {
-	Body *plexsync.PreviewResult
+	Body *plexsync.SyncPreview
 }
 
 type plexSyncImportInput struct {
 	ID   string `path:"id"`
-	Body plexsync.ImportOptions
+	Body plexsync.SyncImportOptions
 }
 
 type plexSyncImportOutput struct {
-	Body *plexsync.ImportResult
+	Body *plexsync.SyncImportResult
 }
 
 // ── Route registration ───────────────────────────────────────────────────────
