@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import {
   useLibraries,
   useCreateLibrary,
@@ -420,6 +422,7 @@ interface DiskScanModalProps {
 }
 
 function DiskScanModal({ library, onClose }: DiskScanModalProps) {
+  const qc = useQueryClient();
   const { data: diskFiles, isLoading, error: scanError } = useCandidates(library.id);
   const rescan = useRescanDisk();
   const lookupMovies = useLookupMovies();
@@ -587,19 +590,41 @@ function DiskScanModal({ library, onClose }: DiskScanModalProps) {
     setImportDone(0);
     setImportTotal(selected.length);
 
+    const isBatch = selected.length > 5;
+    const importedPaths: string[] = [];
+    let failed = 0;
+
     for (const row of selected) {
-      updateRow(row.file.path, { importing: true });
+      if (!isBatch) updateRow(row.file.path, { importing: true });
       try {
         await importFile.mutateAsync({
           libraryId: library.id,
           file_path: row.file.path,
           tmdb_id: row.match?.tmdb_id ?? 0,
         });
-        updateRow(row.file.path, { importing: false, imported: true, selected: false });
+        importedPaths.push(row.file.path);
+        if (!isBatch) updateRow(row.file.path, { importing: false, imported: true, selected: false });
       } catch {
-        updateRow(row.file.path, { importing: false });
+        failed++;
+        if (!isBatch) updateRow(row.file.path, { importing: false });
       }
       setImportDone((n) => n + 1);
+    }
+
+    // Batch mode: mark all successful rows at once to avoid per-row strobe.
+    if (isBatch) {
+      for (const path of importedPaths) {
+        updateRow(path, { importing: false, imported: true, selected: false });
+      }
+    }
+
+    // Single invalidation at end instead of per-file.
+    qc.invalidateQueries({ queryKey: ["movies"] });
+
+    if (failed > 0) {
+      toast.error(`${failed} file${failed !== 1 ? "s" : ""} failed to import`);
+    } else {
+      toast.success(`Imported ${importedPaths.length} file${importedPaths.length !== 1 ? "s" : ""}`);
     }
 
     setIsImporting(false);

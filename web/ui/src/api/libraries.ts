@@ -98,7 +98,6 @@ export function useRescanDisk() {
 }
 
 export function useImportFile() {
-  const qc = useQueryClient();
   return useMutation({
     mutationFn: ({
       libraryId,
@@ -113,9 +112,5 @@ export function useImportFile() {
         method: "POST",
         body: JSON.stringify({ file_path, tmdb_id }),
       }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["movies"] });
-    },
-    onError: (err) => toast.error((err as Error).message),
   });
 }
