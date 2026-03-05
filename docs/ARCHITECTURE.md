@@ -39,8 +39,10 @@ Luminarr is a single Go binary that embeds the React frontend as a static file s
 │  queue · notification · health · importer              │
 ├─────────────────────────────────────────────────────────┤
 │  Plugin registry                                       │
-│  torznab · newznab · qbittorrent · deluge             │
-│  discord · webhook · email                             │
+│  torznab · newznab                                     │
+│  qbittorrent · deluge · transmission · sabnzbd · nzbget│
+│  discord · slack · telegram · gotify · ntfy · pushover │
+│  webhook · email · command                             │
 ├─────────────────────────────────────────────────────────┤
 │  Infrastructure                                        │
 │  SQLite/Postgres (sqlc) · Events bus · Scheduler       │
@@ -89,10 +91,19 @@ pkg/plugin/            Public plugin interfaces + shared value types
 plugins/
   downloaders/deluge/
   downloaders/qbittorrent/
+  downloaders/transmission/
+  downloaders/sabnzbd/
+  downloaders/nzbget/
   indexers/newznab/
   indexers/torznab/
+  notifications/command/
   notifications/discord/
   notifications/email/
+  notifications/gotify/
+  notifications/ntfy/
+  notifications/pushover/
+  notifications/slack/
+  notifications/telegram/
   notifications/webhook/
 web/
   embed.go             Embeds /web/static/ into the binary; injects API key into HTML
@@ -164,7 +175,7 @@ Plugins implement one of three interfaces defined in `pkg/plugin/`:
 
 - `Indexer` — `Search(ctx, query, categories) ([]Release, error)`
 - `DownloadClient` — `Add(ctx, release) (itemID string, error)` · `Status(ctx, itemID) (DownloadStatus, error)` · etc.
-- `Notifier` — `Send(ctx, event) error`
+- `Notifier` — `Notify(ctx, event) error` · `Test(ctx) error`
 
 **Registration:** each plugin calls `registry.Default.Register*()` from its `init()` function. Plugins are activated by blank-importing their package in `cmd/luminarr/main.go`.
 
@@ -319,5 +330,7 @@ Test coverage targets:
 - `internal/core/notification` — config CRUD, event dispatch
 - `internal/events` — bus publish/subscribe, concurrent delivery
 - `internal/radarrimport` — quality name mapping, field extraction
+- `plugins/downloaders/*` — download client integration (httptest servers)
+- `plugins/notifications/*` — notification delivery (httptest servers, script execution)
 
 Integration tests (full HTTP stack) are on the roadmap.

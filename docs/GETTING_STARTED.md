@@ -114,6 +114,9 @@ Supported clients:
 
 - **qBittorrent** — host, port, username, password
 - **Deluge** — host, port, password
+- **Transmission** — URL, username, password
+- **SABnzbd** — URL, API key, category
+- **NZBGet** — URL, username, password, category
 
 Click **Test** to verify. Luminarr polls the download client for progress and auto-imports completed downloads into your library.
 
@@ -209,7 +212,7 @@ Luminarr imports in dependency order:
 - Quality profiles (mapped to Luminarr's explicit codec/HDR format)
 - Libraries (from Radarr root folders)
 - Indexers (Torznab and Newznab only)
-- Download clients (qBittorrent and Deluge only)
+- Download clients (qBittorrent, Deluge, Transmission, SABnzbd, NZBGet)
 - Movies (duplicates skipped by TMDB ID)
 
 Radarr keeps running during import. Switch over when you're ready.
@@ -283,12 +286,14 @@ Once available, Luminarr scans new imports automatically. For existing files, us
 
 **Settings → Notifications → Add Notification**
 
-Supported channels: **Discord**, **Slack**, **Webhook**, **Email**. Each can subscribe to specific events:
+Supported channels: **Discord**, **Slack**, **Telegram**, **Gotify**, **ntfy**, **Pushover**, **Webhook**, **Email**, and **Command** (custom scripts). Each can subscribe to specific events:
 
 - Grab started / failed
 - Download complete
 - Import complete / failed
 - Health issue / resolved
+
+The **Command** notifier executes scripts from `/config/scripts/` with the event payload on stdin. See [Custom Scripts](CUSTOM_SCRIPTS.md) for details.
 
 ---
 

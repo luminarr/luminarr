@@ -78,13 +78,11 @@ copies indexer URLs and API keys from Radarr automatically.
 
 ### Download Clients
 
-**Settings → Download Clients.** qBittorrent and Deluge are supported. The
-Import Wizard copies connection details automatically.
+**Settings → Download Clients.** qBittorrent, Deluge, Transmission, SABnzbd, and NZBGet are supported. The Import Wizard copies connection details automatically.
 
 ### Notifications
 
-**Settings → Notifications.** Discord, generic Webhook, and Email are
-supported. Radarr notifications are not imported — configure them manually.
+**Settings → Notifications.** Discord, Slack, Telegram, Gotify, ntfy, Pushover, Webhook, Email, and Command (custom scripts) are supported. Radarr notifications are not imported — configure them manually. See [Custom Scripts](CUSTOM_SCRIPTS.md) for the Command notifier.
 
 ### Blocklist
 
