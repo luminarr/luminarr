@@ -23,7 +23,7 @@ docker run -d \
   -v luminarr-data:/config \
   -v /path/to/movies:/movies \
   -e LUMINARR_TMDB_API_KEY=your-tmdb-key \
-  ghcr.io/davidfic/luminarr:latest
+  ghcr.io/luminarr/luminarr:latest
 ```
 
 Open `http://localhost:8282`. Done.
@@ -37,7 +37,7 @@ Create a `docker-compose.yml`:
 ```yaml
 services:
   luminarr:
-    image: ghcr.io/davidfic/luminarr:latest
+    image: ghcr.io/luminarr/luminarr:latest
     ports:
       - "8282:8282"
     environment:
@@ -64,7 +64,7 @@ docker compose up -d
 Requires Go 1.22+ and Node.js 20+.
 
 ```bash
-git clone https://github.com/davidfic/luminarr
+git clone https://github.com/luminarr/luminarr
 cd luminarr
 cd web/ui && npm install && npm run build && cd ../..
 make build
@@ -251,7 +251,7 @@ The standard `latest` image is built from scratch and has no shell or extra bina
 ```yaml
 services:
   luminarr:
-    image: ghcr.io/davidfic/luminarr:latest-full   # ← change this line
+    image: ghcr.io/luminarr/luminarr:latest-full   # ← change this line
     ports:
       - "8282:8282"
     environment:
@@ -427,4 +427,4 @@ Movie search and metadata are disabled. Set `LUMINARR_TMDB_API_KEY` via environm
 
 - Browse the [Architecture docs](ARCHITECTURE.md) for internals
 - Check the [API docs](/api/docs) for automation
-- Report bugs or request features on [GitHub](https://github.com/davidfic/luminarr/issues)
+- Report bugs or request features on [GitHub](https://github.com/luminarr/luminarr/issues)

@@ -15,7 +15,7 @@ See [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md#development) for the full set
 The short version:
 
 ```bash
-git clone https://github.com/davidfic/luminarr
+git clone https://github.com/luminarr/luminarr
 cd luminarr
 go build ./...          # confirm Go build is clean
 cd web/ui && npm run build  # confirm TypeScript build is clean

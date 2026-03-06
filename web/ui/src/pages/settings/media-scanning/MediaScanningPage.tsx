@@ -65,7 +65,7 @@ export default function MediaScanningPage() {
             <p style={{ margin: 0, fontSize: 12, color: "var(--color-text-muted)" }}>
               Install ffprobe to enable media scanning. See the{" "}
               <a
-                href="https://github.com/davidfic/luminarr/blob/main/docs/getting-started.md#ffprobe-optional"
+                href="https://github.com/luminarr/luminarr/blob/main/docs/getting-started.md#ffprobe-optional"
                 target="_blank"
                 rel="noreferrer"
                 style={{ color: "var(--color-accent)" }}

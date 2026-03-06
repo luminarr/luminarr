@@ -96,7 +96,7 @@ docker run -d \
   -v luminarr-data:/config \
   -v /path/to/movies:/movies \
   -e LUMINARR_TMDB_API_KEY=your-tmdb-key \
-  ghcr.io/davidfic/luminarr:latest
+  ghcr.io/luminarr/luminarr:latest
 ```
 
 Open `http://localhost:8282`. That's it. No API key setup — on first run, Luminarr generates one and saves it to the volume, so it's stable across restarts. The browser gets it automatically.
@@ -105,14 +105,14 @@ Open `http://localhost:8282`. That's it. No API key setup — on first run, Lumi
 
 > **Running Radarr too?** Luminarr uses port 8282 specifically so you can run both simultaneously during migration. Radarr stays on 7878.
 
-> **Want media scanning?** Use the `latest-full` image tag to get a build that includes ffprobe. Swap `ghcr.io/davidfic/luminarr:latest` for `ghcr.io/davidfic/luminarr:latest-full` — no other changes needed. See the [Media Scanning section](docs/GETTING_STARTED.md#ffprobe-optional) for details.
+> **Want media scanning?** Use the `latest-full` image tag to get a build that includes ffprobe. Swap `ghcr.io/luminarr/luminarr:latest` for `ghcr.io/luminarr/luminarr:latest-full` — no other changes needed. See the [Media Scanning section](docs/GETTING_STARTED.md#ffprobe-optional) for details.
 
 ### Docker Compose
 
 ```yaml
 services:
   luminarr:
-    image: ghcr.io/davidfic/luminarr:latest
+    image: ghcr.io/luminarr/luminarr:latest
     ports:
       - "8282:8282"
     environment:
@@ -131,7 +131,7 @@ volumes:
 ### Build from source
 
 ```bash
-git clone https://github.com/davidfic/luminarr
+git clone https://github.com/luminarr/luminarr
 cd luminarr
 make build
 ./bin/luminarr

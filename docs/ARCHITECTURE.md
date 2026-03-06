@@ -195,7 +195,7 @@ Plugins implement one of four interfaces defined in `pkg/plugin/`:
 1. Create `plugins/{kind}/{kind}.go`
 2. Define a struct implementing the interface
 3. Call `registry.Default.Register*(kind, factory)` in `init()`
-4. Add `_ "github.com/davidfic/luminarr/plugins/{kind}/{kind}"` to `cmd/luminarr/main.go`
+4. Add `_ "github.com/luminarr/luminarr/plugins/{kind}/{kind}"` to `cmd/luminarr/main.go`
 5. Add the settings shape to the UI's settings sub-form component
 
 ---
