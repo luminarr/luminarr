@@ -297,6 +297,61 @@ The **Command** notifier executes scripts from `/config/scripts/` with the event
 
 ---
 
+## Media Server Integration (optional)
+
+**Settings → Media Servers → Add Media Server**
+
+Connect Luminarr to your media server so it can automatically refresh your library when movies are imported — no more waiting for scheduled scans.
+
+Supported servers:
+
+| Server | Required settings |
+|--------|-------------------|
+| **Plex** | Server URL, X-Plex-Token |
+| **Emby** | Server URL, API key |
+| **Jellyfin** | Server URL, API key |
+
+Click **Test** to verify the connection. Once connected, Luminarr sends a library refresh to your media server every time it imports a movie file.
+
+> **Finding your Plex token:** Open any media item in the Plex web app, click "Get Info" → "View XML", and look for `X-Plex-Token=` in the URL. Or see the [Plex support article](https://support.plex.tv/articles/204059436-finding-an-authentication-token-x-plex-token/).
+
+> **Self-signed certificates:** Luminarr accepts self-signed TLS certificates from media servers on your local network. No extra configuration needed.
+
+---
+
+## Library Sync
+
+**Library Sync** (in the sidebar) lets you compare your media server's library against Luminarr's — in both directions.
+
+### How to use it
+
+1. Go to **Library Sync** in the sidebar
+2. Select a configured media server from the dropdown
+3. Pick a movie library section (Luminarr auto-loads them from your server)
+4. Click **Compare**
+
+Luminarr fetches every movie from that section, extracts TMDB IDs, and compares them against its own database. You get two views:
+
+### Server Only
+
+Movies your media server has that Luminarr doesn't track. These are candidates for import — maybe you added them outside of Luminarr, or they predate your Luminarr setup.
+
+Select any (or all), choose a library and quality profile, and click **Import Selected**. Luminarr fetches metadata from TMDB and starts tracking each movie immediately.
+
+### Luminarr Only
+
+Movies Luminarr tracks that aren't on your media server. This is informational — it helps you spot movies that are still downloading, files that landed in the wrong directory, or imports that didn't trigger a library scan.
+
+Each movie shows its current status (monitored, downloaded, missing) so you can quickly assess what needs attention.
+
+### How matching works
+
+Matching is by **TMDB ID only**. Luminarr reads the TMDB GUID that your media server stores for each movie (both new-style and legacy Plex agent formats are supported). Movies where the server doesn't have a TMDB ID are reported as "unmatched" and excluded from the comparison.
+
+This approach is unambiguous — no false positives from movies that share a title or year.
+
+---
+
 ## Configuration Reference
 
 All settings can live in `config.yaml` or as environment variables (prefixed with `LUMINARR_`, dots become underscores).

@@ -2,7 +2,7 @@
 
 > A self-hosted movie collection manager. Monitors your library, searches indexers, and automatically grabs the best available release — with a quality model that makes sense.
 
-**[Getting Started](docs/GETTING_STARTED.md)** · **[Quick Start](#quick-start)** · **[Import from Radarr](#import-from-radarr-in-one-click)** · **[Features](#features)** · **[Privacy](#privacy--no-telemetry)** · **[Architecture](docs/ARCHITECTURE.md)**
+**[Getting Started](docs/GETTING_STARTED.md)** · **[Quick Start](#quick-start)** · **[Import from Radarr](#import-from-radarr-in-one-click)** · **[Library Sync](#library-sync--know-whats-where)** · **[Features](#features)** · **[Privacy](#privacy--no-telemetry)** · **[Architecture](docs/ARCHITECTURE.md)**
 
 ---
 
@@ -71,6 +71,10 @@ Radarr has optional analytics. Luminarr has no analytics at all — optional or 
 - **File renaming** — rename files on disk to Luminarr's standard format (`Title (Year) Quality.ext`) from the movie detail panel
 - **Per-movie history** — full grab and import history per movie in a History tab
 - **Media scanning** — optional ffprobe integration verifies actual codec, resolution, and HDR; flags mislabelled releases with a ⚠ Mismatch badge
+
+**Media server integration**
+- **Library Sync** — bidirectional comparison between Luminarr and your media server (Plex, Emby, Jellyfin). See what your server has that Luminarr doesn't track, and what Luminarr tracks that isn't on the server yet. Import server-only movies into Luminarr with one click.
+- **Auto-refresh** — when Luminarr imports a movie, it tells your media server to refresh the library automatically. No more waiting for scheduled scans.
 
 **Operations**
 - **Radarr import** — one-click migration from a running Radarr instance
@@ -157,6 +161,26 @@ Radarr keeps running during the import — there's no cutover moment. Take your 
 
 ---
 
+## Library Sync — Know What's Where
+
+If you run a media server (Plex, Emby, or Jellyfin), Luminarr can compare its library against yours and show you the difference in both directions:
+
+- **Server has it, Luminarr doesn't** — movies sitting on your server that Luminarr doesn't know about. Select any of them and import them into Luminarr with one click — Luminarr fetches the metadata from TMDB and starts tracking them immediately.
+- **Luminarr has it, server doesn't** — movies Luminarr is tracking that haven't made it to your media server yet. Maybe they're still downloading, maybe the file landed in the wrong place. Either way, now you can see the gap.
+
+No background jobs, no scheduled syncs. Go to **Library Sync**, pick your server and library section, hit **Compare**, and you get a full diff in seconds. Matching is by TMDB ID — clean, unambiguous, no false positives from title/year collisions.
+
+When you do import, Luminarr also tells your media server to refresh its library automatically — so new movies show up without waiting for a scheduled scan.
+
+### Setup
+
+1. **Settings → Media Servers** — add your Plex, Emby, or Jellyfin server (URL + token/API key)
+2. **Library Sync** in the sidebar — select your server, pick a movie library section, and compare
+
+That's it. No plugins to install, no sync schedules to configure.
+
+---
+
 ## Privacy & No Telemetry
 
 Luminarr makes outbound connections **only** to services you explicitly configure:
@@ -166,6 +190,7 @@ Luminarr makes outbound connections **only** to services you explicitly configur
 | TMDB | When you search for or refresh a movie (requires your own API key) |
 | Your indexers | RSS sync and release search |
 | Your download clients | Sending grabs, polling queue |
+| Your media servers | Library sync and auto-refresh — Plex, Emby, Jellyfin — only if configured |
 | Your notification targets | Discord, Slack, webhook, email — only if configured |
 
 **What Luminarr never does:**

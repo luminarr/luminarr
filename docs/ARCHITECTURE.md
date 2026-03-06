@@ -36,11 +36,12 @@ Luminarr is a single Go binary that embeds the React frontend as a static file s
 ├─────────────────────────────────────────────────────────┤
 │  Core services                                         │
 │  movie · quality · library · indexer · downloader      │
-│  queue · notification · health · importer              │
+│  queue · notification · health · importer · plexsync   │
 ├─────────────────────────────────────────────────────────┤
 │  Plugin registry                                       │
 │  torznab · newznab                                     │
 │  qbittorrent · deluge · transmission · sabnzbd · nzbget│
+│  plex · emby · jellyfin                                │
 │  discord · slack · telegram · gotify · ntfy · pushover │
 │  webhook · email · command                             │
 ├─────────────────────────────────────────────────────────┤
@@ -73,6 +74,7 @@ internal/
     movie/             Movie CRUD + TMDB metadata
     notification/      Notification config management
     quality/           Quality profile CRUD + name parsing
+    mediaserver/       Media server config CRUD (Plex, Emby, Jellyfin)
     queue/             Download queue polling
     renamer/           Naming template engine
   db/                  DB connection, migrations (goose), sqlc wiring
@@ -82,6 +84,7 @@ internal/
   logging/             Structured logger setup (slog)
   metadata/tmdb/       TMDB API client
   notifications/       Event bus → notification dispatcher
+  plexsync/            Bidirectional library sync (media server ↔ Luminarr)
   radarrimport/        One-time Radarr migration client + orchestrator
   registry/            Plugin registry (indexers, downloaders, notifiers)
   scheduler/           Background job scheduler
@@ -96,6 +99,9 @@ plugins/
   downloaders/nzbget/
   indexers/newznab/
   indexers/torznab/
+  mediaservers/plex/
+  mediaservers/emby/
+  mediaservers/jellyfin/
   notifications/command/
   notifications/discord/
   notifications/email/
@@ -165,16 +171,19 @@ Interactive docs with full request/response schemas are available at `/api/docs`
 | **Releases** | `GET /api/v1/movies/{id}/releases` · `POST /api/v1/movies/{id}/releases/{guid}/grab` |
 | **Queue** | `GET /api/v1/queue` · `DELETE /api/v1/queue/{id}` |
 | **Notifications** | `GET/POST /api/v1/notifications` · `GET/PUT/DELETE /api/v1/notifications/{id}` · `POST /api/v1/notifications/{id}/test` |
+| **Media Servers** | `GET/POST /api/v1/media-servers` · `GET/PUT/DELETE /api/v1/media-servers/{id}` · `POST /api/v1/media-servers/{id}/test` |
+| **Library Sync** | `GET /api/v1/media-servers/{id}/sections` · `POST /api/v1/media-servers/{id}/sync/preview` · `POST /api/v1/media-servers/{id}/sync/import` |
 | **Import** | `POST /api/v1/import/radarr/preview` · `POST /api/v1/import/radarr/execute` |
 
 ---
 
 ## Plugin System
 
-Plugins implement one of three interfaces defined in `pkg/plugin/`:
+Plugins implement one of four interfaces defined in `pkg/plugin/`:
 
 - `Indexer` — `Search(ctx, query, categories) ([]Release, error)`
 - `DownloadClient` — `Add(ctx, release) (itemID string, error)` · `Status(ctx, itemID) (DownloadStatus, error)` · etc.
+- `MediaServer` — `RefreshLibrary(ctx, moviePath) error` · `Test(ctx) error`
 - `Notifier` — `Notify(ctx, event) error` · `Test(ctx) error`
 
 **Registration:** each plugin calls `registry.Default.Register*()` from its `init()` function. Plugins are activated by blank-importing their package in `cmd/luminarr/main.go`.
@@ -188,6 +197,74 @@ Plugins implement one of three interfaces defined in `pkg/plugin/`:
 3. Call `registry.Default.Register*(kind, factory)` in `init()`
 4. Add `_ "github.com/davidfic/luminarr/plugins/{kind}/{kind}"` to `cmd/luminarr/main.go`
 5. Add the settings shape to the UI's settings sub-form component
+
+---
+
+## Media Server Integration & Library Sync
+
+### Media server plugins
+
+Media server plugins (`plugins/mediaservers/`) handle two responsibilities:
+
+1. **Library refresh** — after Luminarr imports a movie, it calls `RefreshLibrary(ctx, moviePath)` on all configured media servers. The plugin finds the matching library section by path prefix and triggers a targeted refresh via the server's API.
+2. **Library listing** — Plex plugins expose `ListSections(ctx)` and `ListMovies(ctx, sectionKey)` for the library sync feature.
+
+| Plugin | API format | Auth | TLS |
+|--------|-----------|------|-----|
+| Plex | XML (sections, movies) | `X-Plex-Token` header | Self-signed accepted |
+| Emby | JSON REST | `?api_key=` query param | Self-signed accepted |
+| Jellyfin | JSON REST | `Authorization: MediaBrowser Token=` | Self-signed accepted |
+
+All media server plugins use `safedialer.LANTransport()` with `InsecureSkipVerify: true` to support self-signed certificates common on LAN servers.
+
+### Library sync architecture
+
+The `internal/plexsync` service orchestrates the bidirectional library comparison:
+
+```
+┌──────────────┐     ListMovies()     ┌──────────────────┐
+│ Media Server │ ◄──────────────────► │  plexsync.Service │
+│ (Plex API)   │    XML/JSON → Movie  │                  │
+└──────────────┘                      │  Preview():      │
+                                      │   1. Fetch all   │
+┌──────────────┐  ListMovieSummaries  │      server      │
+│ SQLite DB    │ ◄──────────────────► │      movies      │
+│ (movies tbl) │   TMDB ID + status   │   2. Fetch all   │
+└──────────────┘                      │      Luminarr    │
+                                      │      movies      │
+                                      │   3. Set diff    │
+                                      │      by TMDB ID  │
+                                      │                  │
+                                      │  Import():       │
+                                      │   movie.Add()    │
+                                      │   per TMDB ID    │
+                                      └──────────────────┘
+```
+
+**Matching strategy:** TMDB ID only. Plex stores TMDB IDs in two formats:
+- New agent: `<Guid id="tmdb://12345"/>` child elements (requires `?includeGuids=1` on the API request)
+- Legacy agent: `guid="com.plexapp.agents.themoviedb://12345?lang=en"` top-level attribute
+
+Movies without a TMDB GUID are counted as "unmatched" and excluded from the diff.
+
+**Data flow for preview:**
+1. `plexsync.Service.Preview()` loads the media server config from DB
+2. Instantiates the Plex plugin with the stored URL + token
+3. Calls `ListMovies()` → builds `map[tmdbID]PlexMovie`
+4. Queries `ListMovieSummaries` from SQLite → builds `map[tmdbID]LuminarrMovie`
+5. Iterates both maps to produce `inPlexOnly`, `inLuminarrOnly`, and `alreadySynced` counts
+
+**Data flow for import:**
+1. For each selected TMDB ID, calls `movie.Add()` which fetches metadata from TMDB and creates the movie record
+2. Reports imported/skipped/failed counts — skipped means the movie already exists (duplicate TMDB ID)
+
+### API endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/v1/media-servers/{id}/sections` | GET | List movie library sections from the media server |
+| `/api/v1/media-servers/{id}/sync/preview` | POST | Compare server library against Luminarr; body: `{"section_key":"1"}` |
+| `/api/v1/media-servers/{id}/sync/import` | POST | Import selected movies; body: `{"tmdb_ids":[...],"library_id":"...","quality_profile_id":"...","monitored":true}` |
 
 ---
 
