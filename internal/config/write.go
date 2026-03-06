@@ -51,11 +51,19 @@ func writeAtomic(path string, data []byte, perm os.FileMode) error {
 func WriteConfigKey(configFile, key, value string) (writePath string, err error) {
 	path := configFile
 	if path == "" {
-		home, _ := os.UserHomeDir()
-		if home != "" {
-			path = filepath.Join(home, ".config", "luminarr", "config.yaml")
-		} else {
+		// Mirror the search order used by Load(): prefer /config (Docker volume
+		// mount point) when that directory exists, then fall back to the
+		// per-user path. This ensures the written key is found on the next
+		// startup even when $HOME is set (as it usually is inside containers).
+		if _, err := os.Stat("/config"); err == nil {
 			path = "/config/config.yaml"
+		} else {
+			home, _ := os.UserHomeDir()
+			if home != "" {
+				path = filepath.Join(home, ".config", "luminarr", "config.yaml")
+			} else {
+				path = "/config/config.yaml"
+			}
 		}
 	}
 

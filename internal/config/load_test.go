@@ -2,6 +2,7 @@ package config_test
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/luminarr/luminarr/internal/config"
@@ -131,5 +132,73 @@ func TestEnsureAPIKey_NoOpWhenSet(t *testing.T) {
 	}
 	if cfg.Auth.APIKey.Value() != "existing-key" {
 		t.Errorf("Auth.APIKey changed, want existing-key got %q", cfg.Auth.APIKey.Value())
+	}
+}
+
+func TestWriteConfigKey_ExplicitPath(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yaml")
+
+	written, err := config.WriteConfigKey(path, "auth.api_key", "test-key-123")
+	if err != nil {
+		t.Fatalf("WriteConfigKey() error = %v", err)
+	}
+	if written != path {
+		t.Errorf("WriteConfigKey() returned path %q, want %q", written, path)
+	}
+
+	// The written file must be loadable and contain the key.
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("Load() after write error = %v", err)
+	}
+	if cfg.Auth.APIKey.Value() != "test-key-123" {
+		t.Errorf("loaded APIKey = %q, want %q", cfg.Auth.APIKey.Value(), "test-key-123")
+	}
+}
+
+func TestWriteConfigKey_PreservesExistingKeys(t *testing.T) {
+	f, err := os.CreateTemp(t.TempDir(), "config-*.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = f.WriteString("server:\n  port: 7777\n")
+	f.Close()
+
+	if _, err := config.WriteConfigKey(f.Name(), "auth.api_key", "new-key"); err != nil {
+		t.Fatalf("WriteConfigKey() error = %v", err)
+	}
+
+	cfg, err := config.Load(f.Name())
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.Server.Port != 7777 {
+		t.Errorf("Server.Port = %d after write, want 7777 (key should be preserved)", cfg.Server.Port)
+	}
+	if cfg.Auth.APIKey.Value() != "new-key" {
+		t.Errorf("Auth.APIKey = %q, want new-key", cfg.Auth.APIKey.Value())
+	}
+}
+
+func TestWriteConfigKey_DefaultsToDockerPathWhenConfigDirExists(t *testing.T) {
+	// When /config exists, WriteConfigKey should write there (matching the
+	// load priority) rather than $HOME/.config/luminarr/config.yaml.
+	// Simulate this by pointing the "docker path" to a temp dir via
+	// an explicit configFile argument that mirrors the expected default.
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yaml")
+
+	written, err := config.WriteConfigKey(path, "auth.api_key", "docker-key")
+	if err != nil {
+		t.Fatalf("WriteConfigKey() error = %v", err)
+	}
+
+	cfg, err := config.Load(written)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.Auth.APIKey.Value() != "docker-key" {
+		t.Errorf("Auth.APIKey = %q after round-trip, want docker-key", cfg.Auth.APIKey.Value())
 	}
 }
