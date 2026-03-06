@@ -103,7 +103,7 @@ func (c *Client) Test(ctx context.Context) error {
 
 // Add submits a torrent to qBittorrent. For magnet links the hash is parsed
 // directly from the URI. For HTTP .torrent URLs the torrent is added and the
-// most recently added torrent hash is returned (best-effort; see TODO.md).
+// most recently added torrent hash is returned (best-effort).
 func (c *Client) Add(ctx context.Context, r plugin.Release) (string, error) {
 	if err := c.ensureAuth(ctx); err != nil {
 		return "", err
@@ -382,8 +382,8 @@ func (c *Client) waitForRecentTorrent(ctx context.Context, since time.Time) (str
 		// AddedAt is the qBittorrent added_on Unix timestamp.
 		//
 		// NOTE: This is a best-effort heuristic. It can misidentify the torrent
-		// if multiple grabs happen concurrently. See TODO.md for the bencode
-		// hash extraction approach that would make this deterministic.
+		// if multiple grabs happen concurrently. Parsing the info_hash from the
+		// .torrent file's bencode would make this deterministic.
 		var best *plugin.QueueItem
 		for i := range items {
 			item := &items[i]
