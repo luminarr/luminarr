@@ -62,6 +62,10 @@ func BackupHandler(db *sql.DB, dbPath string, logger *slog.Logger) http.HandlerF
 // On the next startup, Luminarr will detect the staging file and swap it in.
 func RestoreHandler(dbPath string, logger *slog.Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// Override the global 1 MiB body limit — restore files are full DB copies.
+		const maxRestoreSize = 500 << 20 // 500 MiB
+		r.Body = http.MaxBytesReader(w, r.Body, maxRestoreSize)
+
 		stagingPath := dbPath + ".restore"
 
 		f, err := os.Create(stagingPath)
@@ -73,6 +77,8 @@ func RestoreHandler(dbPath string, logger *slog.Logger) http.HandlerFunc {
 		defer f.Close()
 
 		if _, err := io.Copy(f, r.Body); err != nil {
+			// Clean up partial staging file on write failure.
+			_ = os.Remove(stagingPath)
 			logger.ErrorContext(r.Context(), "restore: failed to write body", slog.Any("error", err))
 			http.Error(w, "failed to write restore file", http.StatusInternalServerError)
 			return

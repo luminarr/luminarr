@@ -4,6 +4,7 @@ package ws
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -25,13 +26,17 @@ type Hub struct {
 	mu      sync.Mutex
 	clients map[chan []byte]struct{}
 	logger  *slog.Logger
+	apiKey  []byte
 }
 
 // NewHub creates a Hub that broadcasts events to connected WebSocket clients.
-func NewHub(logger *slog.Logger) *Hub {
+// The apiKey is used to authenticate non-browser clients (same-origin browser
+// requests are trusted via the Sec-Fetch-Site header).
+func NewHub(logger *slog.Logger, apiKey []byte) *Hub {
 	return &Hub{
 		clients: make(map[chan []byte]struct{}),
 		logger:  logger,
+		apiKey:  apiKey,
 	}
 }
 
@@ -57,9 +62,16 @@ func (h *Hub) HandleEvent(_ context.Context, e events.Event) {
 }
 
 // ServeHTTP upgrades the connection to WebSocket and starts pumping events
-// to the client. Auth is not enforced here — same-origin browser requests are
-// trusted, and the WebSocket is not exposed to external consumers.
+// to the client. Same-origin browser requests (Sec-Fetch-Site: same-origin) are
+// trusted; external clients must provide a valid X-Api-Key header.
 func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.Header.Get("Sec-Fetch-Site") != "same-origin" {
+		if subtle.ConstantTimeCompare([]byte(r.Header.Get("X-Api-Key")), h.apiKey) != 1 {
+			http.Error(w, `{"status":401,"title":"Unauthorized"}`, http.StatusUnauthorized)
+			return
+		}
+	}
+
 	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
 		// Skip the browser origin check. nhooyr.io/websocket rejects connections
 		// where the Origin header doesn't match the Host header, which breaks the

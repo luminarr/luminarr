@@ -84,9 +84,10 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	r.Use(middleware.RequestLogger(cfg.Logger))
 	r.Use(middleware.Recovery(cfg.Logger))
 
-	// WebSocket event stream — auth is handled inside the hub (query param ?key=).
-	// Must be registered on the raw chi router before huma takes over so the huma
-	// auth middleware does not intercept the upgrade request.
+	// WebSocket event stream — auth is handled inside the hub (Sec-Fetch-Site
+	// for browsers, X-Api-Key for external clients). Must be registered on
+	// the raw chi router before huma takes over so the huma auth middleware
+	// does not intercept the upgrade request.
 	if cfg.WSHub != nil {
 		r.Get("/api/v1/ws", cfg.WSHub.ServeHTTP)
 	}
@@ -124,6 +125,8 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	// that supports OpenAPI to explore the API.
 	humaConfig := huma.DefaultConfig("Luminarr API", version.Version)
 	humaConfig.DocsPath = ""
+	humaConfig.OpenAPIPath = ""
+	humaConfig.SchemasPath = ""
 	humaConfig.Info.Description = "Luminarr movie collection manager API. " +
 		"All endpoints require the X-Api-Key header."
 

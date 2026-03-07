@@ -226,7 +226,7 @@ func run() error {
 	bus := events.New(logger)
 
 	// ── WebSocket hub ─────────────────────────────────────────────────────────
-	wsHub := ws.NewHub(logger)
+	wsHub := ws.NewHub(logger, []byte(cfg.Auth.APIKey.Value()))
 	bus.Subscribe(wsHub.HandleEvent)
 
 	// ── Services ──────────────────────────────────────────────────────────────

@@ -16,6 +16,7 @@ import (
 
 	"github.com/luminarr/luminarr/internal/core/library"
 	"github.com/luminarr/luminarr/internal/core/movie"
+	"github.com/luminarr/luminarr/internal/core/pathutil"
 )
 
 // ── Request / response shapes ────────────────────────────────────────────────
@@ -406,6 +407,11 @@ func RegisterLibraryRoutes(api huma.API, svc *library.Service, movieSvc *movie.S
 				return nil, huma.Error404NotFound("library not found")
 			}
 			return nil, huma.NewError(http.StatusInternalServerError, "failed to get library", err)
+		}
+
+		// Reject paths in sensitive system directories.
+		if err := pathutil.ValidateContentPath(input.Body.FilePath); err != nil {
+			return nil, huma.NewError(http.StatusBadRequest, err.Error())
 		}
 
 		// Verify the file exists on disk before doing anything else.

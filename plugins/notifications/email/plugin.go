@@ -149,8 +149,21 @@ func (n *Notifier) sendTLS(addr string, msg []byte) error {
 	return wc.Close()
 }
 
+// sanitizeHeader strips CR/LF characters to prevent SMTP header injection.
+func sanitizeHeader(s string) string {
+	s = strings.ReplaceAll(s, "\r", "")
+	s = strings.ReplaceAll(s, "\n", "")
+	return s
+}
+
 // buildMessage formats a minimal RFC 5322 email message.
 func buildMessage(from string, to []string, subject, body string) []byte {
+	from = sanitizeHeader(from)
+	for i, addr := range to {
+		to[i] = sanitizeHeader(addr)
+	}
+	subject = sanitizeHeader(subject)
+
 	var sb strings.Builder
 	sb.WriteString("From: " + from + "\r\n")
 	sb.WriteString("To: " + strings.Join(to, ", ") + "\r\n")

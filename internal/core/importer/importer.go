@@ -5,7 +5,6 @@ package importer
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -20,6 +19,7 @@ import (
 	"github.com/luminarr/luminarr/internal/core/downloadhandling"
 	"github.com/luminarr/luminarr/internal/core/mediainfo"
 	"github.com/luminarr/luminarr/internal/core/mediamanagement"
+	"github.com/luminarr/luminarr/internal/core/pathutil"
 	"github.com/luminarr/luminarr/internal/core/quality"
 	"github.com/luminarr/luminarr/internal/core/renamer"
 	dbsqlite "github.com/luminarr/luminarr/internal/db/generated/sqlite"
@@ -247,42 +247,8 @@ func (s *Service) importFile(ctx context.Context, grabID, contentPath string) er
 	return nil
 }
 
-// sensitivePathPrefixes lists path prefixes that content_path must never
-// overlap with. These are checked before any filesystem operations.
-var sensitivePathPrefixes = []string{
-	"/config",
-	"/etc",
-	"/proc",
-	"/sys",
-	"/dev",
-	"/run",
-	"/var",
-}
-
-// validateContentPath rejects paths that are not absolute, contain traversal
-// components after cleaning, or overlap with sensitive system directories.
-func validateContentPath(p string) error {
-	if p == "" {
-		return errors.New("empty content_path")
-	}
-	if !filepath.IsAbs(p) {
-		return fmt.Errorf("content_path must be absolute, got %q", p)
-	}
-	clean := filepath.Clean(p)
-	for _, prefix := range sensitivePathPrefixes {
-		if clean == prefix || strings.HasPrefix(clean, prefix+"/") {
-			return fmt.Errorf("content_path %q is within a restricted directory", clean)
-		}
-	}
-	// Also reject the Luminarr config directory if $HOME is resolvable.
-	if home, err := os.UserHomeDir(); err == nil && home != "" {
-		configDir := filepath.Join(home, ".config", "luminarr")
-		if clean == configDir || strings.HasPrefix(clean, configDir+"/") {
-			return fmt.Errorf("content_path %q is within the Luminarr config directory", clean)
-		}
-	}
-	return nil
-}
+// validateContentPath delegates to the shared pathutil package.
+var validateContentPath = pathutil.ValidateContentPath
 
 // resolveSourceFile returns the path to the video file to import.
 // If contentPath is a regular file, it is returned directly.
