@@ -63,6 +63,19 @@ export function useCheckForUpdates() {
   });
 }
 
+export interface SystemConfig {
+  tmdb_key_configured: boolean;
+  tmdb_key_source: "default" | "custom" | "none";
+  config_file?: string;
+}
+
+export function useSystemConfig() {
+  return useQuery({
+    queryKey: ["system", "config"],
+    queryFn: () => apiFetch<SystemConfig>("/system/config"),
+  });
+}
+
 export function useSaveConfig() {
   const qc = useQueryClient();
   return useMutation({
@@ -73,6 +86,7 @@ export function useSaveConfig() {
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["system", "status"] });
+      qc.invalidateQueries({ queryKey: ["system", "config"] });
       toast.success("Settings saved");
     },
     onError: (err) => toast.error((err as Error).message),

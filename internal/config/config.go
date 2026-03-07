@@ -15,6 +15,10 @@ type Config struct {
 	// ConfigFile is the path of the config file that was loaded, if any.
 	// Empty when running on defaults/env vars only.
 	ConfigFile string `mapstructure:"-"`
+
+	// TMDBKeyIsDefault is true when the TMDB key came from the build-time
+	// default rather than user configuration.
+	TMDBKeyIsDefault bool `mapstructure:"-"`
 }
 
 // MediaInfoConfig controls optional ffprobe-based media scanning.
@@ -68,3 +72,7 @@ type AIConfig struct {
 type AuthConfig struct {
 	APIKey Secret `mapstructure:"api_key"`
 }
+
+// DefaultTMDBKey is set at build time via ldflags. Users can override
+// via config file or LUMINARR_TMDB_API_KEY env var.
+var DefaultTMDBKey string

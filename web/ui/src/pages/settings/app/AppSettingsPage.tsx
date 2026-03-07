@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { Monitor, Moon, Sun } from "lucide-react";
-import { useSystemStatus, useSaveConfig } from "@/api/system";
+import { useSystemStatus, useSystemConfig, useSaveConfig } from "@/api/system";
 import {
   THEME_PRESETS,
   getStoredMode,
@@ -413,6 +413,7 @@ function AISection() {
 
 function ConfigSection() {
   const { data: status } = useSystemStatus();
+  const { data: sysConfig } = useSystemConfig();
   const saveConfig = useSaveConfig();
   const [key, setKey] = useState("");
   const [show, setShow] = useState(false);
@@ -432,6 +433,8 @@ function ConfigSection() {
     );
   }
 
+  const keySource = sysConfig?.tmdb_key_source ?? "none";
+
   return (
     <div style={card}>
       <p style={sectionHeader}>Configuration</p>
@@ -444,11 +447,16 @@ function ConfigSection() {
           {status && (
             <Pill
               ok={status.tmdb_enabled}
-              labelTrue="Configured"
+              labelTrue={keySource === "default" ? "Using built-in key" : "Configured"}
               labelFalse="Not configured"
             />
           )}
         </div>
+        {keySource === "default" && (
+          <p style={{ fontSize: 12, color: "var(--color-text-muted)", margin: 0 }}>
+            A default TMDB key is included. You can optionally use your own below.
+          </p>
+        )}
 
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4, flexWrap: "wrap" }}>
           <input

@@ -323,6 +323,7 @@ func run() error {
 		DBPath:                   cfg.Database.Path,
 		ConfigFile:               cfg.ConfigFile,
 		AIEnabled:                !cfg.AI.APIKey.IsEmpty(),
+		TMDBKeyIsDefault:         cfg.TMDBKeyIsDefault,
 		QualityService:           qualitySvc,
 		QualityDefinitionService: qualityDefSvc,
 		LibraryService:           librarySvc,

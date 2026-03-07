@@ -112,6 +112,12 @@ func Load(cfgFile string) (*Config, error) {
 		}
 	}
 
+	// Apply build-time default TMDB key if no key was configured.
+	if cfg.TMDB.APIKey.IsEmpty() && DefaultTMDBKey != "" {
+		cfg.TMDB.APIKey = Secret(DefaultTMDBKey)
+		cfg.TMDBKeyIsDefault = true
+	}
+
 	cfg.ConfigFile = configFileUsed
 
 	return &cfg, nil

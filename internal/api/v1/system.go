@@ -40,6 +40,7 @@ type systemStatusOutput struct {
 // systemConfigBody is the response body for GET /api/v1/system/config.
 type systemConfigBody struct {
 	TMDBKeyConfigured bool   `json:"tmdb_key_configured" doc:"Whether a TMDB API key is set"`
+	TMDBKeySource     string `json:"tmdb_key_source" doc:"Source of the TMDB key: default, custom, or none"`
 	ConfigFile        string `json:"config_file,omitempty" doc:"Path of the loaded config file, if any"`
 }
 
@@ -89,7 +90,7 @@ type githubRelease struct {
 
 // RegisterSystemRoutes registers the /api/v1/system/* endpoints.
 // movieSvc may be nil in test environments; aiEnabled reflects the static AI key state.
-func RegisterSystemRoutes(api huma.API, startTime time.Time, dbType, dbPath, configFile string, aiEnabled bool, movieSvc *movie.Service, logger *slog.Logger) {
+func RegisterSystemRoutes(api huma.API, startTime time.Time, dbType, dbPath, configFile string, aiEnabled bool, tmdbKeyIsDefault bool, movieSvc *movie.Service, logger *slog.Logger) {
 	huma.Register(api, huma.Operation{
 		OperationID: "get-system-status",
 		Method:      "GET",
@@ -123,8 +124,18 @@ func RegisterSystemRoutes(api huma.API, startTime time.Time, dbType, dbPath, con
 		Summary:     "Get system configuration status",
 		Tags:        []string{"System"},
 	}, func(ctx context.Context, _ *struct{}) (*systemConfigOutput, error) {
+		hasProvider := movieSvc != nil && movieSvc.HasMetadataProvider()
+		source := "none"
+		if hasProvider {
+			if tmdbKeyIsDefault {
+				source = "default"
+			} else {
+				source = "custom"
+			}
+		}
 		return &systemConfigOutput{Body: &systemConfigBody{
-			TMDBKeyConfigured: movieSvc != nil && movieSvc.HasMetadataProvider(),
+			TMDBKeyConfigured: hasProvider,
+			TMDBKeySource:     source,
 			ConfigFile:        configFile,
 		}}, nil
 	})

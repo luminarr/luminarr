@@ -9,7 +9,8 @@ VERSION   ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "d
 BUILD_TIME := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 LDFLAGS   := -ldflags "\
   -X $(MODULE)/internal/version.Version=$(VERSION) \
-  -X $(MODULE)/internal/version.BuildTime=$(BUILD_TIME)"
+  -X $(MODULE)/internal/version.BuildTime=$(BUILD_TIME) \
+  -X $(MODULE)/internal/config.DefaultTMDBKey=$(LUMINARR_TMDB_API_KEY)"
 
 IMAGE ?= ghcr.io/luminarr/luminarr
 

@@ -49,6 +49,7 @@ type RouterConfig struct {
 	DBPath                   string
 	ConfigFile               string
 	AIEnabled                bool
+	TMDBKeyIsDefault         bool
 	QualityService           *quality.Service
 	QualityDefinitionService *quality.DefinitionService
 	LibraryService           *library.Service
@@ -152,7 +153,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		next(ctx)
 	})
 
-	v1.RegisterSystemRoutes(humaAPI, cfg.StartTime, cfg.DBType, cfg.DBPath, cfg.ConfigFile, cfg.AIEnabled, cfg.MovieService, cfg.Logger)
+	v1.RegisterSystemRoutes(humaAPI, cfg.StartTime, cfg.DBType, cfg.DBPath, cfg.ConfigFile, cfg.AIEnabled, cfg.TMDBKeyIsDefault, cfg.MovieService, cfg.Logger)
 
 	if cfg.QualityService != nil {
 		v1.RegisterQualityProfileRoutes(humaAPI, cfg.QualityService)
