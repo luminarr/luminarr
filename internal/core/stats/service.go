@@ -61,11 +61,6 @@ type IndexerStat struct {
 	SuccessRate float64 `json:"success_rate"`
 }
 
-// CutoffCounter is the minimal interface used to count cutoff-unmet movies.
-type CutoffCounter interface {
-	ListCutoffUnmet(ctx context.Context) ([]any, error)
-}
-
 // Service provides library statistics.
 type Service struct {
 	q             dbsqlite.Querier

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strings"
 	"syscall"
 
 	"github.com/luminarr/luminarr/internal/core/downloader"
@@ -261,12 +262,5 @@ func formatBytes(b uint64) string {
 
 // joinIssues concatenates a list of issue strings with "; ".
 func joinIssues(issues []string) string {
-	result := ""
-	for i, s := range issues {
-		if i > 0 {
-			result += "; "
-		}
-		result += s
-	}
-	return result
+	return strings.Join(issues, "; ")
 }

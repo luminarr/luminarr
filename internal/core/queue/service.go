@@ -81,57 +81,39 @@ func (s *Service) GetQueue(ctx context.Context) ([]Item, error) {
 }
 
 // GetQueueItem returns a single active queue item by its grab ID.
-// Returns an error if the item is not found in the active queue.
+// Returns an error if the item is not found.
 func (s *Service) GetQueueItem(ctx context.Context, grabID string) (Item, error) {
-	grabs, err := s.q.ListActiveGrabs(ctx)
+	g, err := s.q.GetGrabByID(ctx, grabID)
 	if err != nil {
-		return Item{}, fmt.Errorf("listing active grabs: %w", err)
+		return Item{}, fmt.Errorf("grab %q not found: %w", grabID, err)
 	}
-	for _, g := range grabs {
-		if g.ID != grabID {
-			continue
-		}
-		grabbedAt, _ := time.Parse(time.RFC3339, g.GrabbedAt)
-		item := Item{
-			GrabID:       g.ID,
-			MovieID:      g.MovieID,
-			ReleaseTitle: g.ReleaseTitle,
-			Protocol:     g.Protocol,
-			Size:         g.Size,
-			Status:       g.DownloadStatus,
-			GrabbedAt:    grabbedAt,
-		}
-		if g.ClientItemID != nil {
-			item.ClientItemID = *g.ClientItemID
-		}
-		if g.DownloadClientID != nil {
-			item.DownloadClientID = *g.DownloadClientID
-		}
-		return item, nil
+	grabbedAt, _ := time.Parse(time.RFC3339, g.GrabbedAt)
+	item := Item{
+		GrabID:       g.ID,
+		MovieID:      g.MovieID,
+		ReleaseTitle: g.ReleaseTitle,
+		Protocol:     g.Protocol,
+		Size:         g.Size,
+		Status:       g.DownloadStatus,
+		GrabbedAt:    grabbedAt,
 	}
-	return Item{}, fmt.Errorf("grab %q not found in active queue", grabID)
+	if g.ClientItemID != nil {
+		item.ClientItemID = *g.ClientItemID
+	}
+	if g.DownloadClientID != nil {
+		item.DownloadClientID = *g.DownloadClientID
+	}
+	return item, nil
 }
 
 // RemoveFromQueue removes a download from the client and marks the grab as removed.
 // If deleteFiles is true the downloaded data is also deleted on disk.
 func (s *Service) RemoveFromQueue(ctx context.Context, grabID string, deleteFiles bool) error {
-	// Look up grab by ID via ListActiveGrabs and filter — avoids a separate
-	// GetGrabByID query for this single call path.
-	grabs, err := s.q.ListActiveGrabs(ctx)
+	grab, err := s.q.GetGrabByID(ctx, grabID)
 	if err != nil {
-		return fmt.Errorf("listing active grabs: %w", err)
+		return fmt.Errorf("grab %q not found: %w", grabID, err)
 	}
-
-	var target *dbsqlite.GrabHistory
-	for i := range grabs {
-		if grabs[i].ID == grabID {
-			target = &grabs[i]
-			break
-		}
-	}
-	if target == nil {
-		return fmt.Errorf("grab %q not found in active queue", grabID)
-	}
+	target := &grab
 	if target.DownloadClientID == nil || target.ClientItemID == nil {
 		return errors.New("grab has no associated download client")
 	}

@@ -165,7 +165,8 @@ func RegisterReleaseRoutes(api huma.API, indexerSvc *indexer.Service, movieSvc *
 		Tags:          []string{"Releases"},
 		DefaultStatus: http.StatusCreated,
 	}, func(ctx context.Context, input *grabInput) (*grabOutput, error) {
-		if _, err := movieSvc.Get(ctx, input.MovieID); err != nil {
+		mov, err := movieSvc.Get(ctx, input.MovieID)
+		if err != nil {
 			if errors.Is(err, movie.ErrNotFound) {
 				return nil, huma.Error404NotFound("movie not found")
 			}
@@ -223,12 +224,10 @@ func RegisterReleaseRoutes(api huma.API, indexerSvc *indexer.Service, movieSvc *
 		// Compute score breakdown against the movie's quality profile.
 		var breakdownJSON string
 		if qualitySvc != nil {
-			if m, err := movieSvc.Get(ctx, input.MovieID); err == nil {
-				if p, err := qualitySvc.Get(ctx, m.QualityProfileID); err == nil {
-					_, bd := p.ScoreWithBreakdown(release.Quality)
-					if b, err := json.Marshal(bd); err == nil {
-						breakdownJSON = string(b)
-					}
+			if p, pErr := qualitySvc.Get(ctx, mov.QualityProfileID); pErr == nil {
+				_, bd := p.ScoreWithBreakdown(release.Quality)
+				if b, bErr := json.Marshal(bd); bErr == nil {
+					breakdownJSON = string(b)
 				}
 			}
 		}

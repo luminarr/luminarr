@@ -285,6 +285,10 @@ func (s *Service) addStub(ctx context.Context, req AddRequest) (Movie, error) {
 	if req.Monitored {
 		monitored = 1
 	}
+	minAvail := req.MinimumAvailability
+	if minAvail == "" {
+		minAvail = "released"
+	}
 
 	row, err := s.q.CreateMovie(ctx, dbsqlite.CreateMovieParams{
 		ID:                  uuid.New().String(),
@@ -302,7 +306,7 @@ func (s *Service) addStub(ctx context.Context, req AddRequest) (Movie, error) {
 		Monitored:           monitored,
 		LibraryID:           req.LibraryID,
 		QualityProfileID:    req.QualityProfileID,
-		MinimumAvailability: "released",
+		MinimumAvailability: minAvail,
 		Path:                nil,
 		AddedAt:             now,
 		UpdatedAt:           now,

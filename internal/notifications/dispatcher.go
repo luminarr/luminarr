@@ -5,6 +5,7 @@ package notifications
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 
@@ -114,12 +115,12 @@ func subscribesTo(onEventsJSON string, eventType string) bool {
 	if onEventsJSON == "" || onEventsJSON == "[]" || onEventsJSON == "null" {
 		return true // no filter = subscribe to everything
 	}
-
-	// Fast path: string contains check avoids JSON parsing for most cases.
-	// We look for the quoted event type surrounded by string delimiters.
-	needle := `"` + eventType + `"`
-	for i := 0; i <= len(onEventsJSON)-len(needle); i++ {
-		if onEventsJSON[i:i+len(needle)] == needle {
+	var events []string
+	if err := json.Unmarshal([]byte(onEventsJSON), &events); err != nil {
+		return false
+	}
+	for _, e := range events {
+		if e == eventType {
 			return true
 		}
 	}

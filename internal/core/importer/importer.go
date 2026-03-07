@@ -328,6 +328,11 @@ func transferFile(src, dst string) error {
 		os.Remove(dst)
 		return err
 	}
+	if err := out.Sync(); err != nil {
+		out.Close()
+		os.Remove(dst)
+		return err
+	}
 	if err := out.Close(); err != nil {
 		os.Remove(dst)
 		return err

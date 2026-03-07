@@ -33,7 +33,7 @@ func BackupHandler(db *sql.DB, dbPath string, logger *slog.Logger) http.HandlerF
 		defer func() { _ = os.Remove(tmpPath) }()
 
 		// VACUUM INTO produces a consistent, compacted copy even under concurrent writes.
-		if _, err := db.ExecContext(r.Context(), fmt.Sprintf("VACUUM INTO %q", tmpPath)); err != nil {
+		if _, err := db.ExecContext(r.Context(), fmt.Sprintf("VACUUM INTO '%s'", tmpPath)); err != nil {
 			logger.ErrorContext(r.Context(), "backup: VACUUM INTO failed", slog.Any("error", err))
 			http.Error(w, "failed to create backup", http.StatusInternalServerError)
 			return

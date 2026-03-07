@@ -50,6 +50,7 @@ func RegisterHookRoutes(
 	sched *scheduler.Scheduler,
 ) {
 	huma.Register(api, huma.Operation{
+		OperationID: "trigger-library-scan",
 		Method:      http.MethodPost,
 		Path:        "/api/v1/hooks/scan",
 		Summary:     "Trigger library scan",
@@ -74,6 +75,7 @@ func RegisterHookRoutes(
 	})
 
 	huma.Register(api, huma.Operation{
+		OperationID: "trigger-metadata-refresh",
 		Method:      http.MethodPost,
 		Path:        "/api/v1/hooks/refresh",
 		Summary:     "Trigger metadata refresh",
@@ -94,6 +96,7 @@ func RegisterHookRoutes(
 	})
 
 	huma.Register(api, huma.Operation{
+		OperationID: "send-custom-notification",
 		Method:      http.MethodPost,
 		Path:        "/api/v1/hooks/notify",
 		Summary:     "Send a custom notification",
