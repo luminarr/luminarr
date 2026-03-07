@@ -102,7 +102,7 @@ Open `http://localhost:8282`. That's it.
 
 > **Running Radarr too?** Luminarr uses port 8282 specifically so you can run both simultaneously during migration. Radarr stays on 7878.
 
-> **Want media scanning?** Use the `latest-full` image tag to get a build that includes ffprobe. Swap `ghcr.io/luminarr/luminarr:latest` for `ghcr.io/luminarr/luminarr:latest-full` — no other changes needed. See the [Media Scanning section](docs/GETTING_STARTED.md#ffprobe-optional) for details.
+> **Want media scanning?** Use the `latest-full` image tag to get a build that includes ffprobe. Swap `ghcr.io/luminarr/luminarr:latest` for `ghcr.io/luminarr/luminarr:latest-full` — no other changes needed. See the [Media Scanning section](docs/GETTING_STARTED.md#media-scanning-with-ffprobe-optional) for details.
 
 ### Docker Compose
 

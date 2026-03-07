@@ -201,7 +201,7 @@ Radarr keeps running during import. Switch over when you're ready.
 
 ---
 
-## Media Scanning with ffprobe (optional) {#ffprobe-optional}
+## Media Scanning with ffprobe (optional)
 
 Luminarr can verify the **actual** technical metadata of imported files using `ffprobe` — codec, resolution, HDR format, audio. It catches mislabelled releases: a file named `Movie.2160p.x265.HDR10.mkv` might actually contain `x264 SDR`.
 
@@ -384,5 +384,5 @@ For external integrations (scripts, Home Assistant, etc.), find your API key in 
 ## Next Steps
 
 - Browse the [Architecture docs](ARCHITECTURE.md) for internals
-- Check the [API docs](/api/docs) for automation
+- Check the API docs at `/api/docs` on your running instance
 - Report bugs or request features on [GitHub](https://github.com/luminarr/luminarr/issues)
