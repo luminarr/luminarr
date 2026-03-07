@@ -10,10 +10,9 @@ configure. The complete list:
 
 | Destination | When | Controlled by |
 |---|---|---|
-| **The Movie Database (TMDB)** | Movie search and metadata fetch | `tmdb.api_key` in config |
+| **The Movie Database (TMDB)** | Movie search and metadata fetch | Built-in |
 | **Configured indexers** | RSS sync and manual release search | Indexer settings in the UI/API |
 | **Configured download clients** | Sending grabs, polling queue status | Download client settings |
-| **Anthropic Claude API** | AI release scoring and filtering | `ai.api_key` in config |
 | **Configured notification targets** | Webhooks, Discord, email, etc. | Notification settings |
 
 ## What Luminarr Never Does

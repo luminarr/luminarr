@@ -4,14 +4,6 @@ This guide walks you through installing Luminarr, configuring it, and getting yo
 
 ---
 
-## Prerequisites
-
-You need one thing before you start:
-
-- **A TMDB API key** — free at [themoviedb.org/settings/api](https://www.themoviedb.org/settings/api). Sign up, request an API key (choose "Developer"), and you'll have it in two minutes. Without this key, Luminarr runs but can't search for or fetch movie metadata.
-
----
-
 ## Installation
 
 ### Docker (recommended)
@@ -22,13 +14,10 @@ docker run -d \
   -p 8282:8282 \
   -v luminarr-data:/config \
   -v /path/to/movies:/movies \
-  -e LUMINARR_TMDB_API_KEY=your-tmdb-key \
   ghcr.io/luminarr/luminarr:latest
 ```
 
 Open `http://localhost:8282`. Done.
-
-On first run, Luminarr generates an API key and saves it to the `/config` volume. It persists across restarts automatically.
 
 ### Docker Compose
 
@@ -40,10 +29,6 @@ services:
     image: ghcr.io/luminarr/luminarr:latest
     ports:
       - "8282:8282"
-    environment:
-      LUMINARR_TMDB_API_KEY: your-tmdb-key
-      # Optional: set a fixed API key instead of auto-generating one
-      # LUMINARR_AUTH_API_KEY: my-secret-key
     volumes:
       - luminarr-data:/config
       - /path/to/movies:/movies
@@ -254,8 +239,6 @@ services:
     image: ghcr.io/luminarr/luminarr:latest-full   # ← change this line
     ports:
       - "8282:8282"
-    environment:
-      LUMINARR_TMDB_API_KEY: your-tmdb-key
     volumes:
       - luminarr-data:/config
       - /path/to/movies:/movies
@@ -362,8 +345,7 @@ All settings can live in `config.yaml` or as environment variables (prefixed wit
 | `server.port` | `8282` | `LUMINARR_SERVER_PORT` | HTTP port |
 | `database.driver` | `sqlite` | `LUMINARR_DATABASE_DRIVER` | `sqlite` only |
 | `database.path` | `~/.config/luminarr/luminarr.db` | `LUMINARR_DATABASE_PATH` | SQLite file path |
-| `auth.api_key` | auto-generated | `LUMINARR_AUTH_API_KEY` | API key for all requests |
-| `tmdb.api_key` | — | `LUMINARR_TMDB_API_KEY` | TMDB metadata key |
+| `auth.api_key` | auto-generated | `LUMINARR_AUTH_API_KEY` | API key for external integrations |
 | `log.level` | `info` | `LUMINARR_LOG_LEVEL` | `debug`, `info`, `warn`, `error` |
 | `log.format` | `json` | `LUMINARR_LOG_FORMAT` | `json` or `text` |
 | `mediainfo.ffprobe_path` | `` | `LUMINARR_MEDIAINFO_FFPROBE_PATH` | Path to ffprobe binary; empty = search $PATH |
@@ -380,34 +362,13 @@ A fully commented example is at [`config.example.yaml`](../config.example.yaml).
 
 ---
 
-## API Key
+## API
 
-Every Luminarr instance has its own randomly generated API key. This is intentional.
-
-**Why one key per instance, not a shared key?**
-Tools like Radarr ship with one API key that's visible in the settings UI — it's the same key for every client that talks to that instance, and you copy-paste it wherever needed. That works fine when you're the only user, but it means anyone who has ever seen the key has permanent access.
-
-Luminarr takes the same one-key-per-instance approach, but removes the copy-paste step entirely: the key is generated once on first start and **baked directly into the HTML** that the browser receives. The browser stores it in memory and sends it with every API request automatically. You never see it, never manage it, never paste it anywhere — it just works.
-
-The practical consequence: if you restart the container without a persistent key, the key changes and your open browser tabs get a 401 until you hard-refresh. Fix this with `LUMINARR_AUTH_API_KEY` or by mounting a `config.yaml`. See [Troubleshooting](#troubleshooting) below.
-
-**Using the API from outside the browser** (scripts, Home Assistant, etc.): find your key in the container logs on startup (`api key: ...`), or set a fixed key via `LUMINARR_AUTH_API_KEY` and use that value in the `X-Api-Key` header.
-
-Interactive OpenAPI docs are available at `/api/docs` when the server is running.
+For external integrations (scripts, Home Assistant, etc.), find your API key in **Settings → General** and send it as the `X-Api-Key` header. Interactive OpenAPI docs are available at `/api/docs` when the server is running.
 
 ---
 
 ## Troubleshooting
-
-### 401 errors after restarting Docker
-
-The API key changed. Either:
-- Hard-refresh the browser tab (Ctrl+Shift+R) to pick up the new key
-- Set `LUMINARR_AUTH_API_KEY` in your Docker config so the key is stable across restarts
-
-### "TMDB API key not configured" warning
-
-Movie search and metadata are disabled. Set `LUMINARR_TMDB_API_KEY` via environment variable or `tmdb.api_key` in config.yaml.
 
 ### Download client connection fails
 

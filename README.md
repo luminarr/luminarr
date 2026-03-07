@@ -95,13 +95,10 @@ docker run -d \
   -p 8282:8282 \
   -v luminarr-data:/config \
   -v /path/to/movies:/movies \
-  -e LUMINARR_TMDB_API_KEY=your-tmdb-key \
   ghcr.io/luminarr/luminarr:latest
 ```
 
-Open `http://localhost:8282`. That's it. No API key setup — on first run, Luminarr generates one and saves it to the volume, so it's stable across restarts. The browser gets it automatically.
-
-**Get a free TMDB API key:** [themoviedb.org/settings/api](https://www.themoviedb.org/settings/api) (takes about two minutes, just an account signup).
+Open `http://localhost:8282`. That's it.
 
 > **Running Radarr too?** Luminarr uses port 8282 specifically so you can run both simultaneously during migration. Radarr stays on 7878.
 
@@ -115,10 +112,6 @@ services:
     image: ghcr.io/luminarr/luminarr:latest
     ports:
       - "8282:8282"
-    environment:
-      LUMINARR_TMDB_API_KEY: your-tmdb-key
-      # API key auto-generates and persists on first run — no action needed.
-      # Set LUMINARR_AUTH_API_KEY here only if you want a fixed value.
     volumes:
       - luminarr-data:/config
       - /path/to/movies:/movies
@@ -187,7 +180,7 @@ Luminarr makes outbound connections **only** to services you explicitly configur
 
 | Service | When |
 |---|---|
-| TMDB | When you search for or refresh a movie (requires your own API key) |
+| TMDB | When you search for or refresh a movie |
 | Your indexers | RSS sync and release search |
 | Your download clients | Sending grabs, polling queue |
 | Your media servers | Library sync and auto-refresh — Plex, Emby, Jellyfin — only if configured |
@@ -197,7 +190,6 @@ Luminarr makes outbound connections **only** to services you explicitly configur
 - No telemetry or usage analytics
 - No crash reporting to external services
 - No update checks phoning home
-- No shared API keys — you supply your own TMDB key, so your rate limits are yours alone
 
 Credentials are stored in your local `config.yaml` only and never written to logs. The codebase uses a `Secret` type that renders as `***` in all output.
 

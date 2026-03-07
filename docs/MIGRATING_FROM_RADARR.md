@@ -100,5 +100,3 @@ during future grabs.
 - Rename existing files in bulk (only renames on new imports)
 - Movie collections / series grouping
 - Calendar integration (iCal export)
-- API key management UI
-- Backup and restore
