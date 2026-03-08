@@ -91,7 +91,7 @@ func run() error {
 	}
 
 	// ── Logger ────────────────────────────────────────────────────────────────
-	logger := logging.New(cfg.Log.Level, cfg.Log.Format)
+	logger, logBuffer := logging.New(cfg.Log.Level, cfg.Log.Format)
 
 	// Set the global slog default so packages using the top-level slog
 	// functions (slog.Info, slog.Error, etc.) pick up the configured handler.
@@ -343,6 +343,7 @@ func run() error {
 		CollectionService:        collectionSvc,
 		MediaServerService:       mediaServerSvc,
 		PlexSyncService:          plexSyncSvc,
+		LogBuffer:                logBuffer,
 		WSHub:                    wsHub,
 		Bus:                      bus,
 	})

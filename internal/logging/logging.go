@@ -6,25 +6,32 @@ import (
 	"strings"
 )
 
-// New creates and returns a configured slog.Logger.
+const defaultBufferSize = 1000
+
+// New creates and returns a configured slog.Logger backed by a TeeHandler.
+// The returned RingBuffer captures the last 1000 log entries for the API.
 //
 // Format "json" produces structured JSON output (default, for production).
 // Format "text" produces human-readable key=value output (for development).
 //
 // Level is one of: debug, info, warn, error. Default: info.
-func New(level, format string) *slog.Logger {
+func New(level, format string) (*slog.Logger, *RingBuffer) {
+	lvl := parseLevel(level)
 	opts := &slog.HandlerOptions{
-		Level: parseLevel(level),
+		Level: lvl,
 	}
 
-	var handler slog.Handler
+	var output slog.Handler
 	if strings.ToLower(format) == "text" {
-		handler = slog.NewTextHandler(os.Stdout, opts)
+		output = slog.NewTextHandler(os.Stdout, opts)
 	} else {
-		handler = slog.NewJSONHandler(os.Stdout, opts)
+		output = slog.NewJSONHandler(os.Stdout, opts)
 	}
 
-	return slog.New(handler)
+	buf := NewRingBuffer(defaultBufferSize)
+	handler := NewTeeHandler(output, buf)
+
+	return slog.New(handler), buf
 }
 
 func parseLevel(level string) slog.Level {

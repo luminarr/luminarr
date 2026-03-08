@@ -37,13 +37,13 @@ export function useRunTask() {
   });
 }
 
-export function useSystemLogs(level?: string, lines?: number) {
+export function useSystemLogs(level?: string, limit?: number) {
   const params = new URLSearchParams();
   if (level) params.set("level", level);
-  if (lines) params.set("lines", String(lines));
+  if (limit) params.set("limit", String(limit));
   const qs = params.toString();
   return useQuery({
-    queryKey: ["system", "logs", level, lines],
+    queryKey: ["system", "logs", level, limit],
     queryFn: () => apiFetch<LogEntry[]>(`/system/logs${qs ? `?${qs}` : ""}`),
     refetchInterval: 10_000,
   });

@@ -44,7 +44,7 @@ export interface LogEntry {
   time: string;
   level: string;
   message: string;
-  fields: Record<string, unknown>;
+  fields?: Record<string, unknown>;
 }
 
 export interface PluginList {

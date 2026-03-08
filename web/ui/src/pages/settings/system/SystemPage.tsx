@@ -5,11 +5,12 @@ import {
   useTasks,
   useRunTask,
   useCheckForUpdates,
+  useSystemLogs,
 } from "@/api/system";
 import { useMovies } from "@/api/movies";
 import { useQueue } from "@/api/queue";
 import { marked } from "marked";
-import type { HealthStatus, UpdateCheck } from "@/types";
+import type { HealthStatus, UpdateCheck, LogEntry } from "@/types";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -764,6 +765,223 @@ function TasksSection() {
   );
 }
 
+// ── Section 4: Logs ──────────────────────────────────────────────────────────
+
+const LOG_LEVELS = ["all", "debug", "info", "warn", "error"] as const;
+
+function levelBadgeColor(level: string): { color: string; bg: string } {
+  switch (level) {
+    case "DEBUG":
+      return { color: "var(--color-text-muted)", bg: "var(--color-bg-subtle)" };
+    case "INFO":
+      return { color: "var(--color-accent)", bg: "color-mix(in srgb, var(--color-accent) 12%, transparent)" };
+    case "WARN":
+      return { color: "var(--color-warning)", bg: "color-mix(in srgb, var(--color-warning) 12%, transparent)" };
+    case "ERROR":
+      return { color: "var(--color-danger)", bg: "color-mix(in srgb, var(--color-danger) 12%, transparent)" };
+    default:
+      return { color: "var(--color-text-secondary)", bg: "var(--color-bg-subtle)" };
+  }
+}
+
+function formatLogTime(iso: string): string {
+  const d = new Date(iso);
+  return d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
+}
+
+function LogRow({ entry, isLast }: { entry: LogEntry; isLast: boolean }) {
+  const [expanded, setExpanded] = useState(false);
+  const hasFields = entry.fields && Object.keys(entry.fields).length > 0;
+  const badge = levelBadgeColor(entry.level);
+
+  return (
+    <>
+      <tr
+        onClick={hasFields ? () => setExpanded(!expanded) : undefined}
+        style={{ cursor: hasFields ? "pointer" : "default" }}
+        onMouseEnter={(e) => {
+          (e.currentTarget as HTMLTableRowElement).style.background = "var(--color-bg-subtle)";
+        }}
+        onMouseLeave={(e) => {
+          (e.currentTarget as HTMLTableRowElement).style.background = "transparent";
+        }}
+      >
+        <td
+          style={{
+            height: 36,
+            fontSize: 12,
+            fontFamily: "var(--font-family-mono)",
+            color: "var(--color-text-muted)",
+            whiteSpace: "nowrap",
+            paddingRight: 12,
+            borderBottom: !expanded && !isLast ? "1px solid var(--color-border-subtle)" : "none",
+            verticalAlign: "middle",
+          }}
+        >
+          {formatLogTime(entry.time)}
+        </td>
+        <td
+          style={{
+            height: 36,
+            paddingRight: 12,
+            borderBottom: !expanded && !isLast ? "1px solid var(--color-border-subtle)" : "none",
+            verticalAlign: "middle",
+          }}
+        >
+          <span
+            style={{
+              display: "inline-block",
+              padding: "1px 6px",
+              borderRadius: 3,
+              fontSize: 10,
+              fontWeight: 600,
+              letterSpacing: "0.04em",
+              color: badge.color,
+              background: badge.bg,
+              minWidth: 42,
+              textAlign: "center",
+            }}
+          >
+            {entry.level}
+          </span>
+        </td>
+        <td
+          style={{
+            height: 36,
+            fontSize: 13,
+            color: "var(--color-text-primary)",
+            borderBottom: !expanded && !isLast ? "1px solid var(--color-border-subtle)" : "none",
+            verticalAlign: "middle",
+            maxWidth: 0,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {entry.message}
+          {hasFields && (
+            <span style={{ color: "var(--color-text-muted)", fontSize: 11, marginLeft: 6 }}>
+              {expanded ? "▾" : "▸"}
+            </span>
+          )}
+        </td>
+      </tr>
+      {expanded && hasFields && (
+        <tr>
+          <td colSpan={3} style={{ borderBottom: !isLast ? "1px solid var(--color-border-subtle)" : "none", padding: 0 }}>
+            <pre
+              style={{
+                margin: 0,
+                padding: "8px 12px 8px 40px",
+                fontSize: 11,
+                fontFamily: "var(--font-family-mono)",
+                color: "var(--color-text-secondary)",
+                background: "var(--color-bg-elevated)",
+                borderRadius: 0,
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-all",
+              }}
+            >
+              {JSON.stringify(entry.fields, null, 2)}
+            </pre>
+          </td>
+        </tr>
+      )}
+    </>
+  );
+}
+
+function LogsSection() {
+  const [level, setLevel] = useState<string>("all");
+  const filterLevel = level === "all" ? undefined : level;
+  const { data, isLoading, error } = useSystemLogs(filterLevel, 200);
+
+  return (
+    <div style={card}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+        <p style={{ ...sectionHeader, marginBottom: 0 }}>Logs</p>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontSize: 11, color: "var(--color-text-muted)" }}>Level:</span>
+          <select
+            value={level}
+            onChange={(e) => setLevel(e.target.value)}
+            style={{
+              background: "var(--color-bg-elevated)",
+              border: "1px solid var(--color-border-default)",
+              borderRadius: 4,
+              padding: "2px 6px",
+              fontSize: 12,
+              color: "var(--color-text-primary)",
+              cursor: "pointer",
+            }}
+          >
+            {LOG_LEVELS.map((l) => (
+              <option key={l} value={l}>
+                {l === "all" ? "All" : l.toUpperCase()}
+              </option>
+            ))}
+          </select>
+          <span style={{ fontSize: 11, color: "var(--color-text-muted)" }}>
+            Auto-refresh 10s
+          </span>
+        </div>
+      </div>
+      {isLoading ? (
+        <div>
+          <SkeletonRow height={28} />
+          <SkeletonRow height={28} />
+          <SkeletonRow height={28} />
+          <SkeletonRow height={28} />
+          <SkeletonRow height={28} />
+        </div>
+      ) : error ? (
+        <p style={{ fontSize: 13, color: "var(--color-danger)", margin: 0 }}>
+          Failed to load logs.
+        </p>
+      ) : !data?.length ? (
+        <p style={{ fontSize: 13, color: "var(--color-text-muted)", margin: 0 }}>
+          No log entries{filterLevel ? ` at ${filterLevel.toUpperCase()} level` : ""}.
+        </p>
+      ) : (
+        <div style={{ maxHeight: 420, overflowY: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr>
+                {["Time", "Level", "Message"].map((h) => (
+                  <th
+                    key={h}
+                    style={{
+                      textAlign: "left",
+                      fontSize: 11,
+                      fontWeight: 600,
+                      letterSpacing: "0.08em",
+                      textTransform: "uppercase",
+                      color: "var(--color-text-muted)",
+                      paddingBottom: 8,
+                      borderBottom: "1px solid var(--color-border-subtle)",
+                      position: "sticky",
+                      top: 0,
+                      background: "var(--color-bg-surface)",
+                      zIndex: 1,
+                    }}
+                  >
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {data.map((entry, i) => (
+                <LogRow key={`${entry.time}-${i}`} entry={entry} isLast={i === data.length - 1} />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function SystemPage() {
@@ -792,6 +1010,7 @@ export default function SystemPage() {
         <StatusSection />
         <HealthSection />
         <TasksSection />
+        <LogsSection />
       </div>
     </div>
   );

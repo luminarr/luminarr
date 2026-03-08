@@ -32,6 +32,7 @@ import (
 	"github.com/luminarr/luminarr/internal/core/queue"
 	"github.com/luminarr/luminarr/internal/core/stats"
 	"github.com/luminarr/luminarr/internal/events"
+	"github.com/luminarr/luminarr/internal/logging"
 	"github.com/luminarr/luminarr/internal/plexsync"
 	"github.com/luminarr/luminarr/internal/radarrimport"
 	"github.com/luminarr/luminarr/internal/scheduler"
@@ -69,6 +70,7 @@ type RouterConfig struct {
 	CollectionService        *collection.Service
 	MediaServerService       *mediaserver.Service
 	PlexSyncService          *plexsync.Service
+	LogBuffer                *logging.RingBuffer
 	WSHub                    *ws.Hub
 	Bus                      *events.Bus
 }
@@ -165,6 +167,10 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	})
 
 	v1.RegisterSystemRoutes(humaAPI, cfg.StartTime, cfg.DBType, cfg.DBPath, cfg.ConfigFile, cfg.AIEnabled, cfg.TMDBKeyIsDefault, cfg.Auth.Value(), cfg.MovieService, cfg.Logger)
+
+	if cfg.LogBuffer != nil {
+		v1.RegisterLogRoutes(humaAPI, cfg.LogBuffer)
+	}
 
 	if cfg.QualityService != nil {
 		v1.RegisterQualityProfileRoutes(humaAPI, cfg.QualityService)
