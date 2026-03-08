@@ -1287,13 +1287,40 @@ func (s *Service) ListCutoffUnmet(ctx context.Context) ([]Movie, error) {
 }
 
 // CountCutoffUnmet returns the number of monitored movies whose best file
-// quality does not meet the quality profile cutoff.
+// quality does not meet the quality profile cutoff. Unlike ListCutoffUnmet it
+// skips the Movie conversion and sorting since only the count is needed.
 func (s *Service) CountCutoffUnmet(ctx context.Context) (int64, error) {
-	movies, err := s.ListCutoffUnmet(ctx)
+	rows, err := s.q.ListMonitoredMoviesWithFiles(ctx)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("listing movies with files: %w", err)
 	}
-	return int64(len(movies)), nil
+
+	type entry struct {
+		best   plugin.Quality
+		cutoff plugin.Quality
+	}
+	seen := map[string]*entry{}
+
+	for _, r := range rows {
+		var fileQ plugin.Quality
+		_ = json.Unmarshal([]byte(r.QualityJson), &fileQ)
+
+		if e, ok := seen[r.ID]; !ok {
+			var cutoffQ plugin.Quality
+			_ = json.Unmarshal([]byte(r.CutoffJson), &cutoffQ)
+			seen[r.ID] = &entry{best: fileQ, cutoff: cutoffQ}
+		} else if fileQ.Score() > e.best.Score() {
+			e.best = fileQ
+		}
+	}
+
+	var count int64
+	for _, e := range seen {
+		if !e.best.AtLeast(e.cutoff) {
+			count++
+		}
+	}
+	return count, nil
 }
 
 // rowToMovieFromWithFilesRow converts a ListMonitoredMoviesWithFilesRow (which
