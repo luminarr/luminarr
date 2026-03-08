@@ -1013,7 +1013,7 @@ function FileTableRow({
   const { file, selected, match, searchOpen, searchQuery, searchResults, importing, imported, autoMatchLoading, autoMatched } = row;
 
   // Row highlight colour.
-  let rowBg = "transparent";
+  let rowBg;
   if (imported) rowBg = "color-mix(in srgb, var(--color-success) 6%, transparent)";
   else if (match) rowBg = "color-mix(in srgb, var(--color-success) 8%, transparent)";
   else rowBg = "color-mix(in srgb, var(--color-warning) 5%, transparent)";
