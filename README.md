@@ -1,7 +1,8 @@
 <p align="center">
-  <img src="web/ui/public/luminarr-512.png" alt="Luminarr" width="200">
+  <img src="web/ui/public/luminarr-512.png" alt="Luminarr" width="120">
 </p>
-<h3 align="center">A self-hosted movie collection manager built for simplicity.</h3>
+<h1 align="center">Luminarr</h1>
+<p align="center">A self-hosted movie collection manager built for simplicity.</p>
 <p align="center">
   <img src="https://github.com/luminarr/luminarr/actions/workflows/ci.yml/badge.svg" alt="CI">
   <a href="https://github.com/luminarr/luminarr/releases/latest"><img src="https://img.shields.io/github/v/release/luminarr/luminarr" alt="Release"></a>
