@@ -32,6 +32,10 @@ function presetKey(q: Quality): string {
   return `${q.resolution}-${q.source}-${q.codec}-${q.hdr}`;
 }
 
+function presetLabel(q: Quality): string {
+  return `${q.resolution} · ${q.source} · ${q.codec} · ${q.hdr}`;
+}
+
 // ── Shared styles ─────────────────────────────────────────────────────────────
 
 const inputStyle: React.CSSProperties = {
@@ -156,7 +160,7 @@ function QualityProfileModal({ editing, onClose }: ModalProps) {
           border: "1px solid var(--color-border-subtle)",
           borderRadius: 12,
           padding: 24,
-          width: 560,
+          width: 640,
           maxWidth: "calc(100vw - 48px)",
           maxHeight: "calc(100vh - 80px)",
           overflowY: "auto",
@@ -199,37 +203,48 @@ function QualityProfileModal({ editing, onClose }: ModalProps) {
         {/* Qualities */}
         <div>
           <label style={{ ...labelStyle, marginBottom: 10 }}>Allowed Qualities *</label>
-          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            {PRESETS.map((preset) => {
-              const key = presetKey(preset);
-              const checked = selectedKeys.has(key);
-              return (
-                <label
-                  key={key}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 10,
-                    padding: "6px 8px",
-                    borderRadius: 5,
-                    cursor: "pointer",
-                    background: checked ? "var(--color-accent-muted)" : "transparent",
-                    transition: "background 100ms ease",
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={checked}
-                    onChange={() => togglePreset(key)}
-                    style={{ accentColor: "var(--color-accent)", width: 14, height: 14 }}
-                  />
-                  <span style={{ fontSize: 13, color: checked ? "var(--color-text-primary)" : "var(--color-text-secondary)" }}>
-                    {preset.name}
-                  </span>
-                </label>
-              );
-            })}
-          </div>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+            <thead>
+              <tr style={{ borderBottom: "1px solid var(--color-border-subtle)" }}>
+                {["Resolution", "Source", "Codec", "HDR", ""].map((h) => (
+                  <th key={h} style={{ textAlign: "left", padding: "6px 10px", fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--color-text-muted)", whiteSpace: "nowrap" }}>
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {PRESETS.map((preset) => {
+                const key = presetKey(preset);
+                const checked = selectedKeys.has(key);
+                return (
+                  <tr
+                    key={key}
+                    onClick={() => togglePreset(key)}
+                    style={{
+                      cursor: "pointer",
+                      background: checked ? "var(--color-accent-muted)" : "transparent",
+                      transition: "background 100ms ease",
+                    }}
+                  >
+                    <td style={{ padding: "6px 10px", color: checked ? "var(--color-text-primary)" : "var(--color-text-secondary)" }}>{preset.resolution}</td>
+                    <td style={{ padding: "6px 10px", color: checked ? "var(--color-text-primary)" : "var(--color-text-secondary)" }}>{preset.source}</td>
+                    <td style={{ padding: "6px 10px", color: checked ? "var(--color-text-primary)" : "var(--color-text-secondary)" }}>{preset.codec}</td>
+                    <td style={{ padding: "6px 10px", color: checked ? "var(--color-text-primary)" : "var(--color-text-secondary)" }}>{preset.hdr}</td>
+                    <td style={{ padding: "6px 10px", textAlign: "center", width: 32 }}>
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => togglePreset(key)}
+                        onClick={(e) => e.stopPropagation()}
+                        style={{ accentColor: "var(--color-accent)", width: 14, height: 14 }}
+                      />
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
 
         {/* Cutoff + Upgrade */}
@@ -246,7 +261,7 @@ function QualityProfileModal({ editing, onClose }: ModalProps) {
               >
                 <option value="">Select…</option>
                 {selectedPresets.map((p) => (
-                  <option key={presetKey(p)} value={presetKey(p)}>{p.name}</option>
+                  <option key={presetKey(p)} value={presetKey(p)}>{presetLabel(p)}</option>
                 ))}
               </select>
             </div>
@@ -275,7 +290,7 @@ function QualityProfileModal({ editing, onClose }: ModalProps) {
                 >
                   <option value="">No ceiling</option>
                   {selectedPresets.map((p) => (
-                    <option key={presetKey(p)} value={presetKey(p)}>{p.name}</option>
+                    <option key={presetKey(p)} value={presetKey(p)}>{presetLabel(p)}</option>
                   ))}
                 </select>
               )}
@@ -406,7 +421,7 @@ export default function QualityProfileList() {
                     {profile.name}
                   </td>
                   <td style={{ padding: "0 16px", height: 52, color: "var(--color-text-secondary)" }}>
-                    {profile.cutoff.name}
+                    {presetLabel(profile.cutoff)}
                   </td>
                   <td style={{ padding: "0 16px", height: 52, color: "var(--color-text-secondary)" }}>
                     {profile.qualities.length}
@@ -414,7 +429,7 @@ export default function QualityProfileList() {
                   <td style={{ padding: "0 16px", height: 52 }}>
                     {profile.upgrade_allowed ? (
                       <span style={{ fontSize: 12, color: "var(--color-success)", background: "color-mix(in srgb, var(--color-success) 12%, transparent)", padding: "2px 8px", borderRadius: 4, fontWeight: 500 }}>
-                        {profile.upgrade_until ? `Until ${profile.upgrade_until.name}` : "Yes"}
+                        {profile.upgrade_until ? `Until ${presetLabel(profile.upgrade_until)}` : "Yes"}
                       </span>
                     ) : (
                       <span style={{ fontSize: 12, color: "var(--color-text-muted)" }}>No</span>
