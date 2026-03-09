@@ -14,6 +14,7 @@ import (
 
 	"github.com/luminarr/luminarr/internal/api/middleware"
 	v1 "github.com/luminarr/luminarr/internal/api/v1"
+	v3 "github.com/luminarr/luminarr/internal/api/v3"
 	"github.com/luminarr/luminarr/internal/api/ws"
 	"github.com/luminarr/luminarr/internal/config"
 	"github.com/luminarr/luminarr/internal/core/blocklist"
@@ -254,6 +255,26 @@ func NewRouter(cfg RouterConfig) http.Handler {
 
 	v1.RegisterFilesystemRoutes(humaAPI)
 	v1.RegisterParseRoutes(humaAPI)
+
+	// ── Radarr v3 API compatibility layer ────────────────────────────────
+	// External tools (Overseerr, Homepage, etc.) can point their "Radarr"
+	// integration at Luminarr and it will just work.
+	if cfg.DB != nil {
+		v3Config := huma.DefaultConfig("Luminarr Radarr-Compatible API", version.Version)
+		v3Config.DocsPath = ""
+		v3Config.OpenAPIPath = ""
+		v3Config.SchemasPath = ""
+		v3API := humachi.New(r, v3Config)
+		v3API.UseMiddleware(v3.Auth(v3API, apiKeyBytes))
+		v3.RegisterRoutes(v3API, v3.Config{
+			DB:             cfg.DB,
+			MovieService:   cfg.MovieService,
+			QualityService: cfg.QualityService,
+			LibraryService: cfg.LibraryService,
+			QueueService:   cfg.QueueService,
+			Scheduler:      cfg.Scheduler,
+		})
+	}
 
 	// Serve the embedded React SPA. This handler serves static files when they
 	// exist (assets, favicon, etc.) and falls back to index.html for all other

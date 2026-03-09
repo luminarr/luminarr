@@ -7,24 +7,31 @@ package api_test
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 	"time"
 
 	"github.com/luminarr/luminarr/internal/api"
 	"github.com/luminarr/luminarr/internal/config"
+	"github.com/luminarr/luminarr/internal/core/blocklist"
 	"github.com/luminarr/luminarr/internal/core/downloader"
+	"github.com/luminarr/luminarr/internal/core/downloadhandling"
 	"github.com/luminarr/luminarr/internal/core/health"
 	"github.com/luminarr/luminarr/internal/core/indexer"
 	"github.com/luminarr/luminarr/internal/core/library"
+	"github.com/luminarr/luminarr/internal/core/mediamanagement"
+	"github.com/luminarr/luminarr/internal/core/mediaserver"
 	"github.com/luminarr/luminarr/internal/core/movie"
 	"github.com/luminarr/luminarr/internal/core/notification"
 	"github.com/luminarr/luminarr/internal/core/quality"
 	"github.com/luminarr/luminarr/internal/core/queue"
+	"github.com/luminarr/luminarr/internal/core/stats"
 	dbsqlite "github.com/luminarr/luminarr/internal/db/generated/sqlite"
 	"github.com/luminarr/luminarr/internal/events"
 	"github.com/luminarr/luminarr/internal/ratelimit"
@@ -60,6 +67,16 @@ func registerTestPlugins(reg *registry.Registry) {
 		return &testDownloadClient{}, nil
 	})
 	reg.RegisterDownloaderSanitizer("qbittorrent", func(s json.RawMessage) json.RawMessage { return s })
+
+	reg.RegisterNotifier("webhook", func(_ json.RawMessage) (plugin.Notifier, error) {
+		return &testNotifier{}, nil
+	})
+	reg.RegisterNotifierSanitizer("webhook", func(s json.RawMessage) json.RawMessage { return s })
+
+	reg.RegisterMediaServer("plex", func(_ json.RawMessage) (plugin.MediaServer, error) {
+		return &testMediaServer{}, nil
+	})
+	reg.RegisterMediaServerSanitizer("plex", func(s json.RawMessage) json.RawMessage { return s })
 }
 
 type testIndexer struct{}
@@ -91,9 +108,21 @@ func (m *testDownloadClient) Status(_ context.Context, id string) (plugin.QueueI
 func (m *testDownloadClient) GetQueue(_ context.Context) ([]plugin.QueueItem, error) { return nil, nil }
 func (m *testDownloadClient) Remove(_ context.Context, _ string, _ bool) error       { return nil }
 
+type testNotifier struct{}
+
+func (m *testNotifier) Name() string                                               { return "test-webhook" }
+func (m *testNotifier) Notify(_ context.Context, _ plugin.NotificationEvent) error { return nil }
+func (m *testNotifier) Test(_ context.Context) error                               { return nil }
+
+type testMediaServer struct{}
+
+func (m *testMediaServer) Name() string                                     { return "test-plex" }
+func (m *testMediaServer) RefreshLibrary(_ context.Context, _ string) error { return nil }
+func (m *testMediaServer) Test(_ context.Context) error                     { return nil }
+
 // newIntegrationRouterFromDB builds a fully-wired router using the provided
 // queries so that callers can seed data directly into the same DB.
-func newIntegrationRouterFromDB(t *testing.T, q *dbsqlite.Queries) http.Handler {
+func newIntegrationRouterFromDB(t *testing.T, q *dbsqlite.Queries, sqlDBs ...*sql.DB) http.Handler {
 	t.Helper()
 	logger := slog.Default()
 	bus := events.New(logger)
@@ -101,6 +130,7 @@ func newIntegrationRouterFromDB(t *testing.T, q *dbsqlite.Queries) http.Handler 
 	registerTestPlugins(reg)
 
 	qualSvc := quality.NewService(q, bus)
+	qualDefSvc := quality.NewDefinitionService(q)
 	libSvc := library.NewService(q, bus, nil)
 	movieSvc := movie.NewService(q, nil /* no TMDB */, bus, logger)
 	idxSvc := indexer.NewService(q, reg, bus, ratelimit.New())
@@ -108,24 +138,41 @@ func newIntegrationRouterFromDB(t *testing.T, q *dbsqlite.Queries) http.Handler 
 	queueSvc := queue.NewService(q, dlSvc, bus, logger)
 	notifSvc := notification.NewService(q, reg)
 	healthSvc := health.NewService(libSvc, dlSvc, idxSvc, logger)
+	blockSvc := blocklist.NewService(q)
+	statsSvc := stats.NewService(q, movieSvc)
+	mmSvc := mediamanagement.NewService(q)
+	dhSvc := downloadhandling.NewService(q)
+	msSvc := mediaserver.NewService(q, reg)
 	sched := scheduler.New(logger)
 
+	var sqlDB *sql.DB
+	if len(sqlDBs) > 0 {
+		sqlDB = sqlDBs[0]
+	}
+
 	return api.NewRouter(api.RouterConfig{
-		Auth:                config.Secret(testAPIKey),
-		Logger:              logger,
-		StartTime:           time.Now(),
-		DBType:              "sqlite",
-		AIEnabled:           false,
-		QualityService:      qualSvc,
-		LibraryService:      libSvc,
-		MovieService:        movieSvc,
-		IndexerService:      idxSvc,
-		DownloaderService:   dlSvc,
-		QueueService:        queueSvc,
-		Scheduler:           sched,
-		NotificationService: notifSvc,
-		HealthService:       healthSvc,
-		Bus:                 bus,
+		Auth:                     config.Secret(testAPIKey),
+		Logger:                   logger,
+		StartTime:                time.Now(),
+		DBType:                   "sqlite",
+		AIEnabled:                false,
+		DB:                       sqlDB,
+		QualityService:           qualSvc,
+		QualityDefinitionService: qualDefSvc,
+		LibraryService:           libSvc,
+		MovieService:             movieSvc,
+		IndexerService:           idxSvc,
+		DownloaderService:        dlSvc,
+		BlocklistService:         blockSvc,
+		QueueService:             queueSvc,
+		Scheduler:                sched,
+		NotificationService:      notifSvc,
+		HealthService:            healthSvc,
+		StatsService:             statsSvc,
+		MediaManagementService:   mmSvc,
+		DownloadHandlingService:  dhSvc,
+		MediaServerService:       msSvc,
+		Bus:                      bus,
 	})
 }
 
@@ -149,6 +196,18 @@ func do(t *testing.T, handler http.Handler, method, path string, body any) *http
 	req.Header.Set("X-Api-Key", testAPIKey)
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
+	}
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	return rec
+}
+
+// doNoAuth performs a request without the X-Api-Key header.
+func doNoAuth(t *testing.T, handler http.Handler, method, path string, headers map[string]string) *httptest.ResponseRecorder {
+	t.Helper()
+	req := httptest.NewRequest(method, path, nil)
+	for k, v := range headers {
+		req.Header.Set(k, v)
 	}
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
@@ -189,6 +248,30 @@ func TestIntegration_AuthRequired(t *testing.T) {
 	}
 }
 
+// ── Auth: Sec-Fetch-Site ─────────────────────────────────────────────────────
+
+func TestIntegration_Auth_SecFetchSite_SameOrigin(t *testing.T) {
+	h := newIntegrationRouter(t)
+	// same-origin requests should be allowed without API key.
+	rec := doNoAuth(t, h, http.MethodGet, "/api/v1/system/status", map[string]string{
+		"Sec-Fetch-Site": "same-origin",
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("Sec-Fetch-Site: same-origin = %d, want 200; body: %s", rec.Code, rec.Body)
+	}
+}
+
+func TestIntegration_Auth_SecFetchSite_CrossSite(t *testing.T) {
+	h := newIntegrationRouter(t)
+	// cross-site without API key should be rejected.
+	rec := doNoAuth(t, h, http.MethodGet, "/api/v1/system/status", map[string]string{
+		"Sec-Fetch-Site": "cross-site",
+	})
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("Sec-Fetch-Site: cross-site = %d, want 401", rec.Code)
+	}
+}
+
 // ── /api/v1/system ────────────────────────────────────────────────────────────
 
 func TestIntegration_SystemStatus(t *testing.T) {
@@ -204,6 +287,32 @@ func TestIntegration_SystemStatus(t *testing.T) {
 	}
 	if body["db_type"] != "sqlite" {
 		t.Errorf("db_type = %v, want sqlite", body["db_type"])
+	}
+}
+
+func TestIntegration_SystemConfig(t *testing.T) {
+	h := newIntegrationRouter(t)
+	rec := do(t, h, http.MethodGet, "/api/v1/system/config", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/v1/system/config = %d; body: %s", rec.Code, rec.Body)
+	}
+	var body map[string]any
+	mustDecode(t, rec, &body)
+	if _, ok := body["tmdb_key_configured"]; !ok {
+		t.Error("response missing 'tmdb_key_configured' field")
+	}
+}
+
+func TestIntegration_SystemConfig_ApiKey(t *testing.T) {
+	h := newIntegrationRouter(t)
+	rec := do(t, h, http.MethodGet, "/api/v1/system/config/apikey", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/v1/system/config/apikey = %d; body: %s", rec.Code, rec.Body)
+	}
+	var body map[string]any
+	mustDecode(t, rec, &body)
+	if body["api_key"] != testAPIKey {
+		t.Errorf("api_key = %v, want %v", body["api_key"], testAPIKey)
 	}
 }
 
@@ -282,6 +391,16 @@ func TestIntegration_QualityProfiles_CRUD(t *testing.T) {
 	}
 }
 
+// ── /api/v1/quality-definitions ──────────────────────────────────────────────
+
+func TestIntegration_QualityDefinitions_List(t *testing.T) {
+	h := newIntegrationRouter(t)
+	rec := do(t, h, http.MethodGet, "/api/v1/quality-definitions", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/v1/quality-definitions = %d; body: %s", rec.Code, rec.Body)
+	}
+}
+
 // ── /api/v1/libraries ────────────────────────────────────────────────────────
 
 func TestIntegration_Libraries_CRUD(t *testing.T) {
@@ -345,14 +464,9 @@ func TestIntegration_Libraries_CRUD(t *testing.T) {
 
 // ── /api/v1/movies ────────────────────────────────────────────────────────────
 
-// TestIntegration_Movies_DegradedMode verifies that a movie can be added as a
-// stub when no TMDB API key is configured. The movie is created with a
-// placeholder title ("tmdb:<id>") and MetadataRefreshedAt is absent from the
-// response.
 func TestIntegration_Movies_DegradedMode(t *testing.T) {
 	h := newIntegrationRouter(t)
 
-	// Seed a quality profile via API.
 	webdl1080p := qualityBody("1080p", "webdl", "x264", "none", "WEBDL-1080p")
 	rec := do(t, h, http.MethodPost, "/api/v1/quality-profiles", map[string]any{
 		"name":            "HD",
@@ -367,7 +481,6 @@ func TestIntegration_Movies_DegradedMode(t *testing.T) {
 	mustDecode(t, rec, &profile)
 	profileID, _ := profile["id"].(string)
 
-	// Seed a library via API.
 	rec = do(t, h, http.MethodPost, "/api/v1/libraries", map[string]any{
 		"name":                       "Movies",
 		"root_path":                  "/movies",
@@ -380,7 +493,6 @@ func TestIntegration_Movies_DegradedMode(t *testing.T) {
 	mustDecode(t, rec, &lib)
 	libraryID, _ := lib["id"].(string)
 
-	// Add a movie — TMDB is not configured, so we expect a stub to be created.
 	rec = do(t, h, http.MethodPost, "/api/v1/movies", map[string]any{
 		"tmdb_id":            27205,
 		"library_id":         libraryID,
@@ -390,12 +502,12 @@ func TestIntegration_Movies_DegradedMode(t *testing.T) {
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("POST movie (degraded) = %d; body: %s", rec.Code, rec.Body)
 	}
-	var movie map[string]any
-	mustDecode(t, rec, &movie)
-	if movie["title"] != "tmdb:27205" {
-		t.Errorf("stub title = %q, want %q", movie["title"], "tmdb:27205")
+	var mv map[string]any
+	mustDecode(t, rec, &mv)
+	if mv["title"] != "tmdb:27205" {
+		t.Errorf("stub title = %q, want %q", mv["title"], "tmdb:27205")
 	}
-	if _, ok := movie["metadata_refreshed_at"]; ok {
+	if _, ok := mv["metadata_refreshed_at"]; ok {
 		t.Error("stub movie should have no metadata_refreshed_at")
 	}
 }
@@ -405,6 +517,67 @@ func TestIntegration_Movies_ListEmpty(t *testing.T) {
 	rec := do(t, h, http.MethodGet, "/api/v1/movies", nil)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("GET /api/v1/movies = %d; body: %s", rec.Code, rec.Body)
+	}
+}
+
+func TestIntegration_Movies_GetByID(t *testing.T) {
+	q := testutil.NewTestDB(t)
+	h := newIntegrationRouterFromDB(t, q)
+	m := testutil.SeedMovie(t, q)
+
+	rec := do(t, h, http.MethodGet, "/api/v1/movies/"+m.ID, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/v1/movies/%s = %d; body: %s", m.ID, rec.Code, rec.Body)
+	}
+	var body map[string]any
+	mustDecode(t, rec, &body)
+	if body["title"] != "Inception" {
+		t.Errorf("title = %v, want Inception", body["title"])
+	}
+}
+
+func TestIntegration_Movies_GetNotFound(t *testing.T) {
+	h := newIntegrationRouter(t)
+	rec := do(t, h, http.MethodGet, "/api/v1/movies/nonexistent", nil)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("GET /api/v1/movies/nonexistent = %d, want 404", rec.Code)
+	}
+}
+
+func TestIntegration_Movies_Update(t *testing.T) {
+	q := testutil.NewTestDB(t)
+	h := newIntegrationRouterFromDB(t, q)
+	m := testutil.SeedMovie(t, q)
+
+	rec := do(t, h, http.MethodPut, "/api/v1/movies/"+m.ID, map[string]any{
+		"title":              m.Title,
+		"monitored":          false,
+		"library_id":         m.LibraryID,
+		"quality_profile_id": m.QualityProfileID,
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("PUT /api/v1/movies/%s = %d; body: %s", m.ID, rec.Code, rec.Body)
+	}
+	var body map[string]any
+	mustDecode(t, rec, &body)
+	if monitored, _ := body["monitored"].(bool); monitored {
+		t.Error("monitored = true after update, want false")
+	}
+}
+
+func TestIntegration_Movies_Delete(t *testing.T) {
+	q := testutil.NewTestDB(t)
+	h := newIntegrationRouterFromDB(t, q)
+	m := testutil.SeedMovie(t, q)
+
+	rec := do(t, h, http.MethodDelete, "/api/v1/movies/"+m.ID, nil)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("DELETE /api/v1/movies/%s = %d; body: %s", m.ID, rec.Code, rec.Body)
+	}
+
+	rec = do(t, h, http.MethodGet, "/api/v1/movies/"+m.ID, nil)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("GET deleted movie = %d, want 404", rec.Code)
 	}
 }
 
@@ -593,58 +766,6 @@ func TestIntegration_DownloadClients_MissingURL_Rejected(t *testing.T) {
 	}
 }
 
-// ── /api/v1/queue ────────────────────────────────────────────────────────────
-
-func TestIntegration_Queue_ListEmpty(t *testing.T) {
-	h := newIntegrationRouter(t)
-	rec := do(t, h, http.MethodGet, "/api/v1/queue", nil)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("GET /api/v1/queue = %d; body: %s", rec.Code, rec.Body)
-	}
-}
-
-// ── /api/v1/tasks ────────────────────────────────────────────────────────────
-
-func TestIntegration_Tasks_List(t *testing.T) {
-	h := newIntegrationRouter(t)
-	rec := do(t, h, http.MethodGet, "/api/v1/tasks", nil)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("GET /api/v1/tasks = %d; body: %s", rec.Code, rec.Body)
-	}
-	var tasks []map[string]any
-	mustDecode(t, rec, &tasks)
-	// Scheduler has no jobs in integration test — empty list is expected.
-	if tasks == nil {
-		t.Fatal("expected a list (possibly empty), got nil")
-	}
-}
-
-func TestIntegration_Tasks_RunNonExistent(t *testing.T) {
-	h := newIntegrationRouter(t)
-	rec := do(t, h, http.MethodPost, "/api/v1/tasks/no-such-task/run", nil)
-	if rec.Code != http.StatusNotFound {
-		t.Fatalf("POST /api/v1/tasks/no-such-task/run = %d, want 404", rec.Code)
-	}
-}
-
-// ── /api/v1/system/health ────────────────────────────────────────────────────
-
-func TestIntegration_SystemHealth(t *testing.T) {
-	h := newIntegrationRouter(t)
-	rec := do(t, h, http.MethodGet, "/api/v1/system/health", nil)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("GET /api/v1/system/health = %d; body: %s", rec.Code, rec.Body)
-	}
-	var body map[string]any
-	mustDecode(t, rec, &body)
-	if _, ok := body["status"]; !ok {
-		t.Error("response missing 'status' field")
-	}
-	if _, ok := body["checks"]; !ok {
-		t.Error("response missing 'checks' field")
-	}
-}
-
 // ── /api/v1/notifications ────────────────────────────────────────────────────
 
 func TestIntegration_Notifications_ListEmpty(t *testing.T) {
@@ -660,20 +781,385 @@ func TestIntegration_Notifications_ListEmpty(t *testing.T) {
 	}
 }
 
-// ── OpenAPI docs ─────────────────────────────────────────────────────────────
-
-func TestIntegration_OpenAPIDocs(t *testing.T) {
+func TestIntegration_Notifications_CRUD(t *testing.T) {
 	h := newIntegrationRouter(t)
-	req := httptest.NewRequest(http.MethodGet, "/api/docs", nil)
-	req.Header.Set("X-Api-Key", testAPIKey)
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
+
+	// Create.
+	rec := do(t, h, http.MethodPost, "/api/v1/notifications", map[string]any{
+		"name":    "Test Webhook",
+		"kind":    "webhook",
+		"enabled": true,
+		"settings": map[string]any{
+			"url": "http://example.com/hook",
+		},
+		"on_events": []string{"grab_started", "download_done"},
+	})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("POST /api/v1/notifications = %d; body: %s", rec.Code, rec.Body)
+	}
+	var created map[string]any
+	mustDecode(t, rec, &created)
+	id, _ := created["id"].(string)
+	if id == "" {
+		t.Fatal("created notification has no id")
+	}
+	if created["name"] != "Test Webhook" {
+		t.Errorf("name = %v, want Test Webhook", created["name"])
+	}
+
+	// List — must contain the created notification.
+	rec = do(t, h, http.MethodGet, "/api/v1/notifications", nil)
 	if rec.Code != http.StatusOK {
-		t.Fatalf("GET /api/docs = %d, want 200", rec.Code)
+		t.Fatalf("GET /api/v1/notifications = %d; body: %s", rec.Code, rec.Body)
+	}
+	var list []map[string]any
+	mustDecode(t, rec, &list)
+	if len(list) != 1 {
+		t.Fatalf("expected 1 notification, got %d", len(list))
+	}
+
+	// Get by ID.
+	rec = do(t, h, http.MethodGet, "/api/v1/notifications/"+id, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/v1/notifications/%s = %d; body: %s", id, rec.Code, rec.Body)
+	}
+
+	// Update.
+	rec = do(t, h, http.MethodPut, "/api/v1/notifications/"+id, map[string]any{
+		"name":    "Updated Webhook",
+		"kind":    "webhook",
+		"enabled": false,
+		"settings": map[string]any{
+			"url": "http://example.com/hook2",
+		},
+		"on_events": []string{"grab_started"},
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("PUT /api/v1/notifications/%s = %d; body: %s", id, rec.Code, rec.Body)
+	}
+	var updatedNotif map[string]any
+	mustDecode(t, rec, &updatedNotif)
+	if updatedNotif["name"] != "Updated Webhook" {
+		t.Errorf("name = %v, want Updated Webhook", updatedNotif["name"])
+	}
+
+	// Delete.
+	rec = do(t, h, http.MethodDelete, "/api/v1/notifications/"+id, nil)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("DELETE /api/v1/notifications/%s = %d; body: %s", id, rec.Code, rec.Body)
+	}
+
+	// Verify gone.
+	rec = do(t, h, http.MethodGet, "/api/v1/notifications/"+id, nil)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("GET deleted notification = %d, want 404", rec.Code)
 	}
 }
 
-// ── /api/v1/movies/{id}/history ──────────────────────────────────────────────
+func TestIntegration_Notifications_GetNotFound(t *testing.T) {
+	h := newIntegrationRouter(t)
+	rec := do(t, h, http.MethodGet, "/api/v1/notifications/nonexistent", nil)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("GET /api/v1/notifications/nonexistent = %d, want 404", rec.Code)
+	}
+}
+
+func TestIntegration_Notifications_Test(t *testing.T) {
+	h := newIntegrationRouter(t)
+
+	// Create a notification first.
+	rec := do(t, h, http.MethodPost, "/api/v1/notifications", map[string]any{
+		"name":    "Hook for Test",
+		"kind":    "webhook",
+		"enabled": true,
+		"settings": map[string]any{
+			"url": "http://example.com/hook",
+		},
+	})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("POST notification = %d; body: %s", rec.Code, rec.Body)
+	}
+	var created map[string]any
+	mustDecode(t, rec, &created)
+	id, _ := created["id"].(string)
+
+	// Test it.
+	rec = do(t, h, http.MethodPost, "/api/v1/notifications/"+id+"/test", nil)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("POST /api/v1/notifications/%s/test = %d, want 204; body: %s", id, rec.Code, rec.Body)
+	}
+}
+
+// ── /api/v1/media-servers ────────────────────────────────────────────────────
+
+func TestIntegration_MediaServers_CRUD(t *testing.T) {
+	h := newIntegrationRouter(t)
+
+	// List — empty initially.
+	rec := do(t, h, http.MethodGet, "/api/v1/media-servers", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/v1/media-servers = %d; body: %s", rec.Code, rec.Body)
+	}
+	var list []map[string]any
+	mustDecode(t, rec, &list)
+	if len(list) != 0 {
+		t.Fatalf("expected empty list, got %d", len(list))
+	}
+
+	// Create.
+	rec = do(t, h, http.MethodPost, "/api/v1/media-servers", map[string]any{
+		"name":    "My Plex",
+		"kind":    "plex",
+		"enabled": true,
+		"settings": map[string]any{
+			"url":   "http://plex:32400",
+			"token": "test-token",
+		},
+	})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("POST /api/v1/media-servers = %d; body: %s", rec.Code, rec.Body)
+	}
+	var created map[string]any
+	mustDecode(t, rec, &created)
+	id, _ := created["id"].(string)
+	if id == "" {
+		t.Fatal("created media server has no id")
+	}
+	if created["name"] != "My Plex" {
+		t.Errorf("name = %v, want My Plex", created["name"])
+	}
+
+	// List — 1 item.
+	rec = do(t, h, http.MethodGet, "/api/v1/media-servers", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/v1/media-servers = %d; body: %s", rec.Code, rec.Body)
+	}
+	mustDecode(t, rec, &list)
+	if len(list) != 1 {
+		t.Fatalf("expected 1 media server, got %d", len(list))
+	}
+
+	// Get by ID.
+	rec = do(t, h, http.MethodGet, "/api/v1/media-servers/"+id, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/v1/media-servers/%s = %d; body: %s", id, rec.Code, rec.Body)
+	}
+
+	// Update.
+	rec = do(t, h, http.MethodPut, "/api/v1/media-servers/"+id, map[string]any{
+		"name":    "Updated Plex",
+		"kind":    "plex",
+		"enabled": false,
+		"settings": map[string]any{
+			"url":   "http://plex:32400",
+			"token": "new-token",
+		},
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("PUT /api/v1/media-servers/%s = %d; body: %s", id, rec.Code, rec.Body)
+	}
+	var updatedMS map[string]any
+	mustDecode(t, rec, &updatedMS)
+	if updatedMS["name"] != "Updated Plex" {
+		t.Errorf("name = %v, want Updated Plex", updatedMS["name"])
+	}
+
+	// Delete.
+	rec = do(t, h, http.MethodDelete, "/api/v1/media-servers/"+id, nil)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("DELETE /api/v1/media-servers/%s = %d; body: %s", id, rec.Code, rec.Body)
+	}
+
+	// Verify gone.
+	rec = do(t, h, http.MethodGet, "/api/v1/media-servers/"+id, nil)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("GET deleted media server = %d, want 404", rec.Code)
+	}
+}
+
+// ── /api/v1/blocklist ────────────────────────────────────────────────────────
+
+func TestIntegration_Blocklist_EmptyList(t *testing.T) {
+	h := newIntegrationRouter(t)
+	rec := do(t, h, http.MethodGet, "/api/v1/blocklist", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/v1/blocklist = %d; body: %s", rec.Code, rec.Body)
+	}
+	var body map[string]any
+	mustDecode(t, rec, &body)
+	items, _ := body["items"].([]any)
+	if len(items) != 0 {
+		t.Fatalf("expected 0 blocklist items, got %d", len(items))
+	}
+}
+
+func TestIntegration_Blocklist_ClearEmpty(t *testing.T) {
+	h := newIntegrationRouter(t)
+	rec := do(t, h, http.MethodDelete, "/api/v1/blocklist", nil)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("DELETE /api/v1/blocklist = %d, want 204; body: %s", rec.Code, rec.Body)
+	}
+}
+
+// ── /api/v1/wanted ───────────────────────────────────────────────────────────
+
+func TestIntegration_Wanted_Missing_Empty(t *testing.T) {
+	h := newIntegrationRouter(t)
+	rec := do(t, h, http.MethodGet, "/api/v1/wanted/missing", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/v1/wanted/missing = %d; body: %s", rec.Code, rec.Body)
+	}
+	var body map[string]any
+	mustDecode(t, rec, &body)
+	if _, ok := body["total"]; !ok {
+		t.Error("response missing 'total' field")
+	}
+	if _, ok := body["page"]; !ok {
+		t.Error("response missing 'page' field")
+	}
+}
+
+func TestIntegration_Wanted_Cutoff_Empty(t *testing.T) {
+	h := newIntegrationRouter(t)
+	rec := do(t, h, http.MethodGet, "/api/v1/wanted/cutoff", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/v1/wanted/cutoff = %d; body: %s", rec.Code, rec.Body)
+	}
+	var body map[string]any
+	mustDecode(t, rec, &body)
+	if _, ok := body["movies"]; !ok {
+		t.Error("response missing 'movies' field")
+	}
+}
+
+func TestIntegration_Wanted_Missing_WithMovie(t *testing.T) {
+	q := testutil.NewTestDB(t)
+	h := newIntegrationRouterFromDB(t, q)
+
+	// Seed a monitored movie with no file — it should appear in wanted/missing.
+	testutil.SeedMovie(t, q, testutil.WithMonitored(true))
+
+	rec := do(t, h, http.MethodGet, "/api/v1/wanted/missing", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/v1/wanted/missing = %d; body: %s", rec.Code, rec.Body)
+	}
+	var body map[string]any
+	mustDecode(t, rec, &body)
+	total, _ := body["total"].(float64)
+	if total < 1 {
+		t.Errorf("expected at least 1 missing movie, got %v", total)
+	}
+}
+
+// ── /api/v1/stats ────────────────────────────────────────────────────────────
+
+func TestIntegration_Stats_Collection(t *testing.T) {
+	h := newIntegrationRouter(t)
+	rec := do(t, h, http.MethodGet, "/api/v1/stats/collection", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/v1/stats/collection = %d; body: %s", rec.Code, rec.Body)
+	}
+	var body map[string]any
+	mustDecode(t, rec, &body)
+	if _, ok := body["total_movies"]; !ok {
+		t.Error("response missing 'total_movies' field")
+	}
+}
+
+func TestIntegration_Stats_Quality(t *testing.T) {
+	h := newIntegrationRouter(t)
+	rec := do(t, h, http.MethodGet, "/api/v1/stats/quality", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/v1/stats/quality = %d; body: %s", rec.Code, rec.Body)
+	}
+}
+
+func TestIntegration_Stats_Storage(t *testing.T) {
+	h := newIntegrationRouter(t)
+	rec := do(t, h, http.MethodGet, "/api/v1/stats/storage", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/v1/stats/storage = %d; body: %s", rec.Code, rec.Body)
+	}
+	var body map[string]any
+	mustDecode(t, rec, &body)
+	if _, ok := body["total_bytes"]; !ok {
+		t.Error("response missing 'total_bytes' field")
+	}
+	if _, ok := body["trend"]; !ok {
+		t.Error("response missing 'trend' field")
+	}
+}
+
+func TestIntegration_Stats_Grabs(t *testing.T) {
+	h := newIntegrationRouter(t)
+	rec := do(t, h, http.MethodGet, "/api/v1/stats/grabs", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/v1/stats/grabs = %d; body: %s", rec.Code, rec.Body)
+	}
+	var body map[string]any
+	mustDecode(t, rec, &body)
+	if _, ok := body["total_grabs"]; !ok {
+		t.Error("response missing 'total_grabs' field")
+	}
+}
+
+func TestIntegration_Stats_Decades(t *testing.T) {
+	h := newIntegrationRouter(t)
+	rec := do(t, h, http.MethodGet, "/api/v1/stats/decades", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/v1/stats/decades = %d; body: %s", rec.Code, rec.Body)
+	}
+}
+
+func TestIntegration_Stats_Growth(t *testing.T) {
+	h := newIntegrationRouter(t)
+	rec := do(t, h, http.MethodGet, "/api/v1/stats/growth", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/v1/stats/growth = %d; body: %s", rec.Code, rec.Body)
+	}
+}
+
+func TestIntegration_Stats_Genres(t *testing.T) {
+	h := newIntegrationRouter(t)
+	rec := do(t, h, http.MethodGet, "/api/v1/stats/genres", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/v1/stats/genres = %d; body: %s", rec.Code, rec.Body)
+	}
+}
+
+// ── /api/v1/history ──────────────────────────────────────────────────────────
+
+func TestIntegration_History_GlobalEmpty(t *testing.T) {
+	h := newIntegrationRouter(t)
+	rec := do(t, h, http.MethodGet, "/api/v1/history", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/v1/history = %d; body: %s", rec.Code, rec.Body)
+	}
+	var items []any
+	mustDecode(t, rec, &items)
+	if len(items) != 0 {
+		t.Errorf("expected empty history, got %d items", len(items))
+	}
+}
+
+func TestIntegration_History_GlobalWithEntries(t *testing.T) {
+	q := testutil.NewTestDB(t)
+	h := newIntegrationRouterFromDB(t, q)
+
+	m := testutil.SeedMovie(t, q)
+	testutil.SeedGrabHistory(t, q, m.ID, "Inception BluRay-1080p")
+	testutil.SeedGrabHistory(t, q, m.ID, "Inception WEB-1080p")
+
+	rec := do(t, h, http.MethodGet, "/api/v1/history", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/v1/history = %d; body: %s", rec.Code, rec.Body)
+	}
+	var items []map[string]any
+	mustDecode(t, rec, &items)
+	if len(items) != 2 {
+		t.Fatalf("expected 2 history items, got %d", len(items))
+	}
+}
 
 func TestIntegration_MovieHistory_Empty(t *testing.T) {
 	q := testutil.NewTestDB(t)
@@ -715,7 +1201,6 @@ func TestIntegration_MovieHistory_Entries(t *testing.T) {
 	if len(items) != 2 {
 		t.Fatalf("expected 2 history items, got %d", len(items))
 	}
-	// Verify required fields are present.
 	for _, item := range items {
 		if _, ok := item["id"]; !ok {
 			t.Error("history item missing 'id'")
@@ -729,6 +1214,140 @@ func TestIntegration_MovieHistory_Entries(t *testing.T) {
 		if _, ok := item["download_status"]; !ok {
 			t.Error("history item missing 'download_status'")
 		}
+	}
+}
+
+// ── /api/v1/media-management ─────────────────────────────────────────────────
+
+func TestIntegration_MediaManagement_GetDefaults(t *testing.T) {
+	h := newIntegrationRouter(t)
+	rec := do(t, h, http.MethodGet, "/api/v1/media-management", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/v1/media-management = %d; body: %s", rec.Code, rec.Body)
+	}
+}
+
+// ── /api/v1/download-handling ────────────────────────────────────────────────
+
+func TestIntegration_DownloadHandling_GetDefaults(t *testing.T) {
+	h := newIntegrationRouter(t)
+	rec := do(t, h, http.MethodGet, "/api/v1/download-handling", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/v1/download-handling = %d; body: %s", rec.Code, rec.Body)
+	}
+}
+
+func TestIntegration_DownloadHandling_RemotePathMappings_Empty(t *testing.T) {
+	h := newIntegrationRouter(t)
+	rec := do(t, h, http.MethodGet, "/api/v1/download-handling/remote-path-mappings", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/v1/download-handling/remote-path-mappings = %d; body: %s", rec.Code, rec.Body)
+	}
+	var list []any
+	mustDecode(t, rec, &list)
+	if len(list) != 0 {
+		t.Fatalf("expected empty remote path mappings, got %d", len(list))
+	}
+}
+
+// ── /api/v1/queue ────────────────────────────────────────────────────────────
+
+func TestIntegration_Queue_ListEmpty(t *testing.T) {
+	h := newIntegrationRouter(t)
+	rec := do(t, h, http.MethodGet, "/api/v1/queue", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/v1/queue = %d; body: %s", rec.Code, rec.Body)
+	}
+}
+
+// ── /api/v1/tasks ────────────────────────────────────────────────────────────
+
+func TestIntegration_Tasks_List(t *testing.T) {
+	h := newIntegrationRouter(t)
+	rec := do(t, h, http.MethodGet, "/api/v1/tasks", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/v1/tasks = %d; body: %s", rec.Code, rec.Body)
+	}
+	var tasks []map[string]any
+	mustDecode(t, rec, &tasks)
+	if tasks == nil {
+		t.Fatal("expected a list (possibly empty), got nil")
+	}
+}
+
+func TestIntegration_Tasks_RunNonExistent(t *testing.T) {
+	h := newIntegrationRouter(t)
+	rec := do(t, h, http.MethodPost, "/api/v1/tasks/no-such-task/run", nil)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("POST /api/v1/tasks/no-such-task/run = %d, want 404", rec.Code)
+	}
+}
+
+// ── /api/v1/system/health ────────────────────────────────────────────────────
+
+func TestIntegration_SystemHealth(t *testing.T) {
+	h := newIntegrationRouter(t)
+	rec := do(t, h, http.MethodGet, "/api/v1/system/health", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/v1/system/health = %d; body: %s", rec.Code, rec.Body)
+	}
+	var body map[string]any
+	mustDecode(t, rec, &body)
+	if _, ok := body["status"]; !ok {
+		t.Error("response missing 'status' field")
+	}
+	if _, ok := body["checks"]; !ok {
+		t.Error("response missing 'checks' field")
+	}
+}
+
+// ── /api/v1/parse ────────────────────────────────────────────────────────────
+
+func TestIntegration_Parse(t *testing.T) {
+	h := newIntegrationRouter(t)
+	rec := do(t, h, http.MethodGet, "/api/v1/parse?filename=Inception.2010.1080p.BluRay.x264", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/v1/parse = %d; body: %s", rec.Code, rec.Body)
+	}
+	var body map[string]any
+	mustDecode(t, rec, &body)
+	if body["title"] == nil || body["title"] == "" {
+		t.Error("expected non-empty title from parse")
+	}
+	year, _ := body["year"].(float64)
+	if year != 2010 {
+		t.Errorf("year = %v, want 2010", body["year"])
+	}
+}
+
+// ── /api/v1/fs/browse ────────────────────────────────────────────────────────
+
+func TestIntegration_FsBrowse(t *testing.T) {
+	h := newIntegrationRouter(t)
+	rec := do(t, h, http.MethodGet, "/api/v1/fs/browse?path=/tmp", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/v1/fs/browse?path=/tmp = %d; body: %s", rec.Code, rec.Body)
+	}
+	var body map[string]any
+	mustDecode(t, rec, &body)
+	if body["path"] != "/tmp" {
+		t.Errorf("path = %v, want /tmp", body["path"])
+	}
+	if _, ok := body["dirs"]; !ok {
+		t.Error("response missing 'dirs' field")
+	}
+}
+
+// ── OpenAPI docs ─────────────────────────────────────────────────────────────
+
+func TestIntegration_OpenAPIDocs(t *testing.T) {
+	h := newIntegrationRouter(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/docs", nil)
+	req.Header.Set("X-Api-Key", testAPIKey)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/docs = %d, want 200", rec.Code)
 	}
 }
 
@@ -755,8 +1374,6 @@ func TestIntegration_HooksScan_SpecificLibrary_NotFound(t *testing.T) {
 func TestIntegration_HooksRefresh_AllMovies(t *testing.T) {
 	h := newIntegrationRouter(t)
 	rec := do(t, h, http.MethodPost, "/api/v1/hooks/refresh", map[string]any{})
-	// refresh_metadata job is not registered in test scheduler, so RunNow returns error → 500.
-	// That's expected — we're just testing the endpoint is reachable and routed correctly.
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("POST /hooks/refresh = %d, want 500 (no scheduler job); body: %s", rec.Code, rec.Body)
 	}
@@ -790,6 +1407,535 @@ func TestIntegration_HooksNotify_MissingType(t *testing.T) {
 	})
 	if rec.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("POST /hooks/notify without type = %d, want 422; body: %s", rec.Code, rec.Body)
+	}
+}
+
+// ── Multi-step: movie lifecycle ──────────────────────────────────────────────
+
+func TestIntegration_MovieLifecycle(t *testing.T) {
+	h := newIntegrationRouter(t)
+	webdl1080p := qualityBody("1080p", "webdl", "x264", "none", "WEBDL-1080p")
+
+	// 1. Create quality profile.
+	rec := do(t, h, http.MethodPost, "/api/v1/quality-profiles", map[string]any{
+		"name":            "Lifecycle Profile",
+		"cutoff":          webdl1080p,
+		"qualities":       []map[string]any{webdl1080p},
+		"upgrade_allowed": false,
+	})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create profile = %d; body: %s", rec.Code, rec.Body)
+	}
+	var profile map[string]any
+	mustDecode(t, rec, &profile)
+	profileID, _ := profile["id"].(string)
+
+	// 2. Create library.
+	rec = do(t, h, http.MethodPost, "/api/v1/libraries", map[string]any{
+		"name":                       "Lifecycle Movies",
+		"root_path":                  "/lifecycle-movies",
+		"default_quality_profile_id": profileID,
+	})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create library = %d; body: %s", rec.Code, rec.Body)
+	}
+	var lib map[string]any
+	mustDecode(t, rec, &lib)
+	libraryID, _ := lib["id"].(string)
+
+	// 3. Add movie (degraded — no TMDB).
+	rec = do(t, h, http.MethodPost, "/api/v1/movies", map[string]any{
+		"tmdb_id":            12345,
+		"library_id":         libraryID,
+		"quality_profile_id": profileID,
+		"monitored":          true,
+	})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("add movie = %d; body: %s", rec.Code, rec.Body)
+	}
+	var movieResp map[string]any
+	mustDecode(t, rec, &movieResp)
+	movieID, _ := movieResp["id"].(string)
+
+	// 4. Verify movie appears in wanted/missing (monitored, no file).
+	rec = do(t, h, http.MethodGet, "/api/v1/wanted/missing", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("wanted/missing = %d; body: %s", rec.Code, rec.Body)
+	}
+	var wanted map[string]any
+	mustDecode(t, rec, &wanted)
+	total, _ := wanted["total"].(float64)
+	if total < 1 {
+		t.Errorf("expected at least 1 missing movie, got %v", total)
+	}
+
+	// 5. Update movie — unmonitor it.
+	rec = do(t, h, http.MethodPut, "/api/v1/movies/"+movieID, map[string]any{
+		"title":              "tmdb:12345",
+		"monitored":          false,
+		"library_id":         libraryID,
+		"quality_profile_id": profileID,
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("update movie = %d; body: %s", rec.Code, rec.Body)
+	}
+
+	// 6. Verify stats endpoint still works with data.
+	rec = do(t, h, http.MethodGet, "/api/v1/stats/collection", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("stats/collection = %d; body: %s", rec.Code, rec.Body)
+	}
+	var statsBody map[string]any
+	mustDecode(t, rec, &statsBody)
+	totalMovies, _ := statsBody["total_movies"].(float64)
+	if totalMovies < 1 {
+		t.Errorf("expected at least 1 total movie in stats, got %v", totalMovies)
+	}
+
+	// 7. Delete movie.
+	rec = do(t, h, http.MethodDelete, "/api/v1/movies/"+movieID, nil)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("delete movie = %d; body: %s", rec.Code, rec.Body)
+	}
+
+	// 8. Verify gone.
+	rec = do(t, h, http.MethodGet, "/api/v1/movies/"+movieID, nil)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("GET deleted movie = %d, want 404", rec.Code)
+	}
+}
+
+// ── Radarr v3 compatibility ──────────────────────────────────────────────────
+
+// newV3IntegrationRouter creates a router with *sql.DB wired so v3 endpoints work.
+func newV3IntegrationRouter(t *testing.T) (http.Handler, *dbsqlite.Queries) {
+	t.Helper()
+	q, sqlDB := testutil.NewTestDBWithSQL(t)
+	return newIntegrationRouterFromDB(t, q, sqlDB), q
+}
+
+func TestIntegration_V3_SystemStatus(t *testing.T) {
+	h, _ := newV3IntegrationRouter(t)
+
+	rec := do(t, h, http.MethodGet, "/api/v3/system/status", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/v3/system/status = %d; body: %s", rec.Code, rec.Body)
+	}
+	var status map[string]any
+	mustDecode(t, rec, &status)
+
+	if status["appName"] != "Luminarr" {
+		t.Errorf("appName = %v, want Luminarr", status["appName"])
+	}
+	if status["authentication"] != "apiKey" {
+		t.Errorf("authentication = %v, want apiKey", status["authentication"])
+	}
+	// Must have runtimeName and runtimeVersion.
+	if status["runtimeName"] != "go" {
+		t.Errorf("runtimeName = %v, want go", status["runtimeName"])
+	}
+	if _, ok := status["runtimeVersion"]; !ok {
+		t.Error("runtimeVersion missing")
+	}
+}
+
+func TestIntegration_V3_Tags_EmptyList(t *testing.T) {
+	h, _ := newV3IntegrationRouter(t)
+
+	rec := do(t, h, http.MethodGet, "/api/v3/tag", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/v3/tag = %d; body: %s", rec.Code, rec.Body)
+	}
+	var tags []map[string]any
+	mustDecode(t, rec, &tags)
+	if len(tags) != 0 {
+		t.Errorf("expected empty tags, got %d", len(tags))
+	}
+}
+
+func TestIntegration_V3_Tags_Create(t *testing.T) {
+	h, _ := newV3IntegrationRouter(t)
+
+	rec := do(t, h, http.MethodPost, "/api/v3/tag", map[string]any{"label": "test-tag"})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("POST /api/v3/tag = %d; body: %s", rec.Code, rec.Body)
+	}
+	var tag map[string]any
+	mustDecode(t, rec, &tag)
+	if tag["label"] != "test-tag" {
+		t.Errorf("label = %v, want test-tag", tag["label"])
+	}
+	id, _ := tag["id"].(float64)
+	if id < 1 {
+		t.Errorf("id = %v, want >= 1", tag["id"])
+	}
+}
+
+func TestIntegration_V3_QueueStatus(t *testing.T) {
+	h, _ := newV3IntegrationRouter(t)
+
+	rec := do(t, h, http.MethodGet, "/api/v3/queue/status", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/v3/queue/status = %d; body: %s", rec.Code, rec.Body)
+	}
+	var qs map[string]any
+	mustDecode(t, rec, &qs)
+	// totalCount should exist and be 0.
+	tc, _ := qs["totalCount"].(float64)
+	if tc != 0 {
+		t.Errorf("totalCount = %v, want 0", qs["totalCount"])
+	}
+}
+
+func TestIntegration_V3_QualityProfiles_Empty(t *testing.T) {
+	h, _ := newV3IntegrationRouter(t)
+
+	rec := do(t, h, http.MethodGet, "/api/v3/qualityProfile", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/v3/qualityProfile = %d; body: %s", rec.Code, rec.Body)
+	}
+	var profiles []map[string]any
+	mustDecode(t, rec, &profiles)
+	if len(profiles) != 0 {
+		t.Errorf("expected empty profiles, got %d", len(profiles))
+	}
+}
+
+func TestIntegration_V3_QualityProfiles_WithData(t *testing.T) {
+	h, _ := newV3IntegrationRouter(t)
+
+	// Create a profile via v1.
+	webdl := qualityBody("1080p", "webdl", "x264", "none", "WEBDL-1080p")
+	rec := do(t, h, http.MethodPost, "/api/v1/quality-profiles", map[string]any{
+		"name":            "HD-1080p",
+		"cutoff":          webdl,
+		"qualities":       []map[string]any{webdl},
+		"upgrade_allowed": false,
+	})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("POST v1 quality profile = %d; body: %s", rec.Code, rec.Body)
+	}
+
+	// List via v3.
+	rec = do(t, h, http.MethodGet, "/api/v3/qualityProfile", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/v3/qualityProfile = %d; body: %s", rec.Code, rec.Body)
+	}
+	var profiles []map[string]any
+	mustDecode(t, rec, &profiles)
+	if len(profiles) != 1 {
+		t.Fatalf("expected 1 profile, got %d", len(profiles))
+	}
+	p := profiles[0]
+	if p["name"] != "HD-1080p" {
+		t.Errorf("name = %v, want HD-1080p", p["name"])
+	}
+	// Should have an integer id.
+	id, _ := p["id"].(float64)
+	if id < 1 {
+		t.Errorf("id = %v, want >= 1", p["id"])
+	}
+}
+
+func TestIntegration_V3_RootFolders_Empty(t *testing.T) {
+	h, _ := newV3IntegrationRouter(t)
+
+	rec := do(t, h, http.MethodGet, "/api/v3/rootfolder", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/v3/rootfolder = %d; body: %s", rec.Code, rec.Body)
+	}
+	var folders []map[string]any
+	mustDecode(t, rec, &folders)
+	if len(folders) != 0 {
+		t.Errorf("expected empty root folders, got %d", len(folders))
+	}
+}
+
+func TestIntegration_V3_RootFolders_WithLibrary(t *testing.T) {
+	h, _ := newV3IntegrationRouter(t)
+
+	// Create a quality profile (required for library).
+	webdl := qualityBody("1080p", "webdl", "x264", "none", "WEBDL-1080p")
+	rec := do(t, h, http.MethodPost, "/api/v1/quality-profiles", map[string]any{
+		"name":            "HD-1080p",
+		"cutoff":          webdl,
+		"qualities":       []map[string]any{webdl},
+		"upgrade_allowed": false,
+	})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create quality profile = %d; body: %s", rec.Code, rec.Body)
+	}
+	var qp map[string]any
+	mustDecode(t, rec, &qp)
+	qpID, _ := qp["id"].(string)
+
+	// Create a library via v1.
+	rec = do(t, h, http.MethodPost, "/api/v1/libraries", map[string]any{
+		"name":                       "Movies",
+		"root_path":                  "/tmp/test-movies",
+		"default_quality_profile_id": qpID,
+	})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create library = %d; body: %s", rec.Code, rec.Body)
+	}
+
+	// List via v3.
+	rec = do(t, h, http.MethodGet, "/api/v3/rootfolder", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/v3/rootfolder = %d; body: %s", rec.Code, rec.Body)
+	}
+	var folders []map[string]any
+	mustDecode(t, rec, &folders)
+	if len(folders) != 1 {
+		t.Fatalf("expected 1 root folder, got %d", len(folders))
+	}
+	if folders[0]["path"] != "/tmp/test-movies" {
+		t.Errorf("path = %v, want /tmp/test-movies", folders[0]["path"])
+	}
+}
+
+func TestIntegration_V3_Movies_EmptyList(t *testing.T) {
+	h, _ := newV3IntegrationRouter(t)
+
+	rec := do(t, h, http.MethodGet, "/api/v3/movie", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/v3/movie = %d; body: %s", rec.Code, rec.Body)
+	}
+	var movies []map[string]any
+	mustDecode(t, rec, &movies)
+	if len(movies) != 0 {
+		t.Errorf("expected empty movies, got %d", len(movies))
+	}
+}
+
+func TestIntegration_V3_Movies_ListAndGet(t *testing.T) {
+	h, q := newV3IntegrationRouter(t)
+
+	// Seed data via v1: quality profile → library → movie.
+	webdl := qualityBody("1080p", "webdl", "x264", "none", "WEBDL-1080p")
+	rec := do(t, h, http.MethodPost, "/api/v1/quality-profiles", map[string]any{
+		"name": "HD", "cutoff": webdl, "qualities": []map[string]any{webdl}, "upgrade_allowed": false,
+	})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create qp = %d; body: %s", rec.Code, rec.Body)
+	}
+	var qp map[string]any
+	mustDecode(t, rec, &qp)
+	qpID, _ := qp["id"].(string)
+
+	rec = do(t, h, http.MethodPost, "/api/v1/libraries", map[string]any{
+		"name": "Movies", "root_path": "/tmp/movies", "default_quality_profile_id": qpID,
+	})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create library = %d; body: %s", rec.Code, rec.Body)
+	}
+	var lib map[string]any
+	mustDecode(t, rec, &lib)
+	libID, _ := lib["id"].(string)
+
+	// Insert a movie directly via sqlc (movieSvc.Add requires TMDB which we don't have in tests).
+	runtime := int64(139)
+	now := time.Now().UTC().Format(time.RFC3339)
+	_, err := q.CreateMovie(context.Background(), dbsqlite.CreateMovieParams{
+		ID:                  "test-movie-uuid",
+		TmdbID:              550,
+		Title:               "Fight Club",
+		OriginalTitle:       "Fight Club",
+		Year:                1999,
+		Overview:            "Test overview",
+		RuntimeMinutes:      &runtime,
+		GenresJson:          `["Drama","Thriller"]`,
+		LibraryID:           libID,
+		QualityProfileID:    qpID,
+		Monitored:           1,
+		Status:              "released",
+		AddedAt:             now,
+		UpdatedAt:           now,
+		MinimumAvailability: "released",
+		ReleaseDate:         "1999-10-15",
+	})
+	if err != nil {
+		t.Fatalf("create movie: %v", err)
+	}
+
+	// List via v3.
+	rec = do(t, h, http.MethodGet, "/api/v3/movie", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/v3/movie = %d; body: %s", rec.Code, rec.Body)
+	}
+	var movies []map[string]any
+	mustDecode(t, rec, &movies)
+	if len(movies) != 1 {
+		t.Fatalf("expected 1 movie, got %d", len(movies))
+	}
+	m := movies[0]
+	if m["title"] != "Fight Club" {
+		t.Errorf("title = %v, want Fight Club", m["title"])
+	}
+	tmdbID, _ := m["tmdbId"].(float64)
+	if tmdbID != 550 {
+		t.Errorf("tmdbId = %v, want 550", tmdbID)
+	}
+	if m["monitored"] != true {
+		t.Errorf("monitored = %v, want true", m["monitored"])
+	}
+	// Must have integer id.
+	movieRowID, _ := m["id"].(float64)
+	if movieRowID < 1 {
+		t.Errorf("id = %v, want >= 1", m["id"])
+	}
+	// rootFolderPath should match the library.
+	if m["rootFolderPath"] != "/tmp/movies" {
+		t.Errorf("rootFolderPath = %v, want /tmp/movies", m["rootFolderPath"])
+	}
+	// Tags should be an empty array, not null.
+	if m["tags"] == nil {
+		t.Error("tags should not be nil")
+	}
+
+	// GET by v3 ID.
+	movieID := int64(movieRowID)
+	rec = do(t, h, http.MethodGet, "/api/v3/movie/"+strconv.FormatInt(movieID, 10), nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/v3/movie/%d = %d; body: %s", movieID, rec.Code, rec.Body)
+	}
+	var single map[string]any
+	mustDecode(t, rec, &single)
+	if single["title"] != "Fight Club" {
+		t.Errorf("GET single title = %v, want Fight Club", single["title"])
+	}
+}
+
+func TestIntegration_V3_Movies_GetNotFound(t *testing.T) {
+	h, _ := newV3IntegrationRouter(t)
+
+	rec := do(t, h, http.MethodGet, "/api/v3/movie/99999", nil)
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("GET /api/v3/movie/99999 = %d, want 404", rec.Code)
+	}
+}
+
+func TestIntegration_V3_Movies_DeleteByRowID(t *testing.T) {
+	h, q := newV3IntegrationRouter(t)
+
+	// Seed data.
+	webdl := qualityBody("1080p", "webdl", "x264", "none", "WEBDL-1080p")
+	rec := do(t, h, http.MethodPost, "/api/v1/quality-profiles", map[string]any{
+		"name": "HD", "cutoff": webdl, "qualities": []map[string]any{webdl}, "upgrade_allowed": false,
+	})
+	var qp map[string]any
+	mustDecode(t, rec, &qp)
+	qpID, _ := qp["id"].(string)
+
+	rec = do(t, h, http.MethodPost, "/api/v1/libraries", map[string]any{
+		"name": "Movies", "root_path": "/tmp/movies", "default_quality_profile_id": qpID,
+	})
+	var lib map[string]any
+	mustDecode(t, rec, &lib)
+	libID, _ := lib["id"].(string)
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	_, err := q.CreateMovie(context.Background(), dbsqlite.CreateMovieParams{
+		ID: "del-test-uuid", TmdbID: 100, Title: "Delete Me", OriginalTitle: "Delete Me", Year: 2020,
+		LibraryID: libID, QualityProfileID: qpID, Monitored: 1, Status: "released",
+		GenresJson: "[]", AddedAt: now, UpdatedAt: now, MinimumAvailability: "released", ReleaseDate: "2020-01-01",
+	})
+	if err != nil {
+		t.Fatalf("create movie: %v", err)
+	}
+
+	// Get the rowid.
+	rec = do(t, h, http.MethodGet, "/api/v3/movie", nil)
+	var movies []map[string]any
+	mustDecode(t, rec, &movies)
+	if len(movies) != 1 {
+		t.Fatalf("expected 1 movie, got %d", len(movies))
+	}
+	rowID := int64(movies[0]["id"].(float64))
+
+	// Delete via v3.
+	rec = do(t, h, http.MethodDelete, "/api/v3/movie/"+strconv.FormatInt(rowID, 10), nil)
+	if rec.Code != http.StatusNoContent && rec.Code != http.StatusOK {
+		t.Fatalf("DELETE /api/v3/movie/%d = %d; body: %s", rowID, rec.Code, rec.Body)
+	}
+
+	// Verify gone.
+	rec = do(t, h, http.MethodGet, "/api/v3/movie/"+strconv.FormatInt(rowID, 10), nil)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("GET deleted movie = %d, want 404", rec.Code)
+	}
+}
+
+func TestIntegration_V3_Command_RssSync(t *testing.T) {
+	h, _ := newV3IntegrationRouter(t)
+
+	rec := do(t, h, http.MethodPost, "/api/v3/command", map[string]any{
+		"name": "RssSync",
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("POST /api/v3/command = %d; body: %s", rec.Code, rec.Body)
+	}
+	var resp map[string]any
+	mustDecode(t, rec, &resp)
+	if resp["name"] != "RssSync" {
+		t.Errorf("name = %v, want RssSync", resp["name"])
+	}
+	if resp["status"] != "started" {
+		t.Errorf("status = %v, want started", resp["status"])
+	}
+}
+
+func TestIntegration_V3_Command_Unknown(t *testing.T) {
+	h, _ := newV3IntegrationRouter(t)
+
+	rec := do(t, h, http.MethodPost, "/api/v3/command", map[string]any{
+		"name": "SomeUnknownCommand",
+	})
+	// Should still return 200 — gracefully acknowledge unknown commands.
+	if rec.Code != http.StatusOK {
+		t.Fatalf("POST /api/v3/command (unknown) = %d; body: %s", rec.Code, rec.Body)
+	}
+}
+
+func TestIntegration_V3_Auth_ApiKeyHeader(t *testing.T) {
+	h, _ := newV3IntegrationRouter(t)
+
+	// Standard X-Api-Key header — should work (already used by do()).
+	rec := do(t, h, http.MethodGet, "/api/v3/system/status", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("X-Api-Key auth = %d, want 200", rec.Code)
+	}
+}
+
+func TestIntegration_V3_Auth_QueryParam(t *testing.T) {
+	h, _ := newV3IntegrationRouter(t)
+
+	// ?apikey= query param — used by Homepage, Home Assistant.
+	rec := doNoAuth(t, h, http.MethodGet, "/api/v3/system/status?apikey="+testAPIKey, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("?apikey= auth = %d, want 200; body: %s", rec.Code, rec.Body)
+	}
+}
+
+func TestIntegration_V3_Auth_NoAuth(t *testing.T) {
+	h, _ := newV3IntegrationRouter(t)
+
+	// No auth at all — should be rejected.
+	rec := doNoAuth(t, h, http.MethodGet, "/api/v3/system/status", nil)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("no-auth = %d, want 401", rec.Code)
+	}
+}
+
+func TestIntegration_V3_Auth_SameOrigin(t *testing.T) {
+	h, _ := newV3IntegrationRouter(t)
+
+	// Browser same-origin — should be allowed without API key.
+	rec := doNoAuth(t, h, http.MethodGet, "/api/v3/system/status", map[string]string{
+		"Sec-Fetch-Site": "same-origin",
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("same-origin auth = %d, want 200; body: %s", rec.Code, rec.Body)
 	}
 }
 
