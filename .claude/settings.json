@@ -5,6 +5,7 @@
       "Glob",
       "Grep",
       "Bash(git *)",
+      "Bash(gh *)",
       "Bash(go *)",
       "Bash(make *)",
       "Bash(npm *)",
