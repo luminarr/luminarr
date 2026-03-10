@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Read",
+      "Glob",
+      "Grep",
+      "Bash(git *)",
+      "Bash(go *)",
+      "Bash(make *)",
+      "Bash(npm *)",
+      "WebSearch"
+    ]
+  }
+}
