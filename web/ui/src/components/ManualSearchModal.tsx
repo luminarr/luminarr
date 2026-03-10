@@ -135,6 +135,7 @@ export function ManualSearchModal({ movieId, movieTitle, onClose }: ManualSearch
   const [grabbedGuids, setGrabbedGuids] = useState<Set<string>>(new Set());
   const [pendingGuids, setPendingGuids] = useState<Set<string>>(new Set());
   const [grabErrors, setGrabErrors] = useState<Record<string, string>>({});
+  const [sortBySeeders, setSortBySeeders] = useState(false);
 
   // Close on Escape
   useEffect(() => {
@@ -294,10 +295,29 @@ export function ManualSearchModal({ movieId, movieTitle, onClose }: ManualSearch
 
           {data && data.length > 0 && (
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <p style={{ margin: "0 0 8px", fontSize: 12, color: "var(--color-text-muted)" }}>
-                {data.length} release{data.length !== 1 ? "s" : ""} found
-              </p>
-              {data.map((release) => (
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                <p style={{ margin: 0, fontSize: 12, color: "var(--color-text-muted)" }}>
+                  {data.length} release{data.length !== 1 ? "s" : ""} found
+                </p>
+                <button
+                  onClick={() => setSortBySeeders((prev) => !prev)}
+                  style={{
+                    background: sortBySeeders
+                      ? "color-mix(in srgb, var(--color-accent) 15%, transparent)"
+                      : "var(--color-bg-elevated)",
+                    border: `1px solid ${sortBySeeders ? "var(--color-accent)" : "var(--color-border-default)"}`,
+                    borderRadius: 6,
+                    padding: "3px 10px",
+                    fontSize: 11,
+                    fontWeight: 500,
+                    color: sortBySeeders ? "var(--color-accent)" : "var(--color-text-secondary)",
+                    cursor: "pointer",
+                  }}
+                >
+                  {sortBySeeders ? "Seeds ↓" : "Sort: Seeds"}
+                </button>
+              </div>
+              {(sortBySeeders ? [...data].sort((a, b) => (b.seeds ?? 0) - (a.seeds ?? 0)) : data).map((release) => (
                 <ReleaseRow
                   key={release.guid}
                   release={release}
