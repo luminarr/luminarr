@@ -20,6 +20,7 @@ import {
 } from "@/api/movies";
 import { ManualSearchModal } from "@/components/ManualSearchModal";
 import ScoreChip from "@/components/ScoreChip";
+import IndexerPill from "@/components/IndexerPill";
 import type { Release, RenamePreviewItem, TMDBResult, MediaInfo, Quality } from "@/types";
 import { formatBytes } from "@/lib/utils";
 import { useMediainfoStatus, useScanMovieFile } from "@/api/mediainfo";
@@ -219,9 +220,7 @@ function ReleaseRow({ release, grabbed, grabError, onGrab, isPending }: ReleaseR
               ↓{release.peers}
             </span>
           )}
-          <span style={{ fontSize: 11, color: "var(--color-text-muted)" }}>
-            {release.indexer}
-          </span>
+          <IndexerPill name={release.indexer} />
           {release.age_days !== undefined && release.age_days > 0 && (
             <span style={{ fontSize: 11, color: "var(--color-text-muted)" }}>
               {Math.round(release.age_days)}d old

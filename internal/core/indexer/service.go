@@ -263,7 +263,8 @@ func (s *Service) Search(ctx context.Context, query plugin.SearchQuery) ([]Searc
 			continue
 		}
 		for _, r := range res.releases {
-			// Fill in indexer name (plugin may have already set it, but ensure it).
+			// Prefer the per-item indexer name from Prowlarr/Jackett; fall back
+			// to the user-configured name from the database.
 			if r.Indexer == "" {
 				r.Indexer = res.indexerName
 			}
