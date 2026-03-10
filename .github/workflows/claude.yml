@@ -30,6 +30,7 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           claude_args: "--max-turns 10"
+          allowed_tools: "Read,Glob,Grep,WebSearch"
           prompt: |
             Review this newly opened issue. Analyze the bug report or feature request,
             identify the relevant code areas, and comment with your analysis and a
@@ -52,3 +53,4 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           claude_args: "--max-turns 30"
+          allowed_tools: "Read,Glob,Grep,Bash,Write,Edit,WebSearch"
