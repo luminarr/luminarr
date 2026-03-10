@@ -233,7 +233,7 @@ func (idx *Indexer) toRelease(item rssItem) plugin.Release {
 	r := plugin.Release{
 		GUID:        guid,
 		Title:       item.Title,
-		Indexer:     idx.cfg.URL,
+		Indexer:     item.JackettIndexer, // Prowlarr fills this; empty for standalone indexers.
 		Protocol:    plugin.ProtocolTorrent,
 		DownloadURL: item.Enclosure.URL,
 		InfoURL:     item.Link,
@@ -297,6 +297,8 @@ type rssItem struct {
 	Link      string    `xml:"link"`
 	PubDate   string    `xml:"pubDate"`
 	Enclosure enclosure `xml:"enclosure"`
+	// Prowlarr/Jackett include the upstream indexer name per item.
+	JackettIndexer string `xml:"jackettindexer"`
 	// Torznab attributes use the namespace http://torznab.com/schemas/2015/feed.
 	Attrs []torznabAttr `xml:"http://torznab.com/schemas/2015/feed attr"`
 }

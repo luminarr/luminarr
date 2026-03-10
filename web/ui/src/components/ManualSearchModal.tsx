@@ -3,6 +3,7 @@ import { useMovieReleases, useGrabRelease, type GrabReleaseRequest } from "@/api
 import type { Release } from "@/types";
 import { formatBytes } from "@/lib/utils";
 import ScoreChip from "@/components/ScoreChip";
+import IndexerPill from "@/components/IndexerPill";
 
 // ── Quality badge ─────────────────────────────────────────────────────────────
 
@@ -77,7 +78,7 @@ function ReleaseRow({ release, grabbed, grabError, onGrab, isPending }: ReleaseR
           {release.peers !== undefined && (
             <span style={{ fontSize: 11, color: "var(--color-text-muted)" }}>↓{release.peers}</span>
           )}
-          <span style={{ fontSize: 11, color: "var(--color-text-muted)" }}>{release.indexer}</span>
+          <IndexerPill name={release.indexer} />
           {release.age_days !== undefined && release.age_days > 0 && (
             <span style={{ fontSize: 11, color: "var(--color-text-muted)" }}>
               {Math.round(release.age_days)}d old

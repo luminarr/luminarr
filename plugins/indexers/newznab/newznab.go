@@ -207,7 +207,7 @@ func (idx *Indexer) toRelease(item rssItem) plugin.Release {
 	r := plugin.Release{
 		GUID:        guid,
 		Title:       item.Title,
-		Indexer:     idx.cfg.URL,
+		Indexer:     item.JackettIndexer, // Prowlarr fills this; empty for standalone indexers.
 		Protocol:    plugin.ProtocolNZB,
 		DownloadURL: item.Enclosure.URL,
 		InfoURL:     item.Link,
@@ -266,6 +266,8 @@ type rssItem struct {
 	Link      string    `xml:"link"`
 	PubDate   string    `xml:"pubDate"`
 	Enclosure enclosure `xml:"enclosure"`
+	// Prowlarr/Jackett include the upstream indexer name per item.
+	JackettIndexer string `xml:"jackettindexer"`
 	// Newznab attributes use the namespace http://www.newznab.com/DTD/2010/feeds/attributes/.
 	Attrs []newznabAttr `xml:"http://www.newznab.com/DTD/2010/feeds/attributes/ attr"`
 }
