@@ -44,6 +44,7 @@ Thumbs.db
 # Node
 web/ui/node_modules/
 web/ui/.vite/
+web/ui/coverage/
 
 # Built frontend — included in repo so `go build` works without npm
 # Uncomment the line below to exclude it (CI should run npm run build first)

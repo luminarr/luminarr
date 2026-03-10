@@ -14,7 +14,7 @@ LDFLAGS   := -ldflags "\
 
 IMAGE ?= ghcr.io/luminarr/luminarr
 
-.PHONY: build run dev test test/unit test/integration test/cover test/race \
+.PHONY: build run dev test test/unit test/integration test/cover test/race test/frontend \
         lint check install-hooks generate migrate clean docker docker/push help
 
 ## build: Compile the binary into ./bin/luminarr
@@ -52,13 +52,18 @@ test/cover:
 test/race:
 	go test -race ./...
 
+## test/frontend: Run frontend tests
+test/frontend:
+	cd web/ui && npm test
+
 ## lint: Run golangci-lint
 lint:
 	golangci-lint run
 
-## check: Run all pre-push checks (Go lint + TypeScript type-check)
+## check: Run all pre-push checks (Go lint + TypeScript type-check + frontend tests)
 check: lint
 	cd web/ui && npx tsc --noEmit
+	cd web/ui && npm test
 
 ## install-hooks: Install git hooks from the hooks/ directory
 install-hooks:

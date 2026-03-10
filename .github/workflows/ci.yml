@@ -57,6 +57,35 @@ jobs:
       - name: Run golangci-lint
         run: golangci-lint run
 
+  test-frontend:
+    name: Test Frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web/ui
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/ui/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests with coverage
+        run: npm run test:coverage
+
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-coverage
+          path: web/ui/coverage/
+          retention-days: 7
+
   build:
     name: Build
     runs-on: ubuntu-latest
@@ -94,7 +123,7 @@ jobs:
     runs-on: ubuntu-latest
     # Only build and push images on pushes to main (not PRs).
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [test, build]
+    needs: [test, test-frontend, build]
     permissions:
       contents: read
       packages: write  # required to push to ghcr.io
