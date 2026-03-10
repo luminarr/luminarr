@@ -29,13 +29,13 @@ jobs:
       - uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          claude_args: "--max-turns 10"
-          show_full_output: true
+          claude_args: "--max-turns 10 --allowedTools Bash,Read,Glob,Grep"
           prompt: |
             Review this newly opened issue. Analyze the bug report or feature request,
-            identify the relevant code areas, and comment with your analysis and a
-            suggested approach. If it's a bug, try to identify the root cause. If it's
-            a feature request, outline what would need to change.
+            identify the relevant code areas, and post a comment on the issue with your
+            analysis and suggested approach using `gh issue comment`. If it's a bug, try
+            to identify the root cause. If it's a feature request, outline what would
+            need to change.
 
   # Respond to @claude mentions in comments and review PRs.
   claude:
@@ -52,4 +52,4 @@ jobs:
       - uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          claude_args: "--max-turns 30"
+          claude_args: "--max-turns 30 --allowedTools Bash,Read,Glob,Grep,Write,Edit"
