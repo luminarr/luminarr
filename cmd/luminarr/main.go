@@ -108,9 +108,16 @@ func run() error {
 	if checkPath != "" {
 		if info, statErr := os.Stat(checkPath); statErr == nil {
 			if info.Mode()&0o004 != 0 {
-				logger.Warn("config file is world-readable — recommend chmod 600",
-					"path", checkPath,
-				)
+				if chmodErr := os.Chmod(checkPath, 0o600); chmodErr != nil {
+					logger.Warn("config file is world-readable and chmod failed — please run: chmod 600 "+checkPath,
+						"path", checkPath,
+						"error", chmodErr,
+					)
+				} else {
+					logger.Info("fixed world-readable config file permissions to 0600",
+						"path", checkPath,
+					)
+				}
 			}
 		}
 	}
