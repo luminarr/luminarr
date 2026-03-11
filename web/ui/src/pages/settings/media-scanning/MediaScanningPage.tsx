@@ -141,11 +141,15 @@ export default function MediaScanningPage() {
           brew install ffmpeg
         </code>
         <br />
-        <strong>Docker:</strong> use the{" "}
+        <strong>Docker:</strong> ffprobe is included in the default{" "}
         <code style={{ fontFamily: "var(--font-family-mono)", background: "var(--color-bg-elevated)", padding: "1px 4px", borderRadius: 3 }}>
-          latest-full
+          latest
         </code>{" "}
-        image tag — ffprobe is included.
+        image. If you're using{" "}
+        <code style={{ fontFamily: "var(--font-family-mono)", background: "var(--color-bg-elevated)", padding: "1px 4px", borderRadius: 3 }}>
+          latest-minimal
+        </code>
+        , install ffprobe on the host instead.
       </div>
     </div>
   );

@@ -88,6 +88,15 @@ Pick a preset (e.g. "HD-1080p x265") or build a custom profile. Set a **cutoff**
 
 Luminarr supports **Torznab** and **Newznab** protocols. If you use Prowlarr or Jackett, add each indexer with its URL and API key. Click **Test** to verify the connection.
 
+**Seed limits (torrent indexers only):** For private trackers that require minimum seeding, you can configure per-indexer seed criteria:
+
+| Field | Description |
+|-------|-------------|
+| **Seed Ratio** | Target upload ratio (e.g. 2.0). 0 = use download client default |
+| **Seed Time (minutes)** | Minimum seeding duration (e.g. 120). 0 = no time limit |
+
+After Luminarr imports a file, it automatically tells your download client (qBittorrent, Deluge, or Transmission) to enforce these limits on the torrent. This is the same per-indexer seed criteria model that Radarr uses.
+
 ### 4. Add a download client
 
 **Settings → Download Clients → Add Client**
@@ -226,23 +235,11 @@ sudo pacman -S ffmpeg
 
 **Windows:** Not officially supported yet. Advanced users can set `LUMINARR_MEDIAINFO_FFPROBE_PATH` to a full path.
 
-### Docker: use the `latest-full` image
+### Docker
 
-The standard `latest` image is built from scratch and has no shell or extra binaries. To include ffprobe, use the `latest-full` variant:
+The default `latest` image is Alpine-based and includes ffprobe — no extra setup needed.
 
-```yaml
-services:
-  luminarr:
-    image: ghcr.io/luminarr/luminarr:latest-full   # ← change this line
-    ports:
-      - "8282:8282"
-    volumes:
-      - /path/to/config:/config
-      - /path/to/movies:/movies
-    restart: unless-stopped
-```
-
-The `latest-full` image is Alpine-based with `ffmpeg` included. It's larger (~80 MB vs ~20 MB) but requires zero extra setup.
+A `latest-minimal` tag is also available (scratch-based, ~20 MB) for users who don't need media scanning or prefer the smallest possible image. It does not include ffprobe.
 
 ### Verify it works
 

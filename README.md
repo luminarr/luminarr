@@ -95,7 +95,7 @@ make build
 
 > **Running Radarr too?** Luminarr uses port 8282 so you can run both side by side during migration.
 
-> **Want media scanning?** Use the `latest-full` image tag for a build that includes ffprobe. See the [Getting Started guide](https://github.com/luminarr/luminarr/wiki/Getting-Started) for details.
+> **Media scanning** works out of the box — the default Docker image includes ffprobe. A `latest-minimal` tag (scratch-based, no ffprobe) is also available.
 
 For full setup instructions, see the **[Getting Started guide](https://github.com/luminarr/luminarr/wiki/Getting-Started)**.
 
