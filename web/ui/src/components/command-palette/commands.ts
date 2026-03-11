@@ -82,13 +82,60 @@ export const ACTION_COMMANDS: ActionCommand[] = [
   { id: "action:refresh-metadata", category: "action", label: "Refresh All Metadata",   keywords: ["tmdb", "refresh", "sync"], icon: RotateCw,   taskName: "refresh_metadata", onSelect: () => {} },
 ];
 
+// ── Fuzzy matching ──────────────────────────────────────────────────────────
+
+/**
+ * Fuzzy match `query` against `text`. All query characters must appear in
+ * order within text. Returns -1 for no match, otherwise a non-negative score
+ * (higher = better). Bonuses for consecutive runs and word-boundary matches.
+ */
+export function fuzzyScore(query: string, text: string): number {
+  const q = query.toLowerCase();
+  const t = text.toLowerCase();
+
+  if (!q) return 0;
+  if (q.length > t.length) return -1;
+
+  let qi = 0;
+  let score = 0;
+  let consecutive = 0;
+
+  for (let ti = 0; ti < t.length && qi < q.length; ti++) {
+    if (t[ti] === q[qi]) {
+      qi++;
+      consecutive++;
+      score += consecutive;
+      if (ti === 0 || /[\s\-_]/.test(t[ti - 1])) score += 10;
+    } else {
+      consecutive = 0;
+    }
+  }
+
+  return qi === q.length ? score : -1;
+}
+
 // ── Filter helper ────────────────────────────────────────────────────────────
 
 export function filterCommands<T extends Command>(commands: T[], query: string): T[] {
   if (!query) return commands;
-  const lower = query.toLowerCase();
-  return commands.filter((cmd) => {
-    if (cmd.label.toLowerCase().includes(lower)) return true;
-    return cmd.keywords.some((kw) => kw.includes(lower));
-  });
+
+  const scored: Array<{ cmd: T; score: number }> = [];
+
+  for (const cmd of commands) {
+    const labelScore = fuzzyScore(query, cmd.label);
+    // Label matches get a +50 bonus so they rank above keyword-only matches
+    const best = labelScore >= 0 ? labelScore + 50 : -1;
+
+    let kwBest = -1;
+    for (const kw of cmd.keywords) {
+      const s = fuzzyScore(query, kw);
+      if (s > kwBest) kwBest = s;
+    }
+
+    const score = Math.max(best, kwBest);
+    if (score >= 0) scored.push({ cmd, score });
+  }
+
+  scored.sort((a, b) => b.score - a.score);
+  return scored.map((s) => s.cmd);
 }
