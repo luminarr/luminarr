@@ -248,7 +248,7 @@ func run() error {
 	}
 
 	librarySvc := library.NewService(queries, bus, tmdbClient)
-	movieSvc := movie.NewService(queries, tmdbClient, bus, logger)
+	movieSvc := movie.NewService(queries, tmdbClient, bus, logger, movie.WithDB(database.SQL))
 	blocklistSvc := blocklist.NewService(queries)
 	indexerRL := ratelimit.New()
 	indexerSvc := indexer.NewService(queries, registry.Default, bus, indexerRL)
@@ -274,7 +274,7 @@ func run() error {
 	}
 	mediainfoSvc := mediainfo.NewService(mediainfoScanner, queries, logger)
 
-	importerSvc := importer.NewService(queries, bus, logger, mmSvc, dhSvc, mediainfoSvc)
+	importerSvc := importer.NewService(queries, bus, logger, mmSvc, dhSvc, mediainfoSvc, database.SQL)
 	importerSvc.Subscribe()
 
 	seedEnforcerSvc := seedenforcer.NewService(queries, indexerSvc, downloaderSvc, bus, logger)

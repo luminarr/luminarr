@@ -18,6 +18,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/luminarr/luminarr/internal/core/renamer"
+	"github.com/luminarr/luminarr/internal/db"
 	dbsqlite "github.com/luminarr/luminarr/internal/db/generated/sqlite"
 	"github.com/luminarr/luminarr/internal/events"
 	"github.com/luminarr/luminarr/internal/metadata/tmdb"
@@ -128,6 +129,7 @@ type RenameSettings struct {
 // Service manages movie records.
 type Service struct {
 	q          dbsqlite.Querier
+	sqlDB      *sql.DB // for transactions; nil in tests that don't need them
 	meta       MetadataProvider
 	mu         sync.RWMutex
 	bus        *events.Bus
@@ -138,8 +140,23 @@ type Service struct {
 // NewService creates a new Service backed by the given querier, metadata
 // provider, event bus, and logger. meta may be nil when TMDB is not configured;
 // methods that require it return ErrTMDBNotConfigured.
-func NewService(q dbsqlite.Querier, meta MetadataProvider, bus *events.Bus, logger *slog.Logger) *Service {
-	return &Service{q: q, meta: meta, bus: bus, logger: logger, renameFile: os.Rename}
+// sqlDB may be nil in tests; when non-nil, multi-step mutations run in a
+// database transaction.
+func NewService(q dbsqlite.Querier, meta MetadataProvider, bus *events.Bus, logger *slog.Logger, opts ...ServiceOption) *Service {
+	s := &Service{q: q, meta: meta, bus: bus, logger: logger, renameFile: os.Rename}
+	for _, o := range opts {
+		o(s)
+	}
+	return s
+}
+
+// ServiceOption configures optional Service dependencies.
+type ServiceOption func(*Service)
+
+// WithDB provides a *sql.DB for transaction support. When set, multi-step
+// mutations (AttachFile, DeleteFile) run atomically.
+func WithDB(sqlDB *sql.DB) ServiceOption {
+	return func(s *Service) { s.sqlDB = sqlDB }
 }
 
 // SetRenameFunc replaces the function used to rename files on disk. Intended
@@ -868,34 +885,39 @@ func (s *Service) DeleteFile(ctx context.Context, fileID string, deleteFromDisk 
 		}
 	}
 
-	if err := s.q.DeleteMovieFile(ctx, fileID); err != nil {
-		return fmt.Errorf("deleting movie file record %q: %w", fileID, err)
+	do := func(q dbsqlite.Querier) error {
+		if err := q.DeleteMovieFile(ctx, fileID); err != nil {
+			return fmt.Errorf("deleting movie file record %q: %w", fileID, err)
+		}
+
+		remaining, err := q.ListMovieFiles(ctx, row.MovieID)
+		if err != nil {
+			return fmt.Errorf("listing remaining files for movie %q: %w", row.MovieID, err)
+		}
+		if len(remaining) == 0 {
+			now := time.Now().UTC().Format(time.RFC3339)
+			if _, err := q.UpdateMoviePath(ctx, dbsqlite.UpdateMoviePathParams{
+				Path:      nil,
+				UpdatedAt: now,
+				ID:        row.MovieID,
+			}); err != nil {
+				return fmt.Errorf("clearing path for movie %q: %w", row.MovieID, err)
+			}
+			if _, err := q.UpdateMovieStatus(ctx, dbsqlite.UpdateMovieStatusParams{
+				Status:    "wanted",
+				UpdatedAt: now,
+				ID:        row.MovieID,
+			}); err != nil {
+				return fmt.Errorf("resetting status for movie %q: %w", row.MovieID, err)
+			}
+		}
+		return nil
 	}
 
-	// Reset movie status if no files remain.
-	remaining, err := s.q.ListMovieFiles(ctx, row.MovieID)
-	if err != nil {
-		return fmt.Errorf("listing remaining files for movie %q: %w", row.MovieID, err)
+	if s.sqlDB != nil {
+		return db.RunInTx(ctx, s.sqlDB, do)
 	}
-	if len(remaining) == 0 {
-		now := time.Now().UTC().Format(time.RFC3339)
-		if _, err := s.q.UpdateMoviePath(ctx, dbsqlite.UpdateMoviePathParams{
-			Path:      nil,
-			UpdatedAt: now,
-			ID:        row.MovieID,
-		}); err != nil {
-			return fmt.Errorf("clearing path for movie %q: %w", row.MovieID, err)
-		}
-		if _, err := s.q.UpdateMovieStatus(ctx, dbsqlite.UpdateMovieStatusParams{
-			Status:    "wanted",
-			UpdatedAt: now,
-			ID:        row.MovieID,
-		}); err != nil {
-			return fmt.Errorf("resetting status for movie %q: %w", row.MovieID, err)
-		}
-	}
-
-	return nil
+	return do(s.q)
 }
 
 // AttachFile links a file on disk to an existing movie record. It sets
@@ -912,36 +934,42 @@ func (s *Service) AttachFile(ctx context.Context, movieID, filePath string, size
 
 	now := time.Now().UTC().Format(time.RFC3339)
 
-	if _, err := s.q.UpdateMoviePath(ctx, dbsqlite.UpdateMoviePathParams{
-		Path:      &filePath,
-		UpdatedAt: now,
-		ID:        movieID,
-	}); err != nil {
-		return fmt.Errorf("updating movie path for %q: %w", movieID, err)
+	do := func(q dbsqlite.Querier) error {
+		if _, err := q.UpdateMoviePath(ctx, dbsqlite.UpdateMoviePathParams{
+			Path:      &filePath,
+			UpdatedAt: now,
+			ID:        movieID,
+		}); err != nil {
+			return fmt.Errorf("updating movie path for %q: %w", movieID, err)
+		}
+
+		if _, err := q.CreateMovieFile(ctx, dbsqlite.CreateMovieFileParams{
+			ID:          uuid.New().String(),
+			MovieID:     movieID,
+			Path:        filePath,
+			SizeBytes:   sizeBytes,
+			QualityJson: string(qualityJSON),
+			Edition:     nil,
+			ImportedAt:  now,
+			IndexedAt:   now,
+		}); err != nil {
+			return fmt.Errorf("creating movie file for %q: %w", movieID, err)
+		}
+
+		if _, err := q.UpdateMovieStatus(ctx, dbsqlite.UpdateMovieStatusParams{
+			Status:    "downloaded",
+			UpdatedAt: now,
+			ID:        movieID,
+		}); err != nil {
+			return fmt.Errorf("updating movie status for %q: %w", movieID, err)
+		}
+		return nil
 	}
 
-	if _, err := s.q.CreateMovieFile(ctx, dbsqlite.CreateMovieFileParams{
-		ID:          uuid.New().String(),
-		MovieID:     movieID,
-		Path:        filePath,
-		SizeBytes:   sizeBytes,
-		QualityJson: string(qualityJSON),
-		Edition:     nil,
-		ImportedAt:  now,
-		IndexedAt:   now,
-	}); err != nil {
-		return fmt.Errorf("creating movie file for %q: %w", movieID, err)
+	if s.sqlDB != nil {
+		return db.RunInTx(ctx, s.sqlDB, do)
 	}
-
-	if _, err := s.q.UpdateMovieStatus(ctx, dbsqlite.UpdateMovieStatusParams{
-		Status:    "downloaded",
-		UpdatedAt: now,
-		ID:        movieID,
-	}); err != nil {
-		return fmt.Errorf("updating movie status for %q: %w", movieID, err)
-	}
-
-	return nil
+	return do(s.q)
 }
 
 // RenameFiles computes the standard-format destination filename for every file

@@ -4,6 +4,7 @@ package importer
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -22,6 +23,7 @@ import (
 	"github.com/luminarr/luminarr/internal/core/pathutil"
 	"github.com/luminarr/luminarr/internal/core/quality"
 	"github.com/luminarr/luminarr/internal/core/renamer"
+	"github.com/luminarr/luminarr/internal/db"
 	dbsqlite "github.com/luminarr/luminarr/internal/db/generated/sqlite"
 	"github.com/luminarr/luminarr/internal/events"
 	"github.com/luminarr/luminarr/pkg/plugin"
@@ -42,6 +44,7 @@ var videoExtensions = map[string]bool{
 // into the library directory tree.
 type Service struct {
 	q        dbsqlite.Querier
+	sqlDB    *sql.DB // for transactions; nil in tests
 	bus      *events.Bus
 	logger   *slog.Logger
 	mm       *mediamanagement.Service
@@ -50,8 +53,12 @@ type Service struct {
 }
 
 // NewService creates a new Service.
-func NewService(q dbsqlite.Querier, bus *events.Bus, logger *slog.Logger, mm *mediamanagement.Service, dh *downloadhandling.Service, mediaSvc *mediainfo.Service) *Service {
-	return &Service{q: q, bus: bus, logger: logger, mm: mm, dh: dh, mediaSvc: mediaSvc}
+func NewService(q dbsqlite.Querier, bus *events.Bus, logger *slog.Logger, mm *mediamanagement.Service, dh *downloadhandling.Service, mediaSvc *mediainfo.Service, sqlDB ...*sql.DB) *Service {
+	s := &Service{q: q, bus: bus, logger: logger, mm: mm, dh: dh, mediaSvc: mediaSvc}
+	if len(sqlDB) > 0 {
+		s.sqlDB = sqlDB[0]
+	}
+	return s
 }
 
 // Subscribe registers the importer handler on the event bus.
@@ -177,7 +184,7 @@ func (s *Service) importFile(ctx context.Context, grabID, contentPath string) er
 		copyExtraFiles(s.logger, srcDir, destDir, mm.ExtraFileExtensions)
 	}
 
-	// ── Persist movie_file record ──────────────────────────────────────────
+	// ── Persist movie_file record + update movie status (atomic) ──────────
 	info, err := os.Stat(destPath)
 	if err != nil {
 		return fmt.Errorf("stat after transfer: %w", err)
@@ -190,16 +197,46 @@ func (s *Service) importFile(ctx context.Context, grabID, contentPath string) er
 
 	now := time.Now().UTC().Format(time.RFC3339)
 	fileID := uuid.New().String()
-	if _, err := s.q.CreateMovieFile(ctx, dbsqlite.CreateMovieFileParams{
-		ID:          fileID,
-		MovieID:     grab.MovieID,
-		Path:        destPath,
-		SizeBytes:   info.Size(),
-		QualityJson: string(qualityJSON),
-		ImportedAt:  now,
-		IndexedAt:   now,
-	}); err != nil {
-		return fmt.Errorf("creating movie_file record: %w", err)
+
+	dbOps := func(dbq dbsqlite.Querier) error {
+		if _, err := dbq.CreateMovieFile(ctx, dbsqlite.CreateMovieFileParams{
+			ID:          fileID,
+			MovieID:     grab.MovieID,
+			Path:        destPath,
+			SizeBytes:   info.Size(),
+			QualityJson: string(qualityJSON),
+			ImportedAt:  now,
+			IndexedAt:   now,
+		}); err != nil {
+			return fmt.Errorf("creating movie_file record: %w", err)
+		}
+
+		if _, err := dbq.UpdateMoviePath(ctx, dbsqlite.UpdateMoviePathParams{
+			Path:      &destPath,
+			UpdatedAt: now,
+			ID:        grab.MovieID,
+		}); err != nil {
+			return fmt.Errorf("updating movie path: %w", err)
+		}
+
+		if _, err := dbq.UpdateMovieStatus(ctx, dbsqlite.UpdateMovieStatusParams{
+			Status:    "downloaded",
+			UpdatedAt: now,
+			ID:        grab.MovieID,
+		}); err != nil {
+			return fmt.Errorf("updating movie status: %w", err)
+		}
+		return nil
+	}
+
+	if s.sqlDB != nil {
+		if err := db.RunInTx(ctx, s.sqlDB, dbOps); err != nil {
+			return err
+		}
+	} else {
+		if err := dbOps(s.q); err != nil {
+			return err
+		}
 	}
 
 	// ── Trigger mediainfo scan (fire-and-forget) ───────────────────────────
@@ -211,23 +248,6 @@ func (s *Service) importFile(ctx context.Context, grabID, contentPath string) er
 				s.logger.Debug("mediainfo scan failed", "file_id", fileID, "error", scanErr)
 			}
 		}()
-	}
-
-	// ── Update movie status + path ─────────────────────────────────────────
-	if _, err := s.q.UpdateMoviePath(ctx, dbsqlite.UpdateMoviePathParams{
-		Path:      &destPath,
-		UpdatedAt: now,
-		ID:        grab.MovieID,
-	}); err != nil {
-		return fmt.Errorf("updating movie path: %w", err)
-	}
-
-	if _, err := s.q.UpdateMovieStatus(ctx, dbsqlite.UpdateMovieStatusParams{
-		Status:    "downloaded",
-		UpdatedAt: now,
-		ID:        grab.MovieID,
-	}); err != nil {
-		return fmt.Errorf("updating movie status: %w", err)
 	}
 
 	// ── Publish success event ──────────────────────────────────────────────
@@ -306,12 +326,16 @@ func resolveSourceFile(contentPath string) (string, error) {
 
 // transferFile copies src to dst.
 // It tries os.Link first (same filesystem, no data copy); on failure it falls
-// back to a full io.Copy followed by removal of the source.
+// back to a full io.Copy. The source file is intentionally NOT deleted — the
+// download client's seed lifecycle (seed ratio/time limits, "Remove Completed
+// Downloads") is responsible for cleanup. Deleting the source here would break
+// active torrent seeds in cross-volume (e.g. Docker) setups where hardlink
+// fails and copy is used instead.
 func transferFile(src, dst string) error {
 	if err := os.Link(src, dst); err == nil {
 		return nil
 	}
-	// Fallback: copy then delete.
+	// Fallback: copy only (no source deletion).
 	in, err := os.Open(src)
 	if err != nil {
 		return err
@@ -338,7 +362,7 @@ func transferFile(src, dst string) error {
 		return err
 	}
 
-	return os.Remove(src)
+	return nil
 }
 
 // copyExtraFiles walks srcDir and hardlinks (or copies) any file whose
