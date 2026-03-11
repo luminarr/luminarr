@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -51,14 +52,35 @@ type UpdateRequest = CreateRequest
 
 // Service manages download client configuration and release submission.
 type Service struct {
-	q   dbsqlite.Querier
-	reg *registry.Registry
-	bus *events.Bus
+	q     dbsqlite.Querier
+	reg   *registry.Registry
+	bus   *events.Bus
+	cache sync.Map // config ID → plugin.DownloadClient
 }
 
 // NewService creates a new Service.
 func NewService(q dbsqlite.Querier, reg *registry.Registry, bus *events.Bus) *Service {
 	return &Service{q: q, reg: reg, bus: bus}
+}
+
+// clientFor returns a cached or freshly-created download client for the given
+// config. Cached clients persist across calls, avoiding repeated auth round-trips.
+func (s *Service) cachedClient(kind string, id string, settings json.RawMessage) (plugin.DownloadClient, error) {
+	if v, ok := s.cache.Load(id); ok {
+		return v.(plugin.DownloadClient), nil
+	}
+	client, err := s.reg.NewDownloader(kind, settings)
+	if err != nil {
+		return nil, err
+	}
+	// Store returns the existing value if another goroutine raced us — use that.
+	actual, _ := s.cache.LoadOrStore(id, client)
+	return actual.(plugin.DownloadClient), nil
+}
+
+// evictClient removes a cached client instance, forcing re-creation on next use.
+func (s *Service) evictClient(id string) {
+	s.cache.Delete(id)
 }
 
 // Create persists a new download client configuration.
@@ -157,6 +179,7 @@ func (s *Service) Update(ctx context.Context, id string, req UpdateRequest) (Con
 	if err != nil {
 		return Config{}, fmt.Errorf("updating download client %q: %w", id, err)
 	}
+	s.evictClient(id)
 	return rowToConfig(row)
 }
 
@@ -171,6 +194,7 @@ func (s *Service) Delete(ctx context.Context, id string) error {
 	if err := s.q.DeleteDownloadClientConfig(ctx, id); err != nil {
 		return fmt.Errorf("deleting download client %q: %w", id, err)
 	}
+	s.evictClient(id)
 	return nil
 }
 
@@ -201,7 +225,7 @@ func (s *Service) Add(ctx context.Context, r plugin.Release) (downloadClientID, 
 		if err != nil {
 			return "", "", fmt.Errorf("parsing download client config %q: %w", row.ID, err)
 		}
-		client, err := s.reg.NewDownloader(cfg.Kind, cfg.Settings)
+		client, err := s.cachedClient(cfg.Kind, cfg.ID, cfg.Settings)
 		if err != nil {
 			return "", "", fmt.Errorf("initialising download client %q (%s): %w", cfg.Name, cfg.Kind, err)
 		}
@@ -231,14 +255,14 @@ func (s *Service) Add(ctx context.Context, r plugin.Release) (downloadClientID, 
 	return "", "", ErrNoCompatibleClient
 }
 
-// ClientFor returns an instantiated plugin.DownloadClient for the given config ID.
+// ClientFor returns a (cached) plugin.DownloadClient for the given config ID.
 // Used by the queue service to communicate with a specific client.
 func (s *Service) ClientFor(ctx context.Context, configID string) (plugin.DownloadClient, error) {
 	cfg, err := s.Get(ctx, configID)
 	if err != nil {
 		return nil, err
 	}
-	return s.reg.NewDownloader(cfg.Kind, cfg.Settings)
+	return s.cachedClient(cfg.Kind, cfg.ID, cfg.Settings)
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

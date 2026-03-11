@@ -60,15 +60,34 @@ type SearchResult struct {
 
 // Service manages indexer configuration and search orchestration.
 type Service struct {
-	q   dbsqlite.Querier
-	reg *registry.Registry
-	bus *events.Bus
-	rl  *ratelimit.Registry
+	q     dbsqlite.Querier
+	reg   *registry.Registry
+	bus   *events.Bus
+	rl    *ratelimit.Registry
+	cache sync.Map // config ID → plugin.Indexer
 }
 
 // NewService creates a new Service.
 func NewService(q dbsqlite.Querier, reg *registry.Registry, bus *events.Bus, rl *ratelimit.Registry) *Service {
 	return &Service{q: q, reg: reg, bus: bus, rl: rl}
+}
+
+// cachedIndexer returns a cached or freshly-created indexer for the given config.
+func (s *Service) cachedIndexer(kind, id string, settings json.RawMessage) (plugin.Indexer, error) {
+	if v, ok := s.cache.Load(id); ok {
+		return v.(plugin.Indexer), nil
+	}
+	idx, err := s.reg.NewIndexer(kind, settings)
+	if err != nil {
+		return nil, err
+	}
+	actual, _ := s.cache.LoadOrStore(id, idx)
+	return actual.(plugin.Indexer), nil
+}
+
+// evictIndexer removes a cached indexer instance.
+func (s *Service) evictIndexer(id string) {
+	s.cache.Delete(id)
 }
 
 // Create persists a new indexer configuration.
@@ -169,6 +188,7 @@ func (s *Service) Update(ctx context.Context, id string, req UpdateRequest) (Con
 	if err != nil {
 		return Config{}, fmt.Errorf("updating indexer %q: %w", id, err)
 	}
+	s.evictIndexer(id)
 	return rowToConfig(row)
 }
 
@@ -184,6 +204,7 @@ func (s *Service) Delete(ctx context.Context, id string) error {
 		return fmt.Errorf("deleting indexer %q: %w", id, err)
 	}
 	s.rl.Remove(id)
+	s.evictIndexer(id)
 	return nil
 }
 
@@ -236,7 +257,7 @@ func (s *Service) Search(ctx context.Context, query plugin.SearchQuery) ([]Searc
 				resultsCh <- indexerResult{indexerID: cfg.ID, indexerName: cfg.Name, err: err}
 				return
 			}
-			idx, err := s.reg.NewIndexer(cfg.Kind, cfg.Settings)
+			idx, err := s.cachedIndexer(cfg.Kind, cfg.ID, cfg.Settings)
 			if err != nil {
 				resultsCh <- indexerResult{indexerID: cfg.ID, indexerName: cfg.Name, err: err}
 				return
@@ -334,7 +355,7 @@ func (s *Service) GetRecent(ctx context.Context) ([]SearchResult, error) {
 				resultsCh <- indexerResult{indexerID: cfg.ID, indexerName: cfg.Name, err: err}
 				return
 			}
-			idx, err := s.reg.NewIndexer(cfg.Kind, cfg.Settings)
+			idx, err := s.cachedIndexer(cfg.Kind, cfg.ID, cfg.Settings)
 			if err != nil {
 				resultsCh <- indexerResult{indexerID: cfg.ID, indexerName: cfg.Name, err: err}
 				return
