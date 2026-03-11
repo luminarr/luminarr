@@ -510,3 +510,30 @@ func extractRateLimit(settings json.RawMessage) int {
 	_ = json.Unmarshal(settings, &s)
 	return s.RateLimit
 }
+
+// SeedCriteria holds the per-indexer seeding requirements applied to torrents
+// after import. Zero values mean "use download client default".
+type SeedCriteria struct {
+	SeedRatio       float64 // 0 = use client default
+	SeedTimeMinutes int     // 0 = no limit
+}
+
+// GetSeedCriteria loads the seed criteria from an indexer's settings JSON.
+func (s *Service) GetSeedCriteria(ctx context.Context, indexerID string) (SeedCriteria, error) {
+	cfg, err := s.Get(ctx, indexerID)
+	if err != nil {
+		return SeedCriteria{}, err
+	}
+	return ExtractSeedCriteria(cfg.Settings), nil
+}
+
+// ExtractSeedCriteria parses seed_ratio and seed_time_minutes from an indexer's
+// settings JSON. Returns zero values if the fields are absent.
+func ExtractSeedCriteria(settings json.RawMessage) SeedCriteria {
+	var s struct {
+		SeedRatio       float64 `json:"seed_ratio"`
+		SeedTimeMinutes int     `json:"seed_time_minutes"`
+	}
+	_ = json.Unmarshal(settings, &s)
+	return SeedCriteria{SeedRatio: s.SeedRatio, SeedTimeMinutes: s.SeedTimeMinutes}
+}

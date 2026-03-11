@@ -53,3 +53,11 @@ type DownloadClient interface {
 	// Test validates that the connection to the download client works.
 	Test(ctx context.Context) error
 }
+
+// SeedLimiter is an optional interface for download clients that support
+// configuring per-torrent seed ratio and seed time limits.
+// Implementations should treat ratioLimit <= 0 as "use client default"
+// and seedTimeSecs <= 0 as "no time limit".
+type SeedLimiter interface {
+	SetSeedLimits(ctx context.Context, clientItemID string, ratioLimit float64, seedTimeSecs int) error
+}

@@ -52,6 +52,8 @@ func fakeDelugeHandler(t *testing.T) http.Handler {
 			json.NewEncoder(w).Encode(rpcResponse{Result: json.RawMessage(`"AABBCCDD"`), ID: req.ID})
 		case "core.remove_torrent":
 			json.NewEncoder(w).Encode(rpcResponse{Result: json.RawMessage(`true`), ID: req.ID})
+		case "core.set_torrent_options":
+			json.NewEncoder(w).Encode(rpcResponse{Result: json.RawMessage(`true`), ID: req.ID})
 		default:
 			json.NewEncoder(w).Encode(rpcResponse{
 				Error: &rpcError{Code: -1, Message: "unknown method"},
@@ -135,6 +137,93 @@ func TestRemove_Success(t *testing.T) {
 
 	if err := c.Remove(context.Background(), "aabbccdd", false); err != nil {
 		t.Fatalf("Remove() = %v", err)
+	}
+}
+
+func TestSetSeedLimits_HappyPath(t *testing.T) {
+	var gotMethod string
+	var gotParams []json.RawMessage
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req rpcRequest
+		json.NewDecoder(r.Body).Decode(&req)
+		w.Header().Set("Content-Type", "application/json")
+		switch req.Method {
+		case "auth.login":
+			json.NewEncoder(w).Encode(rpcResponse{Result: json.RawMessage(`true`), ID: req.ID})
+		case "core.set_torrent_options":
+			gotMethod = req.Method
+			for _, p := range req.Params {
+				b, _ := json.Marshal(p)
+				gotParams = append(gotParams, b)
+			}
+			json.NewEncoder(w).Encode(rpcResponse{Result: json.RawMessage(`true`), ID: req.ID})
+		}
+	}))
+	defer srv.Close()
+
+	c := New(Config{URL: srv.URL, Password: "deluge"})
+	c.http = srv.Client()
+
+	err := c.SetSeedLimits(context.Background(), "aabbccdd", 2.0, 7200)
+	if err != nil {
+		t.Fatalf("SetSeedLimits() = %v", err)
+	}
+	if gotMethod != "core.set_torrent_options" {
+		t.Errorf("method = %q, want core.set_torrent_options", gotMethod)
+	}
+}
+
+func TestSetSeedLimits_ZeroValuesNoOp(t *testing.T) {
+	called := false
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req rpcRequest
+		json.NewDecoder(r.Body).Decode(&req)
+		w.Header().Set("Content-Type", "application/json")
+		switch req.Method {
+		case "auth.login":
+			json.NewEncoder(w).Encode(rpcResponse{Result: json.RawMessage(`true`), ID: req.ID})
+		case "core.set_torrent_options":
+			called = true
+			json.NewEncoder(w).Encode(rpcResponse{Result: json.RawMessage(`true`), ID: req.ID})
+		}
+	}))
+	defer srv.Close()
+
+	c := New(Config{URL: srv.URL, Password: "deluge"})
+	c.http = srv.Client()
+
+	err := c.SetSeedLimits(context.Background(), "aabbccdd", 0, 0)
+	if err != nil {
+		t.Fatalf("SetSeedLimits() = %v", err)
+	}
+	if called {
+		t.Error("expected no RPC call for zero values, but core.set_torrent_options was called")
+	}
+}
+
+func TestSetSeedLimits_RPCError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req rpcRequest
+		json.NewDecoder(r.Body).Decode(&req)
+		w.Header().Set("Content-Type", "application/json")
+		switch req.Method {
+		case "auth.login":
+			json.NewEncoder(w).Encode(rpcResponse{Result: json.RawMessage(`true`), ID: req.ID})
+		case "core.set_torrent_options":
+			json.NewEncoder(w).Encode(rpcResponse{
+				Error: &rpcError{Code: -1, Message: "torrent not found"},
+				ID:    req.ID,
+			})
+		}
+	}))
+	defer srv.Close()
+
+	c := New(Config{URL: srv.URL, Password: "deluge"})
+	c.http = srv.Client()
+
+	err := c.SetSeedLimits(context.Background(), "aabbccdd", 1.5, 3600)
+	if err == nil {
+		t.Fatal("expected RPC error, got nil")
 	}
 }
 

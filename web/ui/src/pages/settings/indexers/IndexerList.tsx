@@ -71,10 +71,12 @@ interface FormState {
   url: string;
   api_key: string;
   rate_limit: string;
+  seed_ratio: string;
+  seed_time_minutes: string;
 }
 
 function emptyForm(): FormState {
-  return { name: "", kind: "torznab", enabled: true, priority: "1", url: "", api_key: "", rate_limit: "0" };
+  return { name: "", kind: "torznab", enabled: true, priority: "1", url: "", api_key: "", rate_limit: "0", seed_ratio: "0", seed_time_minutes: "0" };
 }
 
 function indexerToForm(cfg: IndexerConfig): FormState {
@@ -86,6 +88,8 @@ function indexerToForm(cfg: IndexerConfig): FormState {
     url: strSetting(cfg.settings, "url"),
     api_key: "",  // never pre-fill; server preserves existing key when omitted
     rate_limit: String(numSetting(cfg.settings, "rate_limit")),
+    seed_ratio: String(numSetting(cfg.settings, "seed_ratio")),
+    seed_time_minutes: String(numSetting(cfg.settings, "seed_time_minutes")),
   };
 }
 
@@ -94,6 +98,10 @@ function formToRequest(f: FormState): IndexerRequest {
   if (f.api_key.trim()) settings.api_key = f.api_key.trim();
   const rl = parseInt(f.rate_limit, 10) || 0;
   if (rl > 0) settings.rate_limit = rl;
+  const seedRatio = parseFloat(f.seed_ratio) || 0;
+  if (seedRatio > 0) settings.seed_ratio = seedRatio;
+  const seedTime = parseInt(f.seed_time_minutes, 10) || 0;
+  if (seedTime > 0) settings.seed_time_minutes = seedTime;
   return {
     name: f.name.trim(),
     kind: f.kind,
@@ -278,6 +286,60 @@ function IndexerModal({ editing, onClose }: ModalProps) {
               )}
             </div>
           </div>
+
+          {/* Seeding (torrent indexers only) */}
+          {form.kind === "torznab" && (
+            <div
+              style={{
+                background: "var(--color-bg-elevated)",
+                border: "1px solid var(--color-border-subtle)",
+                borderRadius: 8,
+                padding: 16,
+                display: "flex",
+                flexDirection: "column",
+                gap: 14,
+              }}
+            >
+              <p style={{ margin: 0, fontSize: 11, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--color-text-muted)" }}>
+                Seeding
+              </p>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                <div style={fieldStyle}>
+                  <label style={labelStyle}>Seed Ratio</label>
+                  <input
+                    style={inputStyle}
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    value={form.seed_ratio}
+                    onChange={(e) => set("seed_ratio", e.currentTarget.value)}
+                    onFocus={focusBorder}
+                    onBlur={blurBorder}
+                    placeholder="0"
+                  />
+                  <p style={{ margin: "4px 0 0", fontSize: 11, color: "var(--color-text-muted)" }}>
+                    0 = use download client default
+                  </p>
+                </div>
+                <div style={fieldStyle}>
+                  <label style={labelStyle}>Seed Time (minutes)</label>
+                  <input
+                    style={inputStyle}
+                    type="number"
+                    min="0"
+                    value={form.seed_time_minutes}
+                    onChange={(e) => set("seed_time_minutes", e.currentTarget.value)}
+                    onFocus={focusBorder}
+                    onBlur={blurBorder}
+                    placeholder="0"
+                  />
+                  <p style={{ margin: "4px 0 0", fontSize: 11, color: "var(--color-text-muted)" }}>
+                    0 = no time limit
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Misc */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>

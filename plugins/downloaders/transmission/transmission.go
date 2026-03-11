@@ -180,6 +180,42 @@ func (c *Client) Remove(ctx context.Context, clientItemID string, deleteFiles bo
 	return nil
 }
 
+// SetSeedLimits sets per-torrent seed ratio and idle time limits via the
+// Transmission RPC. ratioLimit <= 0 means "follow global"; seedTimeSecs <= 0
+// means "follow global".
+func (c *Client) SetSeedLimits(ctx context.Context, clientItemID string, ratioLimit float64, seedTimeSecs int) error {
+	// Transmission's torrent-set accepts integer IDs, so look up by hash first.
+	torrents, err := c.getTorrents(ctx, []string{clientItemID})
+	if err != nil {
+		return err
+	}
+	if len(torrents) == 0 {
+		return fmt.Errorf("transmission: torrent %q not found", clientItemID)
+	}
+
+	args := map[string]any{
+		"ids": []int64{torrents[0].ID},
+	}
+	if ratioLimit > 0 {
+		args["seedRatioLimit"] = ratioLimit
+		args["seedRatioMode"] = 1 // 1 = use per-torrent limit
+	} else {
+		args["seedRatioMode"] = 0 // 0 = follow global
+	}
+	if seedTimeSecs > 0 {
+		args["seedIdleLimit"] = seedTimeSecs / 60 // Transmission uses minutes
+		args["seedIdleMode"] = 1                  // 1 = use per-torrent limit
+	} else {
+		args["seedIdleMode"] = 0 // 0 = follow global
+	}
+
+	var result json.RawMessage
+	if err := c.rpc(ctx, "torrent-set", args, &result); err != nil {
+		return fmt.Errorf("transmission: torrent-set seed limits: %w", err)
+	}
+	return nil
+}
+
 // ── RPC helper ───────────────────────────────────────────────────────────────
 
 // rpc performs a Transmission RPC call, automatically handling the session-ID

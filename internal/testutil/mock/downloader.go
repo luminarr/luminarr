@@ -8,11 +8,12 @@ import (
 
 // DownloadClient is a configurable mock of plugin.DownloadClient.
 type DownloadClient struct {
-	AddFunc      func(ctx context.Context, r plugin.Release) (string, error)
-	StatusFunc   func(ctx context.Context, clientItemID string) (plugin.QueueItem, error)
-	GetQueueFunc func(ctx context.Context) ([]plugin.QueueItem, error)
-	RemoveFunc   func(ctx context.Context, clientItemID string, deleteFiles bool) error
-	TestFunc     func(ctx context.Context) error
+	AddFunc           func(ctx context.Context, r plugin.Release) (string, error)
+	StatusFunc        func(ctx context.Context, clientItemID string) (plugin.QueueItem, error)
+	GetQueueFunc      func(ctx context.Context) ([]plugin.QueueItem, error)
+	RemoveFunc        func(ctx context.Context, clientItemID string, deleteFiles bool) error
+	TestFunc          func(ctx context.Context) error
+	SetSeedLimitsFunc func(ctx context.Context, clientItemID string, ratioLimit float64, seedTimeSecs int) error
 
 	Calls []string
 }
@@ -56,6 +57,14 @@ func (m *DownloadClient) Test(ctx context.Context) error {
 	m.Calls = append(m.Calls, "Test")
 	if m.TestFunc != nil {
 		return m.TestFunc(ctx)
+	}
+	return nil
+}
+
+func (m *DownloadClient) SetSeedLimits(ctx context.Context, clientItemID string, ratioLimit float64, seedTimeSecs int) error {
+	m.Calls = append(m.Calls, "SetSeedLimits")
+	if m.SetSeedLimitsFunc != nil {
+		return m.SetSeedLimitsFunc(ctx, clientItemID, ratioLimit, seedTimeSecs)
 	}
 	return nil
 }

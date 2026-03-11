@@ -327,6 +327,94 @@ func TestStatusMapping(t *testing.T) {
 	}
 }
 
+func TestSetSeedLimits_HappyPath(t *testing.T) {
+	h := newRPCHandler()
+	h.handlers["torrent-get"] = func(_ json.RawMessage) (any, string) {
+		return map[string]any{
+			"torrents": []map[string]any{{
+				"id": 42, "hashString": "ABC123", "name": "Movie",
+				"status": 6, "percentDone": 1.0, "sizeWhenDone": int64(0),
+				"leftUntilDone": int64(0), "downloadDir": "/dl",
+				"error": 0, "errorString": "", "uploadRatio": 0.0,
+				"addedDate": int64(0),
+			}},
+		}, ""
+	}
+	var gotArgs map[string]any
+	h.handlers["torrent-set"] = func(args json.RawMessage) (any, string) {
+		_ = json.Unmarshal(args, &gotArgs)
+		return nil, ""
+	}
+	c, srv := newClient(t, h)
+	defer srv.Close()
+
+	err := c.SetSeedLimits(context.Background(), "abc123", 2.0, 7200) // 7200s = 120min
+	if err != nil {
+		t.Fatalf("SetSeedLimits() error: %v", err)
+	}
+
+	if mode, _ := gotArgs["seedRatioMode"].(float64); mode != 1 {
+		t.Errorf("seedRatioMode = %v, want 1 (per-torrent)", mode)
+	}
+	if ratio, _ := gotArgs["seedRatioLimit"].(float64); ratio != 2.0 {
+		t.Errorf("seedRatioLimit = %v, want 2.0", ratio)
+	}
+	if mode, _ := gotArgs["seedIdleMode"].(float64); mode != 1 {
+		t.Errorf("seedIdleMode = %v, want 1 (per-torrent)", mode)
+	}
+	if limit, _ := gotArgs["seedIdleLimit"].(float64); limit != 120 {
+		t.Errorf("seedIdleLimit = %v, want 120 (minutes)", limit)
+	}
+}
+
+func TestSetSeedLimits_ZeroValuesUseGlobal(t *testing.T) {
+	h := newRPCHandler()
+	h.handlers["torrent-get"] = func(_ json.RawMessage) (any, string) {
+		return map[string]any{
+			"torrents": []map[string]any{{
+				"id": 42, "hashString": "ABC123", "name": "Movie",
+				"status": 6, "percentDone": 1.0, "sizeWhenDone": int64(0),
+				"leftUntilDone": int64(0), "downloadDir": "/dl",
+				"error": 0, "errorString": "", "uploadRatio": 0.0,
+				"addedDate": int64(0),
+			}},
+		}, ""
+	}
+	var gotArgs map[string]any
+	h.handlers["torrent-set"] = func(args json.RawMessage) (any, string) {
+		_ = json.Unmarshal(args, &gotArgs)
+		return nil, ""
+	}
+	c, srv := newClient(t, h)
+	defer srv.Close()
+
+	err := c.SetSeedLimits(context.Background(), "abc123", 0, 0)
+	if err != nil {
+		t.Fatalf("SetSeedLimits() error: %v", err)
+	}
+
+	if mode, _ := gotArgs["seedRatioMode"].(float64); mode != 0 {
+		t.Errorf("seedRatioMode = %v, want 0 (follow global)", mode)
+	}
+	if mode, _ := gotArgs["seedIdleMode"].(float64); mode != 0 {
+		t.Errorf("seedIdleMode = %v, want 0 (follow global)", mode)
+	}
+}
+
+func TestSetSeedLimits_TorrentNotFound(t *testing.T) {
+	h := newRPCHandler()
+	h.handlers["torrent-get"] = func(_ json.RawMessage) (any, string) {
+		return map[string]any{"torrents": []any{}}, ""
+	}
+	c, srv := newClient(t, h)
+	defer srv.Close()
+
+	err := c.SetSeedLimits(context.Background(), "nonexistent", 1.0, 3600)
+	if err == nil {
+		t.Fatal("expected error for missing torrent, got nil")
+	}
+}
+
 func TestFactoryValidation(t *testing.T) {
 	// Verify New() doesn't panic with empty config and returns correct metadata.
 	c := transmission.New(transmission.Config{})

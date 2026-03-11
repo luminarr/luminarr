@@ -77,6 +77,7 @@ internal/
     mediaserver/       Media server config CRUD (Plex, Emby, Jellyfin)
     queue/             Download queue polling
     renamer/           Naming template engine
+    seedenforcer/      Post-import seed limit enforcement
   db/                  DB connection, migrations (goose), sqlc wiring
   db/generated/sqlite/ sqlc-generated query code — do not edit
   db/migrations/       Numbered goose SQL migration files
@@ -183,6 +184,7 @@ Plugins implement one of four interfaces defined in `pkg/plugin/`:
 
 - `Indexer` — `Search(ctx, query, categories) ([]Release, error)`
 - `DownloadClient` — `Add(ctx, release) (itemID string, error)` · `Status(ctx, itemID) (DownloadStatus, error)` · etc.
+- `SeedLimiter` (optional) — `SetSeedLimits(ctx, clientItemID, ratioLimit, seedTimeSecs) error` — implemented by torrent clients (qBittorrent, Deluge, Transmission) for per-indexer seed enforcement
 - `MediaServer` — `RefreshLibrary(ctx, moviePath) error` · `Test(ctx) error`
 - `Notifier` — `Notify(ctx, event) error` · `Test(ctx) error`
 
@@ -309,6 +311,7 @@ type Quality struct {
 
 **Subscribers:**
 - `internal/core/importer` — subscribes to `TypeDownloadDone`, imports the file
+- `internal/core/seedenforcer` — subscribes to `TypeImportComplete`, applies per-indexer seed ratio/time limits to the torrent via the download client
 - `internal/notifications/Dispatcher` — subscribes to all event types, fans out to enabled notifiers
 
 ---
@@ -407,7 +410,8 @@ Test coverage targets:
 - `internal/core/notification` — config CRUD, event dispatch
 - `internal/events` — bus publish/subscribe, concurrent delivery
 - `internal/radarrimport` — quality name mapping, field extraction
-- `plugins/downloaders/*` — download client integration (httptest servers)
+- `internal/core/seedenforcer` — event-driven seed limit enforcement (mock providers)
+- `plugins/downloaders/*` — download client integration (httptest servers), including `SetSeedLimits`
 - `plugins/notifications/*` — notification delivery (httptest servers, script execution)
 
 Integration tests (full HTTP stack) are on the roadmap.

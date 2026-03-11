@@ -30,6 +30,7 @@ import (
 	"github.com/luminarr/luminarr/internal/core/notification"
 	"github.com/luminarr/luminarr/internal/core/quality"
 	"github.com/luminarr/luminarr/internal/core/queue"
+	"github.com/luminarr/luminarr/internal/core/seedenforcer"
 	"github.com/luminarr/luminarr/internal/core/stats"
 	"github.com/luminarr/luminarr/internal/db"
 	dbsqlite "github.com/luminarr/luminarr/internal/db/generated/sqlite"
@@ -275,6 +276,9 @@ func run() error {
 
 	importerSvc := importer.NewService(queries, bus, logger, mmSvc, dhSvc, mediainfoSvc)
 	importerSvc.Subscribe()
+
+	seedEnforcerSvc := seedenforcer.NewService(queries, indexerSvc, downloaderSvc, bus, logger)
+	seedEnforcerSvc.Subscribe()
 
 	notifSvc := notification.NewService(queries, registry.Default)
 	notifDispatcher := notifications.NewDispatcher(queries, registry.Default, bus, logger, movieSvc)

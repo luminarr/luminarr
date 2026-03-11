@@ -188,6 +188,40 @@ func (c *Client) Remove(ctx context.Context, clientItemID string, deleteFiles bo
 	return nil
 }
 
+// SetSeedLimits sets per-torrent seed ratio and time limits via the qBittorrent
+// Web API. ratioLimit <= 0 means "use global setting"; seedTimeSecs <= 0 means
+// "use global setting".
+func (c *Client) SetSeedLimits(ctx context.Context, clientItemID string, ratioLimit float64, seedTimeSecs int) error {
+	if err := c.ensureAuth(ctx); err != nil {
+		return err
+	}
+
+	// qBittorrent uses -2 = "use global setting", -1 = "no limit".
+	ratioStr := "-2"
+	if ratioLimit > 0 {
+		ratioStr = fmt.Sprintf("%.4f", ratioLimit)
+	}
+	timeStr := "-2"
+	if seedTimeSecs > 0 {
+		timeStr = fmt.Sprintf("%d", seedTimeSecs/60) // qBittorrent takes minutes
+	}
+
+	form := url.Values{
+		"hashes":           {clientItemID},
+		"ratioLimit":       {ratioStr},
+		"seedingTimeLimit": {timeStr},
+	}
+	resp, err := c.post(ctx, "/api/v2/torrents/setShareLimits", form)
+	if err != nil {
+		return fmt.Errorf("qbittorrent: setShareLimits failed: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("qbittorrent: setShareLimits returned status %d", resp.StatusCode)
+	}
+	return nil
+}
+
 // ── Auth ─────────────────────────────────────────────────────────────────────
 
 func (c *Client) ensureAuth(ctx context.Context) error {

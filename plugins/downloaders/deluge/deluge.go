@@ -145,6 +145,33 @@ func (c *Client) Remove(ctx context.Context, clientItemID string, deleteFiles bo
 	return nil
 }
 
+// SetSeedLimits sets per-torrent seed ratio and time limits via Deluge's
+// core.set_torrent_options RPC method. ratioLimit <= 0 and seedTimeSecs <= 0
+// are ignored (no change sent to Deluge).
+func (c *Client) SetSeedLimits(ctx context.Context, clientItemID string, ratioLimit float64, seedTimeSecs int) error {
+	if err := c.ensureAuth(ctx); err != nil {
+		return err
+	}
+
+	opts := map[string]any{}
+	if ratioLimit > 0 {
+		opts["stop_at_ratio"] = true
+		opts["stop_ratio"] = ratioLimit
+	}
+	if seedTimeSecs > 0 {
+		opts["seed_time_limit"] = seedTimeSecs / 60 // Deluge uses minutes
+	}
+	if len(opts) == 0 {
+		return nil // nothing to set
+	}
+
+	var result bool
+	if err := c.call(ctx, "core.set_torrent_options", []any{[]string{clientItemID}, opts}, &result); err != nil {
+		return fmt.Errorf("deluge: set_torrent_options: %w", err)
+	}
+	return nil
+}
+
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
 func (c *Client) ensureAuth(ctx context.Context) error {

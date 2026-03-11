@@ -365,6 +365,95 @@ func TestService_Search_DisabledIndexerSkipped(t *testing.T) {
 	}
 }
 
+func TestExtractSeedCriteria_BothFields(t *testing.T) {
+	settings := json.RawMessage(`{"url":"http://example.com","seed_ratio":2.0,"seed_time_minutes":120}`)
+	c := indexer.ExtractSeedCriteria(settings)
+	if c.SeedRatio != 2.0 {
+		t.Errorf("SeedRatio = %v, want 2.0", c.SeedRatio)
+	}
+	if c.SeedTimeMinutes != 120 {
+		t.Errorf("SeedTimeMinutes = %v, want 120", c.SeedTimeMinutes)
+	}
+}
+
+func TestExtractSeedCriteria_RatioOnly(t *testing.T) {
+	settings := json.RawMessage(`{"seed_ratio":1.5}`)
+	c := indexer.ExtractSeedCriteria(settings)
+	if c.SeedRatio != 1.5 {
+		t.Errorf("SeedRatio = %v, want 1.5", c.SeedRatio)
+	}
+	if c.SeedTimeMinutes != 0 {
+		t.Errorf("SeedTimeMinutes = %v, want 0", c.SeedTimeMinutes)
+	}
+}
+
+func TestExtractSeedCriteria_TimeOnly(t *testing.T) {
+	settings := json.RawMessage(`{"seed_time_minutes":60}`)
+	c := indexer.ExtractSeedCriteria(settings)
+	if c.SeedRatio != 0 {
+		t.Errorf("SeedRatio = %v, want 0", c.SeedRatio)
+	}
+	if c.SeedTimeMinutes != 60 {
+		t.Errorf("SeedTimeMinutes = %v, want 60", c.SeedTimeMinutes)
+	}
+}
+
+func TestExtractSeedCriteria_EmptySettings(t *testing.T) {
+	settings := json.RawMessage(`{}`)
+	c := indexer.ExtractSeedCriteria(settings)
+	if c.SeedRatio != 0 || c.SeedTimeMinutes != 0 {
+		t.Errorf("expected zero values, got ratio=%v time=%v", c.SeedRatio, c.SeedTimeMinutes)
+	}
+}
+
+func TestExtractSeedCriteria_NilSettings(t *testing.T) {
+	c := indexer.ExtractSeedCriteria(nil)
+	if c.SeedRatio != 0 || c.SeedTimeMinutes != 0 {
+		t.Errorf("expected zero values for nil, got ratio=%v time=%v", c.SeedRatio, c.SeedTimeMinutes)
+	}
+}
+
+func TestService_GetSeedCriteria(t *testing.T) {
+	_, sqlDB := testutil.NewTestDBWithSQL(t)
+	svc := newServiceFromSQL(sqlDB, &mockIndexer{})
+	ctx := context.Background()
+
+	settings := json.RawMessage(`{"url":"http://indexer.example.com","seed_ratio":1.5,"seed_time_minutes":90}`)
+	req := indexer.CreateRequest{
+		Name:     "Seed Test Indexer",
+		Kind:     "mock",
+		Enabled:  true,
+		Priority: 10,
+		Settings: settings,
+	}
+	created, err := svc.Create(ctx, req)
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+
+	criteria, err := svc.GetSeedCriteria(ctx, created.ID)
+	if err != nil {
+		t.Fatalf("GetSeedCriteria() error = %v", err)
+	}
+	if criteria.SeedRatio != 1.5 {
+		t.Errorf("SeedRatio = %v, want 1.5", criteria.SeedRatio)
+	}
+	if criteria.SeedTimeMinutes != 90 {
+		t.Errorf("SeedTimeMinutes = %v, want 90", criteria.SeedTimeMinutes)
+	}
+}
+
+func TestService_GetSeedCriteria_NotFound(t *testing.T) {
+	_, sqlDB := testutil.NewTestDBWithSQL(t)
+	svc := newServiceFromSQL(sqlDB, &mockIndexer{})
+	ctx := context.Background()
+
+	_, err := svc.GetSeedCriteria(ctx, "00000000-0000-0000-0000-000000000000")
+	if !errors.Is(err, indexer.ErrNotFound) {
+		t.Errorf("GetSeedCriteria() error = %v, want ErrNotFound", err)
+	}
+}
+
 func TestService_Grab_RecordsHistory(t *testing.T) {
 	_, sqlDB := testutil.NewTestDBWithSQL(t)
 	svc := newServiceFromSQL(sqlDB, &mockIndexer{})

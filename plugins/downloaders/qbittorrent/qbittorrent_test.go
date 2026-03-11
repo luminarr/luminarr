@@ -201,6 +201,78 @@ func TestRemove(t *testing.T) {
 	}
 }
 
+func TestSetSeedLimits_HappyPath(t *testing.T) {
+	var gotHashes, gotRatio, gotTime string
+	srv := newTestServer(t, map[string]http.HandlerFunc{
+		"/api/v2/auth/login": loginOK,
+		"/api/v2/torrents/setShareLimits": func(w http.ResponseWriter, r *http.Request) {
+			_ = r.ParseForm()
+			gotHashes = r.FormValue("hashes")
+			gotRatio = r.FormValue("ratioLimit")
+			gotTime = r.FormValue("seedingTimeLimit")
+			w.WriteHeader(http.StatusOK)
+		},
+	})
+	defer srv.Close()
+
+	c := qbittorrent.NewWithHTTPClient(qbittorrent.Config{URL: srv.URL}, newTestClient())
+	err := c.SetSeedLimits(context.Background(), "abc123", 2.0, 7200) // 7200s = 120min
+	if err != nil {
+		t.Fatalf("SetSeedLimits() error: %v", err)
+	}
+	if gotHashes != "abc123" {
+		t.Errorf("hashes = %q, want abc123", gotHashes)
+	}
+	if gotRatio != "2.0000" {
+		t.Errorf("ratioLimit = %q, want 2.0000", gotRatio)
+	}
+	if gotTime != "120" {
+		t.Errorf("seedingTimeLimit = %q, want 120", gotTime)
+	}
+}
+
+func TestSetSeedLimits_ZeroValuesUseGlobal(t *testing.T) {
+	var gotRatio, gotTime string
+	srv := newTestServer(t, map[string]http.HandlerFunc{
+		"/api/v2/auth/login": loginOK,
+		"/api/v2/torrents/setShareLimits": func(w http.ResponseWriter, r *http.Request) {
+			_ = r.ParseForm()
+			gotRatio = r.FormValue("ratioLimit")
+			gotTime = r.FormValue("seedingTimeLimit")
+			w.WriteHeader(http.StatusOK)
+		},
+	})
+	defer srv.Close()
+
+	c := qbittorrent.NewWithHTTPClient(qbittorrent.Config{URL: srv.URL}, newTestClient())
+	err := c.SetSeedLimits(context.Background(), "abc123", 0, 0)
+	if err != nil {
+		t.Fatalf("SetSeedLimits() error: %v", err)
+	}
+	if gotRatio != "-2" {
+		t.Errorf("ratioLimit = %q, want -2 (use global)", gotRatio)
+	}
+	if gotTime != "-2" {
+		t.Errorf("seedingTimeLimit = %q, want -2 (use global)", gotTime)
+	}
+}
+
+func TestSetSeedLimits_AuthFailure(t *testing.T) {
+	srv := newTestServer(t, map[string]http.HandlerFunc{
+		"/api/v2/auth/login": func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("Fails."))
+		},
+	})
+	defer srv.Close()
+
+	c := qbittorrent.NewWithHTTPClient(qbittorrent.Config{URL: srv.URL}, newTestClient())
+	err := c.SetSeedLimits(context.Background(), "abc123", 1.0, 3600)
+	if err == nil {
+		t.Fatal("expected auth failure error, got nil")
+	}
+}
+
 func TestStateMapping(t *testing.T) {
 	// Verify the full queue is returned and states map correctly.
 	tests := []struct {
