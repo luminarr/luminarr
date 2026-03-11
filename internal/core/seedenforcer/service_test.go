@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"log/slog"
-	"sync"
 	"testing"
 	"time"
 
@@ -62,18 +61,11 @@ func torrentGrab() dbsqlite.GrabHistory {
 	}
 }
 
+// publishAndWait publishes an event and waits long enough for the bus handler
+// goroutine to finish. Uses a generous sleep to avoid flakiness.
 func publishAndWait(bus *events.Bus, e events.Event) {
-	var wg sync.WaitGroup
-	wg.Add(1)
-	// The bus runs handlers in goroutines, so we use a channel to wait.
-	done := make(chan struct{})
-	go func() {
-		bus.Publish(context.Background(), e)
-		// Give the goroutine a moment to execute.
-		time.Sleep(50 * time.Millisecond)
-		close(done)
-	}()
-	<-done
+	bus.Publish(context.Background(), e)
+	time.Sleep(100 * time.Millisecond)
 }
 
 // ── Tests ───────────────────────────────────────────────────────────────────
@@ -83,10 +75,12 @@ func TestSeedEnforcer_HappyPath(t *testing.T) {
 	var gotRatio float64
 	var gotTime int
 	var gotItemID string
+	called := make(chan struct{})
 	dl.SetSeedLimitsFunc = func(_ context.Context, clientItemID string, ratioLimit float64, seedTimeSecs int) error {
 		gotItemID = clientItemID
 		gotRatio = ratioLimit
 		gotTime = seedTimeSecs
+		close(called)
 		return nil
 	}
 
@@ -100,10 +94,16 @@ func TestSeedEnforcer_HappyPath(t *testing.T) {
 	)
 	svc.Subscribe()
 
-	publishAndWait(bus, events.Event{
+	bus.Publish(context.Background(), events.Event{
 		Type: events.TypeImportComplete,
 		Data: map[string]any{"grab_id": "grab-1"},
 	})
+
+	select {
+	case <-called:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for SetSeedLimits")
+	}
 
 	if gotItemID != "hash-abc123" {
 		t.Errorf("clientItemID = %q, want hash-abc123", gotItemID)
@@ -136,7 +136,7 @@ func TestSeedEnforcer_NZBProtocolSkipped(t *testing.T) {
 		Data: map[string]any{"grab_id": "grab-1"},
 	})
 
-	for _, c := range dl.Calls {
+	for _, c := range dl.GetCalls() {
 		if c == "SetSeedLimits" {
 			t.Error("SetSeedLimits should not be called for usenet protocol")
 		}
@@ -163,7 +163,7 @@ func TestSeedEnforcer_MissingIDsSkipped(t *testing.T) {
 		Data: map[string]any{"grab_id": "grab-1"},
 	})
 
-	for _, c := range dl.Calls {
+	for _, c := range dl.GetCalls() {
 		if c == "SetSeedLimits" {
 			t.Error("SetSeedLimits should not be called when indexer_id is nil")
 		}
@@ -188,7 +188,7 @@ func TestSeedEnforcer_ZeroCriteriaSkipped(t *testing.T) {
 		Data: map[string]any{"grab_id": "grab-1"},
 	})
 
-	for _, c := range dl.Calls {
+	for _, c := range dl.GetCalls() {
 		if c == "SetSeedLimits" {
 			t.Error("SetSeedLimits should not be called when both criteria are zero")
 		}
@@ -218,7 +218,9 @@ func TestSeedEnforcer_NonSeedLimiterClient(t *testing.T) {
 
 func TestSeedEnforcer_SetSeedLimitsError(t *testing.T) {
 	dl := &mock.DownloadClient{}
+	called := make(chan struct{})
 	dl.SetSeedLimitsFunc = func(_ context.Context, _ string, _ float64, _ int) error {
+		close(called)
 		return errors.New("connection refused")
 	}
 
@@ -232,10 +234,16 @@ func TestSeedEnforcer_SetSeedLimitsError(t *testing.T) {
 	)
 	svc.Subscribe()
 
-	publishAndWait(bus, events.Event{
+	bus.Publish(context.Background(), events.Event{
 		Type: events.TypeImportComplete,
 		Data: map[string]any{"grab_id": "grab-1"},
 	})
+
+	select {
+	case <-called:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for SetSeedLimits")
+	}
 	// Should not panic — error is logged but not propagated.
 }
 
@@ -257,7 +265,7 @@ func TestSeedEnforcer_WrongEventTypeIgnored(t *testing.T) {
 		Data: map[string]any{"grab_id": "grab-1"},
 	})
 
-	for _, c := range dl.Calls {
+	for _, c := range dl.GetCalls() {
 		if c == "SetSeedLimits" {
 			t.Error("SetSeedLimits should not be called for non-import events")
 		}
