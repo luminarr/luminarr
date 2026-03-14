@@ -17,7 +17,9 @@ type Resolution string
 
 const (
 	ResolutionUnknown Resolution = "unknown"
-	ResolutionSD      Resolution = "sd" // 480p and below
+	ResolutionSD      Resolution = "sd" // implied SD (e.g. DVDRip without explicit resolution)
+	Resolution480p    Resolution = "480p"
+	Resolution576p    Resolution = "576p"
 	Resolution720p    Resolution = "720p"
 	Resolution1080p   Resolution = "1080p"
 	Resolution2160p   Resolution = "2160p" // 4K
@@ -27,15 +29,22 @@ const (
 type Source string
 
 const (
-	SourceUnknown  Source = "unknown"
-	SourceCAM      Source = "cam"
-	SourceTELECINE Source = "telecine"
-	SourceDVD      Source = "dvd"
-	SourceHDTV     Source = "hdtv"
-	SourceWEBRip   Source = "webrip"
-	SourceWEBDL    Source = "webdl"
-	SourceBluRay   Source = "bluray"
-	SourceRemux    Source = "remux"
+	SourceUnknown   Source = "unknown"
+	SourceWorkprint Source = "workprint"
+	SourceCAM       Source = "cam"
+	SourceTelesync  Source = "telesync"
+	SourceTELECINE  Source = "telecine"
+	SourceDVDSCR    Source = "dvdscr"
+	SourceRegional  Source = "regional"
+	SourceDVD       Source = "dvd"
+	SourceDVDR      Source = "dvdr"
+	SourceHDTV      Source = "hdtv"
+	SourceWEBRip    Source = "webrip"
+	SourceWEBDL     Source = "webdl"
+	SourceBluRay    Source = "bluray"
+	SourceRemux     Source = "remux"
+	SourceBRDisk    Source = "brdisk"
+	SourceRawHD     Source = "rawhd"
 )
 
 // Codec is the video codec of a release.
@@ -97,7 +106,7 @@ func resolutionScore(r Resolution) int {
 		return 3
 	case Resolution720p:
 		return 2
-	case ResolutionSD:
+	case Resolution576p, Resolution480p, ResolutionSD:
 		return 1
 	default:
 		return 0
@@ -106,6 +115,10 @@ func resolutionScore(r Resolution) int {
 
 func sourceScore(s Source) int {
 	switch s {
+	case SourceRawHD:
+		return 9
+	case SourceBRDisk:
+		return 8
 	case SourceRemux:
 		return 7
 	case SourceBluRay:
@@ -116,11 +129,13 @@ func sourceScore(s Source) int {
 		return 4
 	case SourceHDTV:
 		return 3
-	case SourceDVD:
+	case SourceDVD, SourceDVDR:
 		return 2
-	case SourceTELECINE:
+	case SourceDVDSCR, SourceRegional, SourceTELECINE:
 		return 1
-	case SourceCAM:
+	case SourceTelesync, SourceCAM:
+		return 0
+	case SourceWorkprint:
 		return 0
 	default:
 		return 0
@@ -140,19 +155,35 @@ func codecScore(c Codec) int {
 	}
 }
 
+// IndexerFlag represents a flag reported by an indexer for a release.
+type IndexerFlag string
+
+const (
+	FlagFreeleech    IndexerFlag = "freeleech"
+	FlagHalfleech    IndexerFlag = "halfleech"
+	FlagFreeleech75  IndexerFlag = "freeleech_75"
+	FlagFreeleech25  IndexerFlag = "freeleech_25"
+	FlagDoubleUpload IndexerFlag = "double_upload"
+	FlagInternal     IndexerFlag = "internal"
+	FlagScene        IndexerFlag = "scene"
+	FlagNuked        IndexerFlag = "nuked"
+)
+
 // Release is the transient result of an indexer search.
 // It is not stored in the database. A summary is written to
 // GrabHistory when a release is grabbed.
 type Release struct {
-	GUID        string
-	Title       string
-	Indexer     string
-	Protocol    Protocol
-	DownloadURL string
-	InfoURL     string
-	Size        int64
-	Seeds       int
-	Peers       int
-	AgeDays     float64
-	Quality     Quality
+	GUID         string
+	Title        string
+	Indexer      string
+	Protocol     Protocol
+	DownloadURL  string
+	InfoURL      string
+	Size         int64
+	Seeds        int
+	Peers        int
+	AgeDays      float64
+	Quality      Quality
+	Edition      string // canonical edition name parsed from title; empty = untagged
+	IndexerFlags []IndexerFlag
 }

@@ -7,6 +7,7 @@ export interface CollectionStats {
   with_file: number;
   missing: number;
   needs_upgrade: number;
+  edition_mismatches: number;
   recently_added: number;
 }
 

@@ -34,6 +34,7 @@ type releaseBody struct {
 	Peers          int                   `json:"peers,omitempty"`
 	AgeDays        float64               `json:"age_days,omitempty"`
 	Quality        plugin.Quality        `json:"quality"`
+	Edition        string                `json:"edition,omitempty"      doc:"Detected edition (e.g. Director's Cut, Extended)"`
 	QualityScore   int                   `json:"quality_score"`
 	ScoreBreakdown plugin.ScoreBreakdown `json:"score_breakdown"`
 }
@@ -122,6 +123,7 @@ func indexerResultToBody(r indexer.SearchResult) *releaseBody {
 		Peers:          r.Peers,
 		AgeDays:        r.AgeDays,
 		Quality:        r.Quality,
+		Edition:        r.Edition,
 		QualityScore:   r.QualityScore,
 		ScoreBreakdown: r.ScoreBreakdown,
 	}
@@ -159,7 +161,7 @@ func RegisterReleaseRoutes(api huma.API, indexerSvc *indexer.Service, movieSvc *
 			Year:   m.Year,
 		}
 
-		results, searchErr := indexerSvc.Search(ctx, query)
+		results, searchErr := indexerSvc.Search(ctx, query, nil)
 
 		// Load quality profile once so we can compute breakdown per release.
 		var prof *quality.Profile
@@ -228,7 +230,7 @@ func RegisterReleaseRoutes(api huma.API, indexerSvc *indexer.Service, movieSvc *
 		// Submit to download client when one is configured.
 		var dcID, itemID string
 		if downloaderSvc != nil {
-			id, item, err := downloaderSvc.Add(ctx, release)
+			id, item, err := downloaderSvc.Add(ctx, release, nil)
 			if err != nil {
 				if errors.Is(err, downloader.ErrNoCompatibleClient) {
 					return nil, huma.NewError(http.StatusServiceUnavailable,

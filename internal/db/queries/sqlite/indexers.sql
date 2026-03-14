@@ -31,12 +31,12 @@ INSERT INTO grab_history (
     id, movie_id, indexer_id, release_guid, release_title,
     release_source, release_resolution, release_codec, release_hdr,
     protocol, size, download_client_id, client_item_id, grabbed_at,
-    download_status, downloaded_bytes, score_breakdown
+    download_status, downloaded_bytes, score_breakdown, release_edition
 ) VALUES (
     ?, ?, ?, ?, ?,
     ?, ?, ?, ?,
     ?, ?, ?, ?, ?,
-    ?, ?, ?
+    ?, ?, ?, ?
 )
 RETURNING *;
 

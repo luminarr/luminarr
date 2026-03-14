@@ -72,6 +72,7 @@ export interface Movie {
   library_id: string;
   quality_profile_id: string;
   minimum_availability: string;
+  preferred_edition?: string;
   release_date?: string;
   path?: string;
   added_at: string;
@@ -110,6 +111,9 @@ export interface ScoreDimension {
 export interface ScoreBreakdown {
   total: number;
   dimensions: ScoreDimension[];
+  custom_format_score?: number;
+  matched_formats?: string[];
+  edition_bonus?: number;
 }
 
 export interface Release {
@@ -126,6 +130,7 @@ export interface Release {
   quality: Quality;
   quality_score: number;
   score_breakdown?: ScoreBreakdown;
+  edition?: string;
 }
 
 export interface GrabHistory {

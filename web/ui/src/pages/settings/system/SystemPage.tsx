@@ -14,6 +14,7 @@ import DOMPurify from "dompurify";
 import type { HealthStatus, UpdateCheck, LogEntry } from "@/types";
 import { card, sectionHeader } from "@/lib/styles";
 import Pill from "@/components/Pill";
+import Modal from "@/components/Modal";
 
 function formatUptime(seconds: number): string {
   const d = Math.floor(seconds / 86400);
@@ -167,33 +168,7 @@ function UpdateModal({ data, onClose }: { data: UpdateCheck; onClose: () => void
   }, [data.release_notes]);
 
   return (
-    <div
-      onClick={onClose}
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0, 0, 0, 0.6)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 1000,
-        padding: 24,
-      }}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          background: "var(--color-bg-surface)",
-          border: "1px solid var(--color-border-default)",
-          borderRadius: 12,
-          padding: 28,
-          maxWidth: 600,
-          width: "100%",
-          maxHeight: "85vh",
-          overflow: "auto",
-          boxShadow: "0 24px 48px rgba(0, 0, 0, 0.4)",
-        }}
-      >
+    <Modal onClose={onClose} width={600} maxHeight="85vh" innerStyle={{ padding: 28, overflowY: "auto" }}>
         {/* Header */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
           <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600, color: "var(--color-text-primary)" }}>
@@ -359,8 +334,7 @@ function UpdateModal({ data, onClose }: { data: UpdateCheck; onClose: () => void
             Close
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
 

@@ -17,6 +17,7 @@ import (
 	"github.com/luminarr/luminarr/internal/config"
 	"github.com/luminarr/luminarr/internal/core/blocklist"
 	"github.com/luminarr/luminarr/internal/core/collection"
+	"github.com/luminarr/luminarr/internal/core/customformat"
 	"github.com/luminarr/luminarr/internal/core/downloader"
 	"github.com/luminarr/luminarr/internal/core/downloadhandling"
 	"github.com/luminarr/luminarr/internal/core/health"
@@ -32,6 +33,7 @@ import (
 	"github.com/luminarr/luminarr/internal/core/queue"
 	"github.com/luminarr/luminarr/internal/core/seedenforcer"
 	"github.com/luminarr/luminarr/internal/core/stats"
+	"github.com/luminarr/luminarr/internal/core/tag"
 	"github.com/luminarr/luminarr/internal/db"
 	dbsqlite "github.com/luminarr/luminarr/internal/db/generated/sqlite"
 	"github.com/luminarr/luminarr/internal/events"
@@ -262,6 +264,9 @@ func run() error {
 	downloaderSvc := downloader.NewService(queries, registry.Default, bus)
 	queueSvc := queue.NewService(queries, downloaderSvc, bus, logger)
 
+	tagSvc := tag.NewService(queries)
+	cfSvc := customformat.NewService(queries)
+
 	mmSvc := mediamanagement.NewService(queries)
 	dhSvc := downloadhandling.NewService(queries)
 
@@ -354,6 +359,8 @@ func run() error {
 		CollectionService:        collectionSvc,
 		MediaServerService:       mediaServerSvc,
 		PlexSyncService:          plexSyncSvc,
+		TagService:               tagSvc,
+		CustomFormatService:      cfSvc,
 		LogBuffer:                logBuffer,
 		WSHub:                    wsHub,
 		Bus:                      bus,

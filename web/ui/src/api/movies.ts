@@ -3,6 +3,14 @@ import { toast } from "sonner";
 import { apiFetch } from "./client";
 import type { Movie, MovieListResponse, TMDBResult, Release, GrabHistory, MovieFile, RenameMovieResult, AutoSearchResult, BulkSearchAccepted } from "@/types";
 
+export function useEditions() {
+  return useQuery({
+    queryKey: ["editions"],
+    queryFn: () => apiFetch<string[]>("/editions"),
+    staleTime: Infinity,
+  });
+}
+
 interface MovieFilters {
   library_id?: string;
   page?: number;
@@ -47,6 +55,7 @@ export function useAddMovie() {
       quality_profile_id: string;
       monitored?: boolean;
       minimum_availability?: string;
+      preferred_edition?: string;
     }) => apiFetch<Movie>("/movies", { method: "POST", body: JSON.stringify(body) }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["movies"] });
@@ -62,6 +71,7 @@ export interface MovieUpdateRequest {
   library_id: string;
   quality_profile_id: string;
   minimum_availability?: string;
+  preferred_edition?: string;
 }
 
 export function useUpdateMovie() {

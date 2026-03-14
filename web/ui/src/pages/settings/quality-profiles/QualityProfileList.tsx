@@ -5,35 +5,60 @@ import {
   useUpdateQualityProfile,
   useDeleteQualityProfile,
 } from "@/api/quality-profiles";
-import type { Quality, QualityProfile, QualityProfileRequest } from "@/types";
+import { useQualityDefinitions } from "@/api/quality-definitions";
+import Modal from "@/components/Modal";
+import type { Quality, QualityDefinition, QualityProfile, QualityProfileRequest } from "@/types";
 
-// ── Quality presets ───────────────────────────────────────────────────────────
-// Ordered from lowest to highest quality. Users pick a subset; cutoff and
-// upgrade_until are selected from that subset.
+// ── Quality helpers ──────────────────────────────────────────────────────────
 
-const PRESETS: Quality[] = [
-  { resolution: "sd",    source: "dvd",    codec: "xvid", hdr: "none",  name: "SD DVD" },
-  { resolution: "sd",    source: "hdtv",   codec: "x264", hdr: "none",  name: "SD HDTV" },
-  { resolution: "720p",  source: "hdtv",   codec: "x264", hdr: "none",  name: "720p HDTV" },
-  { resolution: "720p",  source: "webdl",  codec: "x264", hdr: "none",  name: "720p WEBDL" },
-  { resolution: "720p",  source: "webrip", codec: "x264", hdr: "none",  name: "720p WEBRip" },
-  { resolution: "720p",  source: "bluray", codec: "x264", hdr: "none",  name: "720p Bluray" },
-  { resolution: "1080p", source: "hdtv",   codec: "x264", hdr: "none",  name: "1080p HDTV" },
-  { resolution: "1080p", source: "webdl",  codec: "x264", hdr: "none",  name: "1080p WEBDL" },
-  { resolution: "1080p", source: "webrip", codec: "x265", hdr: "none",  name: "1080p WEBRip" },
-  { resolution: "1080p", source: "bluray", codec: "x265", hdr: "none",  name: "1080p Bluray" },
-  { resolution: "1080p", source: "remux",  codec: "x265", hdr: "none",  name: "1080p Remux" },
-  { resolution: "2160p", source: "webdl",  codec: "x265", hdr: "hdr10", name: "2160p WEBDL HDR" },
-  { resolution: "2160p", source: "bluray", codec: "x265", hdr: "hdr10", name: "2160p Bluray HDR" },
-  { resolution: "2160p", source: "remux",  codec: "x265", hdr: "hdr10", name: "2160p Remux HDR" },
-];
+/**
+ * Find the definition that matches a stored quality.
+ *
+ * Real DB data often has resolution/source/codec = "unknown" (from Radarr
+ * import or older schema). The `name` field is the most reliable identifier:
+ * stored as "Bluray-1080p", definitions use "1080p Bluray" — same tokens,
+ * different order. We try field-based matching first, then fall back to
+ * name-based token matching.
+ */
+function findMatchingDef(q: Quality, defs: QualityDefinition[]): QualityDefinition | undefined {
+  // Strategy 1: resolution + source (works when fields aren't "unknown")
+  if (q.resolution !== "unknown" && q.resolution !== "" && q.source !== "unknown" && q.source !== "") {
+    const byFields = defs.find((d) => d.resolution === q.resolution && d.source === q.source);
+    if (byFields) return byFields;
+  }
 
-function presetKey(q: Quality): string {
-  return `${q.resolution}-${q.source}-${q.codec}-${q.hdr}`;
+  // Strategy 2: name contains both the definition's resolution and source tokens
+  // e.g. stored "Remux-1080p" contains "1080p" and "remux" → matches def 1080p-remux-*
+  const nameLower = q.name.toLowerCase();
+  const byName = defs.find((d) => {
+    const res = d.resolution.toLowerCase();
+    const src = d.source.toLowerCase();
+    return res !== "unknown" && src !== "unknown" && nameLower.includes(res) && nameLower.includes(src);
+  });
+  if (byName) return byName;
+
+  // Strategy 3: single-word names like "CAM", "TELESYNC" — match by source alone
+  return defs.find((d) => d.source.toLowerCase() === nameLower);
 }
 
-function presetLabel(q: Quality): string {
-  return `${q.resolution} · ${q.source} · ${q.codec} · ${q.hdr}`;
+function defToQuality(d: QualityDefinition): Quality {
+  return { resolution: d.resolution, source: d.source, codec: d.codec, hdr: d.hdr, name: d.name };
+}
+
+/** Simple key for definition-level grouping (resolution + source). */
+function defKey(d: QualityDefinition): string {
+  return `${d.resolution}-${d.source}`;
+}
+
+/** The curated set of popular qualities shown in simple mode. */
+const POPULAR_KEYS = new Set([
+  "2160p-remux", "2160p-bluray", "2160p-webdl", "2160p-webrip",
+  "1080p-remux", "1080p-bluray", "1080p-webdl", "1080p-webrip",
+  "720p-bluray", "720p-webdl", "720p-webrip",
+]);
+
+function isPopular(d: QualityDefinition): boolean {
+  return POPULAR_KEYS.has(defKey(d));
 }
 
 // ── Shared styles ─────────────────────────────────────────────────────────────
@@ -65,41 +90,112 @@ function onBlur(e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) {
   (e.currentTarget as HTMLElement).style.borderColor = "var(--color-border-default)";
 }
 
+// ── Toggle slider ────────────────────────────────────────────────────────────
+
+function ToggleSlider({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) {
+  return (
+    <div
+      role="switch"
+      aria-checked={checked}
+      onClick={() => onChange(!checked)}
+      style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 12, color: "var(--color-text-muted)", userSelect: "none" }}
+    >
+      <div
+        style={{
+          width: 34,
+          height: 18,
+          borderRadius: 9,
+          background: checked ? "var(--color-accent)" : "var(--color-bg-elevated)",
+          border: `1px solid ${checked ? "var(--color-accent)" : "var(--color-border-default)"}`,
+          position: "relative",
+          transition: "background 150ms ease, border-color 150ms ease",
+          flexShrink: 0,
+        }}
+      >
+        <div
+          style={{
+            width: 14,
+            height: 14,
+            borderRadius: "50%",
+            background: checked ? "var(--color-accent-fg)" : "var(--color-text-muted)",
+            position: "absolute",
+            top: 1,
+            left: checked ? 17 : 1,
+            transition: "left 150ms ease, background 150ms ease",
+          }}
+        />
+      </div>
+      <span>{label}</span>
+    </div>
+  );
+}
+
 // ── Modal ─────────────────────────────────────────────────────────────────────
 
 interface ModalProps {
   editing: QualityProfile | null;
+  definitions: QualityDefinition[];
   onClose: () => void;
 }
 
-function QualityProfileModal({ editing, onClose }: ModalProps) {
-  // Build initial selected preset keys from existing qualities (match by key)
-  const existingKeys = new Set((editing?.qualities ?? []).map(presetKey));
+function QualityProfileModal({ editing, definitions, onClose }: ModalProps) {
+  // Build initial selected keys from existing qualities.
+  // Uses multi-strategy matching (fields → name tokens → source-only)
+  // to handle legacy data where resolution/source/codec are "unknown".
+  const initialKeys = new Set<string>();
+
+  for (const q of editing?.qualities ?? []) {
+    const def = findMatchingDef(q, definitions);
+    if (def) initialKeys.add(def.id);
+  }
+
+  let resolvedCutoffKey = "";
+  if (editing?.cutoff) {
+    const def = findMatchingDef(editing.cutoff, definitions);
+    if (def) resolvedCutoffKey = def.id;
+  }
+
+  let resolvedUpgradeUntilKey = "";
+  const editingUpgradeUntil = editing?.upgrade_until;
+  if (editingUpgradeUntil) {
+    const def = findMatchingDef(editingUpgradeUntil, definitions);
+    if (def) resolvedUpgradeUntilKey = def.id;
+  }
+
+  // Auto-flip to advanced if the profile contains non-popular qualities
+  const hasNonPopular = [...initialKeys].some((id) => {
+    const def = definitions.find((d) => d.id === id);
+    return def && !isPopular(def);
+  });
 
   const [name, setName] = useState(editing?.name ?? "");
-  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(existingKeys);
-  const [cutoffKey, setCutoffKey] = useState<string>(
-    editing?.cutoff ? presetKey(editing.cutoff) : ""
-  );
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(initialKeys);
+  const [cutoffKey, setCutoffKey] = useState<string>(resolvedCutoffKey);
   const [upgradeAllowed, setUpgradeAllowed] = useState(editing?.upgrade_allowed ?? false);
-  const [upgradeUntilKey, setUpgradeUntilKey] = useState<string>(
-    editing?.upgrade_until ? presetKey(editing.upgrade_until) : ""
-  );
+  const [upgradeUntilKey, setUpgradeUntilKey] = useState<string>(resolvedUpgradeUntilKey);
+  const [advanced, setAdvanced] = useState(hasNonPopular);
   const [error, setError] = useState<string | null>(null);
 
   const createProfile = useCreateQualityProfile();
   const updateProfile = useUpdateQualityProfile();
   const isPending = createProfile.isPending || updateProfile.isPending;
 
-  // Ordered selected presets (preserving PRESETS order)
-  const selectedPresets = PRESETS.filter((p) => selectedKeys.has(presetKey(p)));
+  // Filter definitions based on mode
+  const visibleDefs = advanced ? definitions : definitions.filter(isPopular);
 
-  function togglePreset(key: string) {
+  // Ordered selected definitions (preserving sort_order, from full list)
+  const selectedDefs = definitions.filter((d) => selectedKeys.has(d.id));
+
+  // Table columns differ by mode
+  const headers = advanced
+    ? ["Name", "Resolution", "Source", "Codec", "HDR", ""]
+    : ["Name", "Resolution", "Source", ""];
+
+  function toggleDef(key: string) {
     setSelectedKeys((prev) => {
       const next = new Set(prev);
       if (next.has(key)) {
         next.delete(key);
-        // Clear cutoff/upgradeUntil if they referenced this preset
         if (cutoffKey === key) setCutoffKey("");
         if (upgradeUntilKey === key) setUpgradeUntilKey("");
       } else {
@@ -112,22 +208,22 @@ function QualityProfileModal({ editing, onClose }: ModalProps) {
 
   function handleSubmit() {
     if (!name.trim()) { setError("Name is required."); return; }
-    if (selectedPresets.length === 0) { setError("Select at least one quality."); return; }
+    if (selectedDefs.length === 0) { setError("Select at least one quality."); return; }
     if (!cutoffKey) { setError("Select a cutoff quality."); return; }
 
-    const cutoff = PRESETS.find((p) => presetKey(p) === cutoffKey);
-    const upgradeUntil = upgradeAllowed && upgradeUntilKey
-      ? PRESETS.find((p) => presetKey(p) === upgradeUntilKey)
+    const cutoffDef = definitions.find((d) => d.id === cutoffKey);
+    const upgradeUntilDef = upgradeAllowed && upgradeUntilKey
+      ? definitions.find((d) => d.id === upgradeUntilKey)
       : undefined;
 
-    if (!cutoff) { setError("Invalid cutoff selection."); return; }
+    if (!cutoffDef) { setError("Invalid cutoff selection."); return; }
 
     const body: QualityProfileRequest = {
       name: name.trim(),
-      cutoff,
-      qualities: selectedPresets,
+      cutoff: defToQuality(cutoffDef),
+      qualities: selectedDefs.map(defToQuality),
       upgrade_allowed: upgradeAllowed,
-      upgrade_until: upgradeUntil,
+      upgrade_until: upgradeUntilDef ? defToQuality(upgradeUntilDef) : undefined,
     };
 
     if (editing) {
@@ -141,36 +237,7 @@ function QualityProfileModal({ editing, onClose }: ModalProps) {
   }
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.6)",
-        backdropFilter: "blur(2px)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 100,
-      }}
-      onClick={onClose}
-    >
-      <div
-        style={{
-          background: "var(--color-bg-surface)",
-          border: "1px solid var(--color-border-subtle)",
-          borderRadius: 12,
-          padding: 24,
-          width: 640,
-          maxWidth: "calc(100vw - 48px)",
-          maxHeight: "calc(100vh - 80px)",
-          overflowY: "auto",
-          boxShadow: "var(--shadow-modal)",
-          display: "flex",
-          flexDirection: "column",
-          gap: 20,
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
+    <Modal onClose={onClose} width={640} innerStyle={{ padding: 24, gap: 20, overflowY: "auto" }}>
         {/* Header */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <h2 style={{ margin: 0, fontSize: 16, fontWeight: 600, color: "var(--color-text-primary)" }}>
@@ -202,11 +269,14 @@ function QualityProfileModal({ editing, onClose }: ModalProps) {
 
         {/* Qualities */}
         <div>
-          <label style={{ ...labelStyle, marginBottom: 10 }}>Allowed Qualities *</label>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+            <label style={{ ...labelStyle, marginBottom: 0 }}>Allowed Qualities *</label>
+            <ToggleSlider checked={advanced} onChange={setAdvanced} label="Advanced" />
+          </div>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
             <thead>
               <tr style={{ borderBottom: "1px solid var(--color-border-subtle)" }}>
-                {["Resolution", "Source", "Codec", "HDR", ""].map((h) => (
+                {headers.map((h) => (
                   <th key={h} style={{ textAlign: "left", padding: "6px 10px", fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--color-text-muted)", whiteSpace: "nowrap" }}>
                     {h}
                   </th>
@@ -214,28 +284,32 @@ function QualityProfileModal({ editing, onClose }: ModalProps) {
               </tr>
             </thead>
             <tbody>
-              {PRESETS.map((preset) => {
-                const key = presetKey(preset);
-                const checked = selectedKeys.has(key);
+              {visibleDefs.map((def) => {
+                const checked = selectedKeys.has(def.id);
                 return (
                   <tr
-                    key={key}
-                    onClick={() => togglePreset(key)}
+                    key={def.id}
+                    onClick={() => toggleDef(def.id)}
                     style={{
                       cursor: "pointer",
                       background: checked ? "var(--color-accent-muted)" : "transparent",
                       transition: "background 100ms ease",
                     }}
                   >
-                    <td style={{ padding: "6px 10px", color: checked ? "var(--color-text-primary)" : "var(--color-text-secondary)" }}>{preset.resolution}</td>
-                    <td style={{ padding: "6px 10px", color: checked ? "var(--color-text-primary)" : "var(--color-text-secondary)" }}>{preset.source}</td>
-                    <td style={{ padding: "6px 10px", color: checked ? "var(--color-text-primary)" : "var(--color-text-secondary)" }}>{preset.codec}</td>
-                    <td style={{ padding: "6px 10px", color: checked ? "var(--color-text-primary)" : "var(--color-text-secondary)" }}>{preset.hdr}</td>
+                    <td style={{ padding: "6px 10px", color: checked ? "var(--color-text-primary)" : "var(--color-text-secondary)", fontWeight: checked ? 500 : 400 }}>{def.name}</td>
+                    <td style={{ padding: "6px 10px", color: checked ? "var(--color-text-primary)" : "var(--color-text-secondary)" }}>{def.resolution}</td>
+                    <td style={{ padding: "6px 10px", color: checked ? "var(--color-text-primary)" : "var(--color-text-secondary)" }}>{def.source}</td>
+                    {advanced && (
+                      <>
+                        <td style={{ padding: "6px 10px", color: checked ? "var(--color-text-primary)" : "var(--color-text-secondary)" }}>{def.codec}</td>
+                        <td style={{ padding: "6px 10px", color: checked ? "var(--color-text-primary)" : "var(--color-text-secondary)" }}>{def.hdr === "none" ? "—" : def.hdr}</td>
+                      </>
+                    )}
                     <td style={{ padding: "6px 10px", textAlign: "center", width: 32 }}>
                       <input
                         type="checkbox"
                         checked={checked}
-                        onChange={() => togglePreset(key)}
+                        onChange={() => toggleDef(def.id)}
                         onClick={(e) => e.stopPropagation()}
                         style={{ accentColor: "var(--color-accent)", width: 14, height: 14 }}
                       />
@@ -248,7 +322,7 @@ function QualityProfileModal({ editing, onClose }: ModalProps) {
         </div>
 
         {/* Cutoff + Upgrade */}
-        {selectedPresets.length > 0 && (
+        {selectedDefs.length > 0 && (
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
             <div>
               <label style={labelStyle}>Cutoff (minimum) *</label>
@@ -260,8 +334,8 @@ function QualityProfileModal({ editing, onClose }: ModalProps) {
                 onBlur={onBlur}
               >
                 <option value="">Select…</option>
-                {selectedPresets.map((p) => (
-                  <option key={presetKey(p)} value={presetKey(p)}>{presetLabel(p)}</option>
+                {selectedDefs.map((d) => (
+                  <option key={d.id} value={d.id}>{d.name}</option>
                 ))}
               </select>
             </div>
@@ -289,8 +363,8 @@ function QualityProfileModal({ editing, onClose }: ModalProps) {
                   onBlur={onBlur}
                 >
                   <option value="">No ceiling</option>
-                  {selectedPresets.map((p) => (
-                    <option key={presetKey(p)} value={presetKey(p)}>{presetLabel(p)}</option>
+                  {selectedDefs.map((d) => (
+                    <option key={d.id} value={d.id}>{d.name}</option>
                   ))}
                 </select>
               )}
@@ -327,8 +401,7 @@ function QualityProfileModal({ editing, onClose }: ModalProps) {
             {isPending ? "Saving…" : editing ? "Save Changes" : "Add Profile"}
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -336,6 +409,7 @@ function QualityProfileModal({ editing, onClose }: ModalProps) {
 
 export default function QualityProfileList() {
   const { data, isLoading, error } = useQualityProfiles();
+  const { data: definitions } = useQualityDefinitions();
   const deleteProfile = useDeleteQualityProfile();
   const [modal, setModal] = useState<{ open: boolean; editing: QualityProfile | null }>({
     open: false,
@@ -421,7 +495,7 @@ export default function QualityProfileList() {
                     {profile.name}
                   </td>
                   <td style={{ padding: "0 16px", height: 52, color: "var(--color-text-secondary)" }}>
-                    {presetLabel(profile.cutoff)}
+                    {profile.cutoff.name}
                   </td>
                   <td style={{ padding: "0 16px", height: 52, color: "var(--color-text-secondary)" }}>
                     {profile.qualities.length}
@@ -429,7 +503,7 @@ export default function QualityProfileList() {
                   <td style={{ padding: "0 16px", height: 52 }}>
                     {profile.upgrade_allowed ? (
                       <span style={{ fontSize: 12, color: "var(--color-success)", background: "color-mix(in srgb, var(--color-success) 12%, transparent)", padding: "2px 8px", borderRadius: 4, fontWeight: 500 }}>
-                        {profile.upgrade_until ? `Until ${presetLabel(profile.upgrade_until)}` : "Yes"}
+                        {profile.upgrade_until ? `Until ${profile.upgrade_until.name}` : "Yes"}
                       </span>
                     ) : (
                       <span style={{ fontSize: 12, color: "var(--color-text-muted)" }}>No</span>
@@ -479,8 +553,8 @@ export default function QualityProfileList() {
         )}
       </div>
 
-      {modal.open && (
-        <QualityProfileModal editing={modal.editing} onClose={closeModal} />
+      {modal.open && definitions && (
+        <QualityProfileModal editing={modal.editing} definitions={definitions} onClose={closeModal} />
       )}
     </div>
   );

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from "react";
+import Modal from "@/components/Modal";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -129,34 +130,7 @@ function LibraryModal({ editing, onClose }: LibraryModalProps) {
   }
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.6)",
-        backdropFilter: "blur(2px)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 100,
-      }}
-      onClick={onClose}
-    >
-      <div
-        style={{
-          background: "var(--color-bg-surface)",
-          border: "1px solid var(--color-border-subtle)",
-          borderRadius: 12,
-          padding: 24,
-          width: 520,
-          maxWidth: "calc(100vw - 48px)",
-          boxShadow: "var(--shadow-modal)",
-          display: "flex",
-          flexDirection: "column",
-          gap: 20,
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
+    <Modal onClose={onClose} width={520} innerStyle={{ padding: 24, gap: 20 }}>
         {/* Header */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <h2 style={{ margin: 0, fontSize: 16, fontWeight: 600, color: "var(--color-text-primary)" }}>
@@ -205,7 +179,7 @@ function LibraryModal({ editing, onClose }: LibraryModalProps) {
                 onChange={(e) => set("root_path", e.currentTarget.value)}
                 onFocus={onInputFocus}
                 onBlur={onInputBlur}
-                placeholder="/data/movies"
+                placeholder="/movies"
               />
               <button
                 type="button"
@@ -228,6 +202,9 @@ function LibraryModal({ editing, onClose }: LibraryModalProps) {
                 Browse…
               </button>
             </div>
+            <span style={{ fontSize: 11, color: "var(--color-text-muted)", marginTop: 4, lineHeight: 1.4 }}>
+              The root folder where movies are stored. In Docker, this must match a mounted volume (e.g. <code style={{ fontSize: 11 }}>/movies</code>).
+            </span>
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
@@ -332,7 +309,6 @@ function LibraryModal({ editing, onClose }: LibraryModalProps) {
             {isPending ? "Saving…" : editing ? "Save Changes" : "Add Library"}
           </button>
         </div>
-      </div>
 
       <DirPicker
         key={pickerOpen ? "open" : "closed"}
@@ -341,7 +317,7 @@ function LibraryModal({ editing, onClose }: LibraryModalProps) {
         onSelect={(path) => set("root_path", path)}
         onClose={() => setPickerOpen(false)}
       />
-    </div>
+    </Modal>
   );
 }
 
@@ -709,34 +685,7 @@ function DiskScanModal({ library, onClose }: DiskScanModalProps) {
   }
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.7)",
-        backdropFilter: "blur(3px)",
-        display: "flex",
-        alignItems: "stretch",
-        justifyContent: "center",
-        zIndex: 200,
-        padding: "32px 24px",
-      }}
-      onClick={onClose}
-    >
-      <div
-        style={{
-          background: "var(--color-bg-surface)",
-          border: "1px solid var(--color-border-subtle)",
-          borderRadius: 12,
-          boxShadow: "var(--shadow-modal)",
-          display: "flex",
-          flexDirection: "column",
-          width: "100%",
-          maxWidth: 980,
-          overflow: "hidden",
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
+    <Modal onClose={onClose} width="100%" maxWidth="980px" maxHeight="calc(100vh - 64px)">
         {/* ── Header ── */}
         <div
           style={{
@@ -982,8 +931,7 @@ function DiskScanModal({ library, onClose }: DiskScanModalProps) {
             </button>
           </div>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
 

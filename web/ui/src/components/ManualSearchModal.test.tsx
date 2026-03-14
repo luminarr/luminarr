@@ -130,7 +130,7 @@ describe("ManualSearchModal", () => {
 
     const onClose = vi.fn();
     renderWithProviders(<ManualSearchModal {...defaultProps} onClose={onClose} />);
-    fireEvent.keyDown(window, { key: "Escape" });
+    fireEvent.keyDown(document, { key: "Escape" });
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 

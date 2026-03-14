@@ -8,11 +8,13 @@ import {
   useAddMovie,
   useLookupMovies,
   useUpdateMovie,
+  useEditions,
 } from "@/api/movies";
 import { useLibraries } from "@/api/libraries";
 import { useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "@/api/client";
 import { useQualityProfiles } from "@/api/quality-profiles";
+import Modal from "@/components/Modal";
 import type { Movie, TMDBResult } from "@/types";
 
 // ── Shared styles ─────────────────────────────────────────────────────────────
@@ -884,10 +886,19 @@ function ConfigureStep({
 }) {
   const { data: libraries } = useLibraries();
   const { data: profiles } = useQualityProfiles();
+  const { data: editions } = useEditions();
   const addMovie = useAddMovie();
 
-  const [libraryId, setLibraryId] = useState(libraries?.[0]?.id ?? "");
-  const [profileId, setProfileId] = useState(profiles?.[0]?.id ?? "");
+  const [libraryId, setLibraryId] = useState("");
+  const [profileId, setProfileId] = useState("");
+
+  // Sync defaults once data loads — useState initializer only runs on mount,
+  // before the queries have resolved.
+  const firstLibrary = libraries?.[0]?.id ?? "";
+  const firstProfile = profiles?.[0]?.id ?? "";
+  if (!libraryId && firstLibrary) setLibraryId(firstLibrary);
+  if (!profileId && firstProfile) setProfileId(firstProfile);
+  const [preferredEdition, setPreferredEdition] = useState("");
   const [monitored, setMonitored] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -910,6 +921,7 @@ function ConfigureStep({
         library_id: libraryId,
         quality_profile_id: profileId,
         monitored,
+        ...(preferredEdition ? { preferred_edition: preferredEdition } : {}),
       },
       {
         onSuccess,
@@ -1008,7 +1020,7 @@ function ConfigureStep({
           <label style={dialogLabelStyle}>Library *</label>
           <select
             style={{ ...dialogInputStyle, cursor: "pointer" }}
-            value={libraryId || (libraries?.[0]?.id ?? "")}
+            value={libraryId}
             onChange={(e) => {
               setLibraryId(e.currentTarget.value);
               setError(null);
@@ -1031,7 +1043,7 @@ function ConfigureStep({
           <label style={dialogLabelStyle}>Quality Profile *</label>
           <select
             style={{ ...dialogInputStyle, cursor: "pointer" }}
-            value={profileId || (profiles?.[0]?.id ?? "")}
+            value={profileId}
             onChange={(e) => {
               setProfileId(e.currentTarget.value);
               setError(null);
@@ -1046,6 +1058,22 @@ function ConfigureStep({
               <option key={p.id} value={p.id}>
                 {p.name}
               </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label style={dialogLabelStyle}>Preferred Edition</label>
+          <select
+            style={{ ...dialogInputStyle, cursor: "pointer" }}
+            value={preferredEdition}
+            onChange={(e) => setPreferredEdition(e.currentTarget.value)}
+            onFocus={focusBorder}
+            onBlur={blurBorder}
+          >
+            <option value="">Any (no preference)</option>
+            {editions?.map((ed) => (
+              <option key={ed} value={ed}>{ed}</option>
             ))}
           </select>
         </div>
@@ -1166,36 +1194,7 @@ function AddMovieDialog({ onClose }: { onClose: () => void }) {
   const [selected, setSelected] = useState<TMDBResult | null>(null);
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.6)",
-        backdropFilter: "blur(2px)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 100,
-      }}
-      onClick={onClose}
-    >
-      <div
-        style={{
-          background: "var(--color-bg-surface)",
-          border: "1px solid var(--color-border-subtle)",
-          borderRadius: 12,
-          padding: 24,
-          width: 580,
-          maxWidth: "calc(100vw - 48px)",
-          maxHeight: "calc(100vh - 80px)",
-          overflowY: "auto",
-          boxShadow: "var(--shadow-modal)",
-          display: "flex",
-          flexDirection: "column",
-          gap: 20,
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
+    <Modal onClose={onClose} width={580} innerStyle={{ padding: 24, gap: 20, overflowY: "auto" }}>
         <div
           style={{
             display: "flex",
@@ -1248,8 +1247,7 @@ function AddMovieDialog({ onClose }: { onClose: () => void }) {
         ) : (
           <SearchStep onSelect={setSelected} onClose={onClose} />
         )}
-      </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -1307,28 +1305,7 @@ function BulkEditModal({
   const count = selectedIds.size;
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.6)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 100,
-      }}
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <div
-        style={{
-          background: "var(--color-bg-surface)",
-          border: "1px solid var(--color-border-default)",
-          borderRadius: 10,
-          width: 420,
-          maxWidth: "calc(100vw - 32px)",
-          boxShadow: "0 8px 32px rgba(0,0,0,0.35)",
-        }}
-      >
+    <Modal onClose={onClose} width={420} maxWidth="calc(100vw - 32px)">
         {/* Header */}
         <div
           style={{
@@ -1548,8 +1525,7 @@ function BulkEditModal({
             {progress ? "Applying…" : "Apply"}
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
 

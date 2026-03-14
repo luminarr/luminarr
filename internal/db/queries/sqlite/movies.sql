@@ -155,6 +155,30 @@ SELECT id, path FROM movie_files
 WHERE mediainfo_json = ''
 ORDER BY imported_at DESC;
 
+-- name: UpdateMoviePreferredEdition :exec
+UPDATE movies SET preferred_edition = ?, updated_at = ? WHERE id = ?;
+
+-- name: ListMoviesWithEditionMismatch :many
+SELECT m.id, m.title, m.year, m.preferred_edition, mf.edition as file_edition
+FROM movies m
+JOIN movie_files mf ON mf.movie_id = m.id
+WHERE m.preferred_edition IS NOT NULL
+  AND m.preferred_edition != ''
+  AND (mf.edition IS NULL OR mf.edition != m.preferred_edition)
+ORDER BY m.title ASC
+LIMIT ? OFFSET ?;
+
+-- name: CountEditionMismatches :one
+SELECT COUNT(*)
+FROM movies m
+JOIN movie_files mf ON mf.movie_id = m.id
+WHERE m.preferred_edition IS NOT NULL
+  AND m.preferred_edition != ''
+  AND (mf.edition IS NULL OR mf.edition != m.preferred_edition);
+
+-- name: UpdateMovieFileEdition :exec
+UPDATE movie_files SET edition = ? WHERE id = ?;
+
 -- name: ListAllTMDBIDs :many
 SELECT tmdb_id FROM movies WHERE tmdb_id != 0;
 

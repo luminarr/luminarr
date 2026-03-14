@@ -10,3 +10,7 @@ services:
       - "8282:8282"
     volumes:
       - ${HOME}/.config/luminarr:/config
+      # Mount your movies directory. The container path (/movies) must match
+      # the root path you configure in Settings > Libraries.
+      # Add additional lines for each root folder you want accessible.
+      - /path/to/movies:/movies

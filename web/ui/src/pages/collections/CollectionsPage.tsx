@@ -7,6 +7,7 @@ import {
   useSearchAll,
 } from "@/api/collections";
 import type { EntitySearchResult } from "@/types";
+import Modal from "@/components/Modal";
 
 const TMDB_IMG_BASE = "https://image.tmdb.org/t/p/w45";
 
@@ -38,31 +39,7 @@ function AddCollectionModal({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.6)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 1000,
-      }}
-      onClick={onClose}
-    >
-      <div
-        style={{
-          background: "var(--color-bg-elevated)",
-          border: "1px solid var(--color-border-default)",
-          borderRadius: 10,
-          width: 520,
-          maxHeight: "80vh",
-          overflow: "hidden",
-          display: "flex",
-          flexDirection: "column",
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
+    <Modal onClose={onClose} width={520} maxHeight="80vh">
         {/* Header */}
         <div
           style={{
@@ -236,8 +213,7 @@ function AddCollectionModal({ onClose }: { onClose: () => void }) {
             );
           })}
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
 

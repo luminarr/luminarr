@@ -40,15 +40,17 @@ type radarrProfileItem struct {
 	Allowed bool                 `json:"allowed"`
 }
 
-// Qualities returns all non-group, allowed qualities from this item,
-// recursing into groups.
+// qualities returns all leaf qualities from this item, recursing into groups.
+// All items are included regardless of the Allowed flag — the profile's quality
+// list represents its full scope (e.g. "HD" = all 720p/1080p variants).
 func (item radarrProfileItem) qualities() []radarrProfileQuality {
 	if len(item.Items) == 0 {
-		// Leaf quality item.
-		if item.Allowed {
-			return []radarrProfileQuality{item.Quality}
+		// Leaf quality item — skip the placeholder ID=0 entry that Radarr
+		// puts at the group level.
+		if item.Quality.ID == 0 {
+			return nil
 		}
-		return nil
+		return []radarrProfileQuality{item.Quality}
 	}
 	// Group — recurse into its children.
 	var out []radarrProfileQuality

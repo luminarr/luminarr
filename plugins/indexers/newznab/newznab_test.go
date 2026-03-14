@@ -361,6 +361,79 @@ func TestCapabilities(t *testing.T) {
 	}
 }
 
+// TestToRelease_IndexerFlags verifies that indexer flags are correctly parsed
+// from newznab:attr elements (downloadvolumefactor, uploadvolumefactor, tag).
+func TestToRelease_IndexerFlags(t *testing.T) {
+	idx := New(Config{URL: "http://localhost"})
+
+	tests := []struct {
+		name  string
+		attrs []newznabAttr
+		want  []plugin.IndexerFlag
+	}{
+		{
+			name:  "no flags",
+			attrs: []newznabAttr{{Name: "size", Value: "1000"}},
+			want:  nil,
+		},
+		{
+			name:  "freeleech via downloadvolumefactor=0",
+			attrs: []newznabAttr{{Name: "downloadvolumefactor", Value: "0"}},
+			want:  []plugin.IndexerFlag{plugin.FlagFreeleech},
+		},
+		{
+			name:  "halfleech via downloadvolumefactor=0.5",
+			attrs: []newznabAttr{{Name: "downloadvolumefactor", Value: "0.5"}},
+			want:  []plugin.IndexerFlag{plugin.FlagHalfleech},
+		},
+		{
+			name:  "double_upload via uploadvolumefactor=2",
+			attrs: []newznabAttr{{Name: "uploadvolumefactor", Value: "2"}},
+			want:  []plugin.IndexerFlag{plugin.FlagDoubleUpload},
+		},
+		{
+			name:  "tag internal case insensitive",
+			attrs: []newznabAttr{{Name: "tag", Value: "INTERNAL"}},
+			want:  []plugin.IndexerFlag{plugin.FlagInternal},
+		},
+		{
+			name: "multiple flags combined",
+			attrs: []newznabAttr{
+				{Name: "downloadvolumefactor", Value: "0"},
+				{Name: "tag", Value: "scene"},
+			},
+			want: []plugin.IndexerFlag{plugin.FlagFreeleech, plugin.FlagScene},
+		},
+		{
+			name: "duplicate freeleech deduplicated",
+			attrs: []newznabAttr{
+				{Name: "downloadvolumefactor", Value: "0"},
+				{Name: "tag", Value: "Freeleech"},
+			},
+			want: []plugin.IndexerFlag{plugin.FlagFreeleech},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			item := rssItem{
+				Title: "Test.NZB.Release.2024",
+				Attrs: tt.attrs,
+			}
+			r := idx.toRelease(item)
+
+			if len(r.IndexerFlags) != len(tt.want) {
+				t.Fatalf("got %d flags %v, want %d flags %v", len(r.IndexerFlags), r.IndexerFlags, len(tt.want), tt.want)
+			}
+			for i, f := range r.IndexerFlags {
+				if f != tt.want[i] {
+					t.Errorf("flag[%d] = %q, want %q", i, f, tt.want[i])
+				}
+			}
+		})
+	}
+}
+
 // TestParseAgeDays is a unit test for the internal pubDate parsing helper.
 func TestParseAgeDays(t *testing.T) {
 	cases := []struct {

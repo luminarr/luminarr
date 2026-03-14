@@ -1,4 +1,18 @@
-# ── Build stage ───────────────────────────────────────────────────────────────
+# ── Frontend build stage ──────────────────────────────────────────────────────
+FROM node:22-alpine AS frontend
+
+WORKDIR /app/web/ui
+
+# Install dependencies first (cached unless package files change)
+COPY web/ui/package.json web/ui/package-lock.json ./
+RUN npm ci
+
+# Copy frontend source and build
+COPY web/ui/ ./
+RUN npm run build
+# Output lands in /app/web/static/
+
+# ── Go build stage ───────────────────────────────────────────────────────────
 FROM golang:1.25-alpine AS builder
 
 ARG VERSION=dev
@@ -12,6 +26,9 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
+
+# Overwrite web/static/ with the freshly built frontend
+COPY --from=frontend /app/web/static/ ./web/static/
 
 # modernc/sqlite is pure Go — CGO_ENABLED=0 produces a fully static binary.
 RUN CGO_ENABLED=0 GOOS=linux go build \

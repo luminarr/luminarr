@@ -10,6 +10,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 
 	"github.com/luminarr/luminarr/internal/core/indexer"
+	"github.com/luminarr/luminarr/internal/core/tag"
 	"github.com/luminarr/luminarr/internal/registry"
 )
 
@@ -22,6 +23,7 @@ type indexerBody struct {
 	Enabled   bool            `json:"enabled"   doc:"Whether this indexer is active"`
 	Priority  int             `json:"priority"  doc:"Search priority; lower = searched first"`
 	Settings  json.RawMessage `json:"settings"  doc:"Plugin-specific settings (URL, API key, etc.)"`
+	TagIDs    []string        `json:"tag_ids"   doc:"Assigned tag UUIDs"`
 	CreatedAt time.Time       `json:"created_at"`
 	UpdatedAt time.Time       `json:"updated_at"`
 }
@@ -32,6 +34,7 @@ type indexerInput struct {
 	Enabled  *bool           `json:"enabled,omitempty"  doc:"Whether this indexer is active (default: true)"`
 	Priority *int            `json:"priority,omitempty" doc:"Search priority; lower = searched first (default: 1)"`
 	Settings json.RawMessage `json:"settings"           doc:"Plugin-specific settings (URL, API key, etc.)"`
+	TagIDs   []string        `json:"tag_ids,omitempty"  doc:"Tag UUIDs to assign"`
 }
 
 type indexerOutput struct {
@@ -108,7 +111,7 @@ func indexerInputToRequest(in indexerInput) indexer.CreateRequest {
 // ── Route registration ───────────────────────────────────────────────────────
 
 // RegisterIndexerRoutes registers all /api/v1/indexers endpoints.
-func RegisterIndexerRoutes(api huma.API, svc *indexer.Service) {
+func RegisterIndexerRoutes(api huma.API, svc *indexer.Service, tagSvc *tag.Service) {
 	// GET /api/v1/indexers
 	huma.Register(api, huma.Operation{
 		OperationID: "list-indexers",
@@ -123,7 +126,11 @@ func RegisterIndexerRoutes(api huma.API, svc *indexer.Service) {
 		}
 		bodies := make([]*indexerBody, len(configs))
 		for i, c := range configs {
-			bodies[i] = indexerToBody(c)
+			b := indexerToBody(c)
+			if tagSvc != nil {
+				b.TagIDs, _ = tagSvc.IndexerTagIDs(ctx, c.ID)
+			}
+			bodies[i] = b
 		}
 		return &indexerListOutput{Body: bodies}, nil
 	})
@@ -141,7 +148,15 @@ func RegisterIndexerRoutes(api huma.API, svc *indexer.Service) {
 		if err != nil {
 			return nil, huma.NewError(http.StatusBadRequest, "failed to create indexer", err)
 		}
-		return &indexerOutput{Body: indexerToBody(cfg)}, nil
+		b := indexerToBody(cfg)
+		if tagSvc != nil && len(input.Body.TagIDs) > 0 {
+			_ = tagSvc.SetIndexerTags(ctx, cfg.ID, input.Body.TagIDs)
+			b.TagIDs = input.Body.TagIDs
+		}
+		if b.TagIDs == nil {
+			b.TagIDs = []string{}
+		}
+		return &indexerOutput{Body: b}, nil
 	})
 
 	// GET /api/v1/indexers/{id}
@@ -159,7 +174,11 @@ func RegisterIndexerRoutes(api huma.API, svc *indexer.Service) {
 			}
 			return nil, huma.NewError(http.StatusInternalServerError, "failed to get indexer", err)
 		}
-		return &indexerOutput{Body: indexerToBody(cfg)}, nil
+		b := indexerToBody(cfg)
+		if tagSvc != nil {
+			b.TagIDs, _ = tagSvc.IndexerTagIDs(ctx, cfg.ID)
+		}
+		return &indexerOutput{Body: b}, nil
 	})
 
 	// PUT /api/v1/indexers/{id}
@@ -177,7 +196,16 @@ func RegisterIndexerRoutes(api huma.API, svc *indexer.Service) {
 			}
 			return nil, huma.NewError(http.StatusInternalServerError, "failed to update indexer", err)
 		}
-		return &indexerOutput{Body: indexerToBody(cfg)}, nil
+		b := indexerToBody(cfg)
+		if tagSvc != nil {
+			if input.Body.TagIDs != nil {
+				_ = tagSvc.SetIndexerTags(ctx, cfg.ID, input.Body.TagIDs)
+				b.TagIDs = input.Body.TagIDs
+			} else {
+				b.TagIDs, _ = tagSvc.IndexerTagIDs(ctx, cfg.ID)
+			}
+		}
+		return &indexerOutput{Body: b}, nil
 	})
 
 	// DELETE /api/v1/indexers/{id}

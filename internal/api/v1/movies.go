@@ -9,10 +9,12 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 
+	"github.com/luminarr/luminarr/internal/core/edition"
 	"github.com/luminarr/luminarr/internal/core/mediainfo"
 	"github.com/luminarr/luminarr/internal/core/mediamanagement"
 	"github.com/luminarr/luminarr/internal/core/movie"
 	"github.com/luminarr/luminarr/internal/core/renamer"
+	"github.com/luminarr/luminarr/internal/core/tag"
 	"github.com/luminarr/luminarr/internal/metadata/tmdb"
 )
 
@@ -77,8 +79,10 @@ type movieBody struct {
 	LibraryID           string     `json:"library_id"                     doc:"Parent library UUID"`
 	QualityProfileID    string     `json:"quality_profile_id"             doc:"Quality profile UUID"`
 	MinimumAvailability string     `json:"minimum_availability"           doc:"Minimum availability before grabbing: tba, announced, in_cinemas, released"`
+	PreferredEdition    string     `json:"preferred_edition,omitempty"    doc:"Preferred edition (e.g. Director's Cut, Extended); empty = no preference"`
 	ReleaseDate         string     `json:"release_date,omitempty"         doc:"TMDB release date (YYYY-MM-DD)"`
 	Path                string     `json:"path,omitempty"                 doc:"Absolute path on disk"`
+	TagIDs              []string   `json:"tag_ids"                        doc:"Assigned tag UUIDs"`
 	AddedAt             time.Time  `json:"added_at"                       doc:"When the movie was added"`
 	UpdatedAt           time.Time  `json:"updated_at"                     doc:"When the record was last changed"`
 	MetadataRefreshedAt *time.Time `json:"metadata_refreshed_at,omitempty" doc:"When metadata was last refreshed"`
@@ -151,11 +155,13 @@ type listMoviesInput struct {
 
 type addMovieInput struct {
 	Body struct {
-		TMDBID              int    `json:"tmdb_id"                        doc:"TMDB movie ID to add"`
-		LibraryID           string `json:"library_id"                     doc:"Library UUID to place the movie in"`
-		QualityProfileID    string `json:"quality_profile_id"             doc:"Quality profile UUID"`
-		Monitored           *bool  `json:"monitored,omitempty"            doc:"Whether to monitor the movie for downloads (default: true)"`
-		MinimumAvailability string `json:"minimum_availability,omitempty" doc:"Minimum availability before grabbing: tba, announced, in_cinemas, released (default: released)"`
+		TMDBID              int      `json:"tmdb_id"                        doc:"TMDB movie ID to add"`
+		LibraryID           string   `json:"library_id"                     doc:"Library UUID to place the movie in"`
+		QualityProfileID    string   `json:"quality_profile_id"             doc:"Quality profile UUID"`
+		Monitored           *bool    `json:"monitored,omitempty"            doc:"Whether to monitor the movie for downloads (default: true)"`
+		MinimumAvailability string   `json:"minimum_availability,omitempty" doc:"Minimum availability before grabbing: tba, announced, in_cinemas, released (default: released)"`
+		PreferredEdition    string   `json:"preferred_edition,omitempty"    doc:"Preferred edition (e.g. Director's Cut, Extended); empty = no preference"`
+		TagIDs              []string `json:"tag_ids,omitempty"              doc:"Tag UUIDs to assign"`
 	}
 }
 
@@ -174,11 +180,13 @@ type getMovieInput struct {
 type updateMovieInput struct {
 	ID   string `path:"id"`
 	Body struct {
-		Title               string `json:"title"                          doc:"Updated title"`
-		Monitored           bool   `json:"monitored"                      doc:"Whether to monitor the movie for downloads"`
-		LibraryID           string `json:"library_id"                     doc:"Library UUID"`
-		QualityProfileID    string `json:"quality_profile_id"             doc:"Quality profile UUID"`
-		MinimumAvailability string `json:"minimum_availability,omitempty" doc:"Minimum availability before grabbing: tba, announced, in_cinemas, released"`
+		Title               string   `json:"title"                          doc:"Updated title"`
+		Monitored           bool     `json:"monitored"                      doc:"Whether to monitor the movie for downloads"`
+		LibraryID           string   `json:"library_id"                     doc:"Library UUID"`
+		QualityProfileID    string   `json:"quality_profile_id"             doc:"Quality profile UUID"`
+		MinimumAvailability string   `json:"minimum_availability,omitempty" doc:"Minimum availability before grabbing: tba, announced, in_cinemas, released"`
+		PreferredEdition    *string  `json:"preferred_edition,omitempty"    doc:"Preferred edition (e.g. Director's Cut, Extended); null = don't change, empty string = clear"`
+		TagIDs              []string `json:"tag_ids,omitempty"              doc:"Tag UUIDs to assign"`
 	}
 }
 
@@ -217,6 +225,7 @@ func movieToBody(m movie.Movie) *movieBody {
 		LibraryID:           m.LibraryID,
 		QualityProfileID:    m.QualityProfileID,
 		MinimumAvailability: m.MinimumAvailability,
+		PreferredEdition:    m.PreferredEdition,
 		ReleaseDate:         m.ReleaseDate,
 		Path:                m.Path,
 		AddedAt:             m.AddedAt,
@@ -242,7 +251,7 @@ func searchResultToBody(r tmdb.SearchResult) *searchResultBody {
 // ── Route registration ────────────────────────────────────────────────────────
 
 // RegisterMovieRoutes registers all /api/v1/movies endpoints.
-func RegisterMovieRoutes(api huma.API, svc *movie.Service) {
+func RegisterMovieRoutes(api huma.API, svc *movie.Service, tagSvc *tag.Service) {
 	// GET /api/v1/movies
 	huma.Register(api, huma.Operation{
 		OperationID: "list-movies",
@@ -262,7 +271,11 @@ func RegisterMovieRoutes(api huma.API, svc *movie.Service) {
 
 		bodies := make([]*movieBody, len(result.Movies))
 		for i, m := range result.Movies {
-			bodies[i] = movieToBody(m)
+			b := movieToBody(m)
+			if tagSvc != nil {
+				b.TagIDs, _ = tagSvc.MovieTagIDs(ctx, m.ID)
+			}
+			bodies[i] = b
 		}
 
 		return &movieListOutput{Body: &movieListBody{
@@ -292,6 +305,7 @@ func RegisterMovieRoutes(api huma.API, svc *movie.Service) {
 			QualityProfileID:    input.Body.QualityProfileID,
 			Monitored:           monitored,
 			MinimumAvailability: input.Body.MinimumAvailability,
+			PreferredEdition:    input.Body.PreferredEdition,
 		})
 		if err != nil {
 			if errors.Is(err, movie.ErrAlreadyExists) {
@@ -299,7 +313,15 @@ func RegisterMovieRoutes(api huma.API, svc *movie.Service) {
 			}
 			return nil, huma.NewError(http.StatusInternalServerError, "failed to add movie", err)
 		}
-		return &movieOutput{Body: movieToBody(m)}, nil
+		b := movieToBody(m)
+		if tagSvc != nil && len(input.Body.TagIDs) > 0 {
+			_ = tagSvc.SetMovieTags(ctx, m.ID, input.Body.TagIDs)
+			b.TagIDs = input.Body.TagIDs
+		}
+		if b.TagIDs == nil {
+			b.TagIDs = []string{}
+		}
+		return &movieOutput{Body: b}, nil
 	})
 
 	// POST /api/v1/movies/lookup
@@ -344,7 +366,11 @@ func RegisterMovieRoutes(api huma.API, svc *movie.Service) {
 			}
 			return nil, huma.NewError(http.StatusInternalServerError, "failed to get movie", err)
 		}
-		return &movieOutput{Body: movieToBody(m)}, nil
+		b := movieToBody(m)
+		if tagSvc != nil {
+			b.TagIDs, _ = tagSvc.MovieTagIDs(ctx, m.ID)
+		}
+		return &movieOutput{Body: b}, nil
 	})
 
 	// PUT /api/v1/movies/{id}
@@ -361,6 +387,7 @@ func RegisterMovieRoutes(api huma.API, svc *movie.Service) {
 			LibraryID:           input.Body.LibraryID,
 			QualityProfileID:    input.Body.QualityProfileID,
 			MinimumAvailability: input.Body.MinimumAvailability,
+			PreferredEdition:    input.Body.PreferredEdition,
 		})
 		if err != nil {
 			if errors.Is(err, movie.ErrNotFound) {
@@ -368,7 +395,16 @@ func RegisterMovieRoutes(api huma.API, svc *movie.Service) {
 			}
 			return nil, huma.NewError(http.StatusInternalServerError, "failed to update movie", err)
 		}
-		return &movieOutput{Body: movieToBody(m)}, nil
+		b := movieToBody(m)
+		if tagSvc != nil {
+			if input.Body.TagIDs != nil {
+				_ = tagSvc.SetMovieTags(ctx, m.ID, input.Body.TagIDs)
+				b.TagIDs = input.Body.TagIDs
+			} else {
+				b.TagIDs, _ = tagSvc.MovieTagIDs(ctx, m.ID)
+			}
+		}
+		return &movieOutput{Body: b}, nil
 	})
 
 	// DELETE /api/v1/movies/{id}
@@ -463,6 +499,20 @@ func RegisterMovieRoutes(api huma.API, svc *movie.Service) {
 			return nil, huma.NewError(http.StatusInternalServerError, "failed to match movie", err)
 		}
 		return &movieOutput{Body: movieToBody(m)}, nil
+	})
+
+	// GET /api/v1/editions — list canonical edition names for UI dropdowns.
+	type editionsOutput struct {
+		Body []string
+	}
+	huma.Register(api, huma.Operation{
+		OperationID: "list-editions",
+		Method:      http.MethodGet,
+		Path:        "/api/v1/editions",
+		Summary:     "List canonical edition names",
+		Tags:        []string{"Movies"},
+	}, func(_ context.Context, _ *struct{}) (*editionsOutput, error) {
+		return &editionsOutput{Body: edition.Canonical()}, nil
 	})
 }
 

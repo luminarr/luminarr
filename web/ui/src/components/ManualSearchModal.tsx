@@ -1,9 +1,10 @@
-import { useState, useCallback, useEffect, useMemo } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { useMovieReleases, useGrabRelease, type GrabReleaseRequest } from "@/api/movies";
 import type { Release } from "@/types";
 import { formatBytes, sortReleases, RELEASE_SORT_LABELS, type ReleaseSortField } from "@/lib/utils";
 import IndexerPill from "@/components/IndexerPill";
 import QualityBadge from "@/components/QualityBadge";
+import Modal from "@/components/Modal";
 
 interface ReleaseRowProps {
   release: Release;
@@ -43,6 +44,21 @@ function ReleaseRow({ release, grabbed, grabError, onGrab, isPending }: ReleaseR
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 4, flexWrap: "wrap" }}>
           <QualityBadge quality={release.quality} />
+          {release.edition && (
+            <span
+              style={{
+                display: "inline-block",
+                padding: "1px 6px",
+                borderRadius: 4,
+                fontSize: 10,
+                fontWeight: 600,
+                background: "color-mix(in srgb, var(--color-info, #3b82f6) 15%, transparent)",
+                color: "var(--color-info, #3b82f6)",
+              }}
+            >
+              {release.edition}
+            </span>
+          )}
           <span style={{ fontSize: 11, color: "var(--color-text-muted)" }}>
             {formatBytes(release.size)}
           </span>
@@ -124,15 +140,6 @@ export function ManualSearchModal({ movieId, movieTitle, onClose }: ManualSearch
     }
   }
 
-  // Close on Escape
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
   const handleGrab = useCallback((release: Release) => {
     const body: GrabReleaseRequest & { movieId: string } = {
       movieId,
@@ -157,34 +164,7 @@ export function ManualSearchModal({ movieId, movieTitle, onClose }: ManualSearch
   }, [movieId, grab]);
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.6)",
-        backdropFilter: "blur(2px)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 200,
-      }}
-      onClick={onClose}
-    >
-      <div
-        style={{
-          background: "var(--color-bg-surface)",
-          border: "1px solid var(--color-border-subtle)",
-          borderRadius: 12,
-          width: 760,
-          maxWidth: "calc(100vw - 48px)",
-          maxHeight: "85vh",
-          boxShadow: "var(--shadow-modal)",
-          display: "flex",
-          flexDirection: "column",
-          overflow: "hidden",
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
+    <Modal onClose={onClose} width={760} maxHeight="85vh">
         {/* Header */}
         <div
           style={{
@@ -322,7 +302,6 @@ export function ManualSearchModal({ movieId, movieTitle, onClose }: ManualSearch
             </div>
           )}
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

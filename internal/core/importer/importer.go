@@ -150,10 +150,15 @@ func (s *Service) importFile(ctx context.Context, grabID, contentPath string) er
 		folderFormat = *lib.FolderFormat
 	}
 
+	var fileEdition string
+	if grab.ReleaseEdition != nil {
+		fileEdition = *grab.ReleaseEdition
+	}
 	rm := renamer.Movie{
 		Title:         mov.Title,
 		OriginalTitle: mov.OriginalTitle,
 		Year:          int(mov.Year),
+		Edition:       fileEdition,
 	}
 	ext := filepath.Ext(srcPath)
 	colon := renamer.ColonReplacement(mm.ColonReplacement)

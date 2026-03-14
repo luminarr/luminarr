@@ -30,6 +30,21 @@ type Collection struct {
 	InLibraryItems int64     `json:"inLibraryItems"`
 }
 
+type CustomFormat struct {
+	ID                  string `json:"id"`
+	Name                string `json:"name"`
+	IncludeWhenRenaming int64  `json:"includeWhenRenaming"`
+	SpecificationsJson  string `json:"specificationsJson"`
+	CreatedAt           string `json:"createdAt"`
+	UpdatedAt           string `json:"updatedAt"`
+}
+
+type CustomFormatScore struct {
+	QualityProfileID string `json:"qualityProfileId"`
+	CustomFormatID   string `json:"customFormatId"`
+	Score            int64  `json:"score"`
+}
+
 type DownloadClientConfig struct {
 	ID        string `json:"id"`
 	Name      string `json:"name"`
@@ -39,6 +54,11 @@ type DownloadClientConfig struct {
 	Settings  string `json:"settings"`
 	CreatedAt string `json:"createdAt"`
 	UpdatedAt string `json:"updatedAt"`
+}
+
+type DownloadClientTag struct {
+	DownloadClientID string `json:"downloadClientId"`
+	TagID            string `json:"tagId"`
 }
 
 type DownloadHandling struct {
@@ -67,6 +87,7 @@ type GrabHistory struct {
 	DownloadStatus    string  `json:"downloadStatus"`
 	DownloadedBytes   int64   `json:"downloadedBytes"`
 	ScoreBreakdown    string  `json:"scoreBreakdown"`
+	ReleaseEdition    *string `json:"releaseEdition"`
 }
 
 type IndexerConfig struct {
@@ -78,6 +99,11 @@ type IndexerConfig struct {
 	Settings  string `json:"settings"`
 	CreatedAt string `json:"createdAt"`
 	UpdatedAt string `json:"updatedAt"`
+}
+
+type IndexerTag struct {
+	IndexerID string `json:"indexerId"`
+	TagID     string `json:"tagId"`
 }
 
 type Library struct {
@@ -151,6 +177,7 @@ type Movie struct {
 	MetadataRefreshedAt *string `json:"metadataRefreshedAt"`
 	MinimumAvailability string  `json:"minimumAvailability"`
 	ReleaseDate         string  `json:"releaseDate"`
+	PreferredEdition    *string `json:"preferredEdition"`
 }
 
 type MovieFile struct {
@@ -166,6 +193,11 @@ type MovieFile struct {
 	MediainfoScannedAt *time.Time `json:"mediainfoScannedAt"`
 }
 
+type MovieTag struct {
+	MovieID string `json:"movieId"`
+	TagID   string `json:"tagId"`
+}
+
 type NotificationConfig struct {
 	ID        string `json:"id"`
 	Name      string `json:"name"`
@@ -175,6 +207,11 @@ type NotificationConfig struct {
 	OnEvents  string `json:"onEvents"`
 	CreatedAt string `json:"createdAt"`
 	UpdatedAt string `json:"updatedAt"`
+}
+
+type NotificationTag struct {
+	NotificationID string `json:"notificationId"`
+	TagID          string `json:"tagId"`
 }
 
 type QualityDefinition struct {
@@ -191,14 +228,16 @@ type QualityDefinition struct {
 }
 
 type QualityProfile struct {
-	ID               string  `json:"id"`
-	Name             string  `json:"name"`
-	CutoffJson       string  `json:"cutoffJson"`
-	QualitiesJson    string  `json:"qualitiesJson"`
-	UpgradeAllowed   int64   `json:"upgradeAllowed"`
-	UpgradeUntilJson *string `json:"upgradeUntilJson"`
-	CreatedAt        string  `json:"createdAt"`
-	UpdatedAt        string  `json:"updatedAt"`
+	ID                   string  `json:"id"`
+	Name                 string  `json:"name"`
+	CutoffJson           string  `json:"cutoffJson"`
+	QualitiesJson        string  `json:"qualitiesJson"`
+	UpgradeAllowed       int64   `json:"upgradeAllowed"`
+	UpgradeUntilJson     *string `json:"upgradeUntilJson"`
+	CreatedAt            string  `json:"createdAt"`
+	UpdatedAt            string  `json:"updatedAt"`
+	MinCustomFormatScore int64   `json:"minCustomFormatScore"`
+	UpgradeUntilCfScore  int64   `json:"upgradeUntilCfScore"`
 }
 
 type RemotePathMapping struct {
@@ -213,4 +252,9 @@ type StorageSnapshot struct {
 	CapturedAt time.Time `json:"capturedAt"`
 	TotalBytes int64     `json:"totalBytes"`
 	FileCount  int64     `json:"fileCount"`
+}
+
+type Tag struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
 }

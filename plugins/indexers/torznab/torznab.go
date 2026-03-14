@@ -241,6 +241,7 @@ func (idx *Indexer) toRelease(item rssItem) plugin.Release {
 	}
 
 	// Extract torznab-specific attributes.
+	var flags []plugin.IndexerFlag
 	for _, attr := range item.Attrs {
 		switch attr.Name {
 		case "seeders":
@@ -252,11 +253,56 @@ func (idx *Indexer) toRelease(item rssItem) plugin.Release {
 			if sz, err := strconv.ParseInt(attr.Value, 10, 64); err == nil && sz > 0 {
 				r.Size = sz
 			}
+		case "downloadvolumefactor":
+			switch attr.Value {
+			case "0":
+				flags = append(flags, plugin.FlagFreeleech)
+			case "0.5":
+				flags = append(flags, plugin.FlagHalfleech)
+			case "0.75":
+				flags = append(flags, plugin.FlagFreeleech25)
+			case "0.25":
+				flags = append(flags, plugin.FlagFreeleech75)
+			}
+		case "uploadvolumefactor":
+			if attr.Value == "2" {
+				flags = append(flags, plugin.FlagDoubleUpload)
+			}
+		case "tag":
+			switch strings.ToLower(attr.Value) {
+			case "freeleech":
+				flags = append(flags, plugin.FlagFreeleech)
+			case "halfleech":
+				flags = append(flags, plugin.FlagHalfleech)
+			case "internal":
+				flags = append(flags, plugin.FlagInternal)
+			case "scene":
+				flags = append(flags, plugin.FlagScene)
+			case "nuked":
+				flags = append(flags, plugin.FlagNuked)
+			}
 		}
 	}
+	r.IndexerFlags = dedupeFlags(flags)
 
 	r.AgeDays = parseAgeDays(item.PubDate)
 	return r
+}
+
+// dedupeFlags removes duplicate flags while preserving order.
+func dedupeFlags(flags []plugin.IndexerFlag) []plugin.IndexerFlag {
+	if len(flags) == 0 {
+		return nil
+	}
+	seen := make(map[plugin.IndexerFlag]struct{}, len(flags))
+	out := make([]plugin.IndexerFlag, 0, len(flags))
+	for _, f := range flags {
+		if _, ok := seen[f]; !ok {
+			seen[f] = struct{}{}
+			out = append(out, f)
+		}
+	}
+	return out
 }
 
 // parseAgeDays parses an RFC1123Z pubDate string and returns the number of

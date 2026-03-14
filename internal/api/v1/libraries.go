@@ -169,6 +169,20 @@ func libInputToCreateRequest(in libraryInput) library.CreateRequest {
 	}
 }
 
+// validateRootPath checks that the given path exists and is a directory.
+// Returns a user-friendly error when the path is not accessible — the most
+// common cause is a missing Docker volume mount.
+func validateRootPath(path string) error {
+	info, err := os.Stat(path)
+	if err != nil {
+		return fmt.Errorf("root path %q is not accessible — if running in Docker, ensure it is mounted as a volume", path)
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("root path %q is not a directory", path)
+	}
+	return nil
+}
+
 // ── Route registration ───────────────────────────────────────────────────────
 
 // RegisterLibraryRoutes registers all /api/v1/libraries endpoints.
@@ -203,6 +217,9 @@ func RegisterLibraryRoutes(api huma.API, svc *library.Service, movieSvc *movie.S
 		Tags:          []string{"Libraries"},
 		DefaultStatus: http.StatusCreated,
 	}, func(ctx context.Context, input *libraryCreateInput) (*libraryOutput, error) {
+		if err := validateRootPath(input.Body.RootPath); err != nil {
+			return nil, huma.NewError(http.StatusUnprocessableEntity, err.Error())
+		}
 		lib, err := svc.Create(ctx, libInputToCreateRequest(input.Body))
 		if err != nil {
 			return nil, huma.NewError(http.StatusInternalServerError, "failed to create library", err)
@@ -236,6 +253,9 @@ func RegisterLibraryRoutes(api huma.API, svc *library.Service, movieSvc *movie.S
 		Summary:     "Update a library",
 		Tags:        []string{"Libraries"},
 	}, func(ctx context.Context, input *libraryUpdateInput) (*libraryOutput, error) {
+		if err := validateRootPath(input.Body.RootPath); err != nil {
+			return nil, huma.NewError(http.StatusUnprocessableEntity, err.Error())
+		}
 		lib, err := svc.Update(ctx, input.ID, libInputToCreateRequest(input.Body))
 		if err != nil {
 			if errors.Is(err, library.ErrNotFound) {

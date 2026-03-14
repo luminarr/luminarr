@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"syscall"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/luminarr/luminarr/internal/core/edition"
 	dbsqlite "github.com/luminarr/luminarr/internal/db/generated/sqlite"
 	"github.com/luminarr/luminarr/internal/events"
 	"github.com/luminarr/luminarr/internal/metadata/tmdb"
@@ -340,6 +342,15 @@ func (s *Service) Scan(ctx context.Context, libraryID string) error {
 				IndexedAt: now,
 				ID:        f.ID,
 			})
+			// Backfill edition from filename if not already set.
+			if f.Edition == nil {
+				if ed := edition.Parse(filepath.Base(f.Path)); ed != nil {
+					_ = s.q.UpdateMovieFileEdition(ctx, dbsqlite.UpdateMovieFileEditionParams{
+						Edition: &ed.Name,
+						ID:      f.ID,
+					})
+				}
+			}
 		} else if os.IsNotExist(statErr) {
 			// File gone — mark owning movie as missing.
 			_, _ = s.q.UpdateMovieStatus(ctx, dbsqlite.UpdateMovieStatusParams{

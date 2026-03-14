@@ -1,10 +1,12 @@
 -- name: CreateQualityProfile :one
 INSERT INTO quality_profiles (
     id, name, cutoff_json, qualities_json,
-    upgrade_allowed, upgrade_until_json, created_at, updated_at
+    upgrade_allowed, upgrade_until_json, created_at, updated_at,
+    min_custom_format_score, upgrade_until_cf_score
 ) VALUES (
     ?, ?, ?, ?,
-    ?, ?, ?, ?
+    ?, ?, ?, ?,
+    ?, ?
 )
 RETURNING *;
 
@@ -16,12 +18,14 @@ SELECT * FROM quality_profiles ORDER BY name ASC;
 
 -- name: UpdateQualityProfile :one
 UPDATE quality_profiles SET
-    name               = ?,
-    cutoff_json        = ?,
-    qualities_json     = ?,
-    upgrade_allowed    = ?,
-    upgrade_until_json = ?,
-    updated_at         = ?
+    name                     = ?,
+    cutoff_json              = ?,
+    qualities_json           = ?,
+    upgrade_allowed          = ?,
+    upgrade_until_json       = ?,
+    updated_at               = ?,
+    min_custom_format_score  = ?,
+    upgrade_until_cf_score   = ?
 WHERE id = ?
 RETURNING *;
 

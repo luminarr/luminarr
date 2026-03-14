@@ -20,6 +20,7 @@ import (
 	"github.com/luminarr/luminarr/internal/core/autosearch"
 	"github.com/luminarr/luminarr/internal/core/blocklist"
 	"github.com/luminarr/luminarr/internal/core/collection"
+	"github.com/luminarr/luminarr/internal/core/customformat"
 	"github.com/luminarr/luminarr/internal/core/downloader"
 	"github.com/luminarr/luminarr/internal/core/downloadhandling"
 	"github.com/luminarr/luminarr/internal/core/health"
@@ -33,6 +34,7 @@ import (
 	"github.com/luminarr/luminarr/internal/core/quality"
 	"github.com/luminarr/luminarr/internal/core/queue"
 	"github.com/luminarr/luminarr/internal/core/stats"
+	"github.com/luminarr/luminarr/internal/core/tag"
 	"github.com/luminarr/luminarr/internal/events"
 	"github.com/luminarr/luminarr/internal/logging"
 	"github.com/luminarr/luminarr/internal/plexsync"
@@ -72,6 +74,8 @@ type RouterConfig struct {
 	CollectionService        *collection.Service
 	MediaServerService       *mediaserver.Service
 	PlexSyncService          *plexsync.Service
+	TagService               *tag.Service
+	CustomFormatService      *customformat.Service
 	LogBuffer                *logging.RingBuffer
 	WSHub                    *ws.Hub
 	Bus                      *events.Bus
@@ -184,7 +188,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	}
 
 	if cfg.MovieService != nil {
-		v1.RegisterMovieRoutes(humaAPI, cfg.MovieService)
+		v1.RegisterMovieRoutes(humaAPI, cfg.MovieService, cfg.TagService)
 		v1.RegisterMovieFileRoutes(humaAPI, cfg.MovieService, cfg.MediaManagementService, cfg.MediaInfoService)
 		v1.RegisterWantedRoutes(humaAPI, cfg.MovieService)
 	}
@@ -192,13 +196,13 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	v1.RegisterMediainfoRoutes(humaAPI, cfg.MediaInfoService)
 
 	if cfg.IndexerService != nil {
-		v1.RegisterIndexerRoutes(humaAPI, cfg.IndexerService)
+		v1.RegisterIndexerRoutes(humaAPI, cfg.IndexerService, cfg.TagService)
 
 		var autoSvc *autosearch.Service
 		if cfg.MovieService != nil && cfg.DownloaderService != nil && cfg.QualityService != nil {
 			autoSvc = autosearch.NewService(
 				cfg.IndexerService, cfg.MovieService, cfg.DownloaderService,
-				cfg.BlocklistService, cfg.QualityService, cfg.Bus, cfg.Logger,
+				cfg.BlocklistService, cfg.QualityService, cfg.TagService, cfg.Bus, cfg.Logger,
 			)
 		}
 		v1.RegisterReleaseRoutes(humaAPI, cfg.IndexerService, cfg.MovieService, cfg.DownloaderService, cfg.BlocklistService, cfg.QualityService, autoSvc, cfg.Logger)
@@ -211,7 +215,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	}
 
 	if cfg.DownloaderService != nil {
-		v1.RegisterDownloadClientRoutes(humaAPI, cfg.DownloaderService)
+		v1.RegisterDownloadClientRoutes(humaAPI, cfg.DownloaderService, cfg.TagService)
 	}
 
 	if cfg.QueueService != nil {
@@ -223,7 +227,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	}
 
 	if cfg.NotificationService != nil {
-		v1.RegisterNotificationRoutes(humaAPI, cfg.NotificationService)
+		v1.RegisterNotificationRoutes(humaAPI, cfg.NotificationService, cfg.TagService)
 	}
 
 	if cfg.MediaServerService != nil {
@@ -256,6 +260,14 @@ func NewRouter(cfg RouterConfig) http.Handler {
 
 	v1.RegisterCollectionRoutes(humaAPI, cfg.CollectionService)
 
+	if cfg.TagService != nil {
+		v1.RegisterTagRoutes(humaAPI, cfg.TagService)
+	}
+
+	if cfg.CustomFormatService != nil {
+		v1.RegisterCustomFormatRoutes(humaAPI, cfg.CustomFormatService)
+	}
+
 	if cfg.LibraryService != nil && cfg.MovieService != nil && cfg.Bus != nil && cfg.Scheduler != nil {
 		v1.RegisterHookRoutes(humaAPI, cfg.LibraryService, cfg.MovieService, cfg.Bus, cfg.Scheduler)
 	}
@@ -279,6 +291,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 			QualityService: cfg.QualityService,
 			LibraryService: cfg.LibraryService,
 			QueueService:   cfg.QueueService,
+			TagService:     cfg.TagService,
 			Scheduler:      cfg.Scheduler,
 		})
 	}

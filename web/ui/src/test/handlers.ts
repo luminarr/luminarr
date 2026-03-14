@@ -51,6 +51,9 @@ export const handlers = [
 
   // Quality profiles
   http.get("/api/v1/quality-profiles", () => HttpResponse.json([])),
+
+  // Quality definitions
+  http.get("/api/v1/quality-definitions", () => HttpResponse.json([])),
 ];
 
 export const server = setupServer(...handlers);

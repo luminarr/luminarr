@@ -17,6 +17,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/luminarr/luminarr/internal/core/edition"
 	"github.com/luminarr/luminarr/internal/core/renamer"
 	"github.com/luminarr/luminarr/internal/db"
 	dbsqlite "github.com/luminarr/luminarr/internal/db/generated/sqlite"
@@ -57,6 +58,7 @@ type Movie struct {
 	LibraryID           string
 	QualityProfileID    string
 	MinimumAvailability string
+	PreferredEdition    string // empty = no preference
 	ReleaseDate         string
 	Path                string
 	AddedAt             time.Time
@@ -71,6 +73,7 @@ type AddRequest struct {
 	QualityProfileID    string
 	Monitored           bool
 	MinimumAvailability string // defaults to "released" when empty
+	PreferredEdition    string // empty = no preference
 }
 
 // AddUnmatchedRequest carries the fields needed to add a file that has no TMDB
@@ -103,7 +106,8 @@ type UpdateRequest struct {
 	Monitored           bool
 	LibraryID           string
 	QualityProfileID    string
-	MinimumAvailability string // preserved from existing when empty
+	MinimumAvailability string  // preserved from existing when empty
+	PreferredEdition    *string // nil = don't change; pointer to "" clears it
 }
 
 // LookupRequest carries parameters for searching TMDB without adding to the library.
@@ -278,6 +282,17 @@ func (s *Service) Add(ctx context.Context, req AddRequest) (Movie, error) {
 	m, err := rowToMovie(row)
 	if err != nil {
 		return Movie{}, err
+	}
+
+	if req.PreferredEdition != "" {
+		if err := s.q.UpdateMoviePreferredEdition(ctx, dbsqlite.UpdateMoviePreferredEditionParams{
+			ID:               m.ID,
+			PreferredEdition: &req.PreferredEdition,
+			UpdatedAt:        time.Now().UTC().Format(time.RFC3339),
+		}); err != nil {
+			return Movie{}, fmt.Errorf("setting preferred edition for movie %q: %w", m.ID, err)
+		}
+		m.PreferredEdition = req.PreferredEdition
 	}
 
 	s.bus.Publish(ctx, events.Event{
@@ -562,6 +577,8 @@ func (s *Service) Update(ctx context.Context, id string, req UpdateRequest) (Mov
 		minAvail = existing.MinimumAvailability
 	}
 
+	now := time.Now().UTC().Format(time.RFC3339)
+
 	row, err := s.q.UpdateMovie(ctx, dbsqlite.UpdateMovieParams{
 		ID:                  id,
 		Title:               title,
@@ -578,13 +595,35 @@ func (s *Service) Update(ctx context.Context, id string, req UpdateRequest) (Mov
 		QualityProfileID:    qualityProfileID,
 		MinimumAvailability: minAvail,
 		ReleaseDate:         existing.ReleaseDate,
-		UpdatedAt:           time.Now().UTC().Format(time.RFC3339),
+		UpdatedAt:           now,
 	})
 	if err != nil {
 		return Movie{}, fmt.Errorf("updating movie %q: %w", id, err)
 	}
 
-	return rowToMovie(row)
+	m, err := rowToMovie(row)
+	if err != nil {
+		return Movie{}, err
+	}
+
+	if req.PreferredEdition != nil {
+		pe := req.PreferredEdition
+		if *pe == "" {
+			pe = nil // clear → store NULL
+		}
+		if err := s.q.UpdateMoviePreferredEdition(ctx, dbsqlite.UpdateMoviePreferredEditionParams{
+			ID:               id,
+			PreferredEdition: pe,
+			UpdatedAt:        now,
+		}); err != nil {
+			return Movie{}, fmt.Errorf("setting preferred edition for movie %q: %w", id, err)
+		}
+		if req.PreferredEdition != nil {
+			m.PreferredEdition = *req.PreferredEdition
+		}
+	}
+
+	return m, nil
 }
 
 // Delete removes a movie by ID. It does not delete files from disk.
@@ -932,6 +971,12 @@ func (s *Service) AttachFile(ctx context.Context, movieID, filePath string, size
 		return fmt.Errorf("marshaling quality: %w", err)
 	}
 
+	// Auto-detect edition from the filename.
+	var editionPtr *string
+	if ed := edition.Parse(filepath.Base(filePath)); ed != nil {
+		editionPtr = &ed.Name
+	}
+
 	now := time.Now().UTC().Format(time.RFC3339)
 
 	do := func(q dbsqlite.Querier) error {
@@ -949,7 +994,7 @@ func (s *Service) AttachFile(ctx context.Context, movieID, filePath string, size
 			Path:        filePath,
 			SizeBytes:   sizeBytes,
 			QualityJson: string(qualityJSON),
-			Edition:     nil,
+			Edition:     editionPtr,
 			ImportedAt:  now,
 			IndexedAt:   now,
 		}); err != nil {
@@ -1019,8 +1064,14 @@ func (s *Service) RenameFiles(ctx context.Context, movieID string, settings Rena
 		var qual plugin.Quality
 		_ = json.Unmarshal([]byte(f.QualityJson), &qual)
 
+		// Set per-file edition so {Edition} renders correctly for each file.
+		fileRM := rm
+		if f.Edition != nil {
+			fileRM.Edition = *f.Edition
+		}
+
 		ext := filepath.Ext(f.Path)
-		newFilename := renamer.ApplyWithOptions(format, rm, qual, colon) + ext
+		newFilename := renamer.ApplyWithOptions(format, fileRM, qual, colon) + ext
 		newPath := filepath.Join(filepath.Dir(f.Path), newFilename)
 
 		if newPath == f.Path {
@@ -1214,6 +1265,11 @@ func rowToMovie(row dbsqlite.Movie) (Movie, error) {
 		path = *row.Path
 	}
 
+	var preferredEdition string
+	if row.PreferredEdition != nil {
+		preferredEdition = *row.PreferredEdition
+	}
+
 	return Movie{
 		ID:                  row.ID,
 		TMDBID:              int(row.TmdbID),
@@ -1231,6 +1287,7 @@ func rowToMovie(row dbsqlite.Movie) (Movie, error) {
 		LibraryID:           row.LibraryID,
 		QualityProfileID:    row.QualityProfileID,
 		MinimumAvailability: row.MinimumAvailability,
+		PreferredEdition:    preferredEdition,
 		ReleaseDate:         row.ReleaseDate,
 		Path:                path,
 		AddedAt:             addedAt,

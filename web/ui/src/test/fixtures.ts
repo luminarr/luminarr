@@ -3,6 +3,7 @@ import type {
   QueueItem,
   Library,
   QualityProfile,
+  QualityDefinition,
   Quality,
   HealthReport,
   SystemStatus,
@@ -91,6 +92,15 @@ export const qualityProfileFixture = {
   upgrade_allowed: true,
   upgrade_until: quality1080pBluray,
 } satisfies QualityProfile;
+
+// ── Quality Definitions ───────────────────────────────────────────────────
+
+export const qualityDefinitionFixtures: QualityDefinition[] = [
+  { id: "1080p-bluray-x265-none",  name: "1080p Bluray",    resolution: "1080p", source: "bluray", codec: "x265", hdr: "none",  min_size: 4, max_size: 95, preferred_size: 95, sort_order: 70 },
+  { id: "1080p-webdl-x264-none",   name: "1080p WEBDL",     resolution: "1080p", source: "webdl",  codec: "x264", hdr: "none",  min_size: 4, max_size: 40, preferred_size: 40, sort_order: 80 },
+  { id: "720p-bluray-x264-none",   name: "720p Bluray",     resolution: "720p",  source: "bluray", codec: "x264", hdr: "none",  min_size: 2, max_size: 30, preferred_size: 30, sort_order: 110 },
+  { id: "2160p-remux-x265-hdr10",  name: "2160p Remux HDR", resolution: "2160p", source: "remux",  codec: "x265", hdr: "hdr10", min_size: 35, max_size: 800, preferred_size: 800, sort_order: 10 },
+];
 
 // ── System ─────────────────────────────────────────────────────────────────
 

@@ -24,11 +24,13 @@ var ErrInUse = errors.New("quality profile is in use")
 
 // CreateRequest carries the fields needed to create a quality profile.
 type CreateRequest struct {
-	Name           string
-	Cutoff         plugin.Quality
-	Qualities      []plugin.Quality
-	UpgradeAllowed bool
-	UpgradeUntil   *plugin.Quality
+	Name                 string
+	Cutoff               plugin.Quality
+	Qualities            []plugin.Quality
+	UpgradeAllowed       bool
+	UpgradeUntil         *plugin.Quality
+	MinCustomFormatScore int
+	UpgradeUntilCFScore  int
 }
 
 // UpdateRequest carries the fields needed to update a quality profile.
@@ -75,14 +77,16 @@ func (s *Service) Create(ctx context.Context, req CreateRequest) (Profile, error
 	}
 
 	row, err := s.q.CreateQualityProfile(ctx, dbsqlite.CreateQualityProfileParams{
-		ID:               uuid.New().String(),
-		Name:             req.Name,
-		CutoffJson:       string(cutoffJSON),
-		QualitiesJson:    string(qualitiesJSON),
-		UpgradeAllowed:   upgradeAllowed,
-		UpgradeUntilJson: upgradeUntilJSON,
-		CreatedAt:        now,
-		UpdatedAt:        now,
+		ID:                   uuid.New().String(),
+		Name:                 req.Name,
+		CutoffJson:           string(cutoffJSON),
+		QualitiesJson:        string(qualitiesJSON),
+		UpgradeAllowed:       upgradeAllowed,
+		UpgradeUntilJson:     upgradeUntilJSON,
+		CreatedAt:            now,
+		UpdatedAt:            now,
+		MinCustomFormatScore: int64(req.MinCustomFormatScore),
+		UpgradeUntilCfScore:  int64(req.UpgradeUntilCFScore),
 	})
 	if err != nil {
 		return Profile{}, fmt.Errorf("inserting quality profile: %w", err)
@@ -160,13 +164,15 @@ func (s *Service) Update(ctx context.Context, id string, req UpdateRequest) (Pro
 	}
 
 	row, err := s.q.UpdateQualityProfile(ctx, dbsqlite.UpdateQualityProfileParams{
-		ID:               id,
-		Name:             req.Name,
-		CutoffJson:       string(cutoffJSON),
-		QualitiesJson:    string(qualitiesJSON),
-		UpgradeAllowed:   upgradeAllowed,
-		UpgradeUntilJson: upgradeUntilJSON,
-		UpdatedAt:        time.Now().UTC().Format(time.RFC3339),
+		ID:                   id,
+		Name:                 req.Name,
+		CutoffJson:           string(cutoffJSON),
+		QualitiesJson:        string(qualitiesJSON),
+		UpgradeAllowed:       upgradeAllowed,
+		UpgradeUntilJson:     upgradeUntilJSON,
+		UpdatedAt:            time.Now().UTC().Format(time.RFC3339),
+		MinCustomFormatScore: int64(req.MinCustomFormatScore),
+		UpgradeUntilCfScore:  int64(req.UpgradeUntilCFScore),
 	})
 	if err != nil {
 		return Profile{}, fmt.Errorf("updating quality profile %q: %w", id, err)
@@ -226,11 +232,13 @@ func rowToProfile(row dbsqlite.QualityProfile) (Profile, error) {
 	}
 
 	return Profile{
-		ID:             row.ID,
-		Name:           row.Name,
-		Cutoff:         cutoff,
-		Qualities:      qualities,
-		UpgradeAllowed: row.UpgradeAllowed != 0,
-		UpgradeUntil:   upgradeUntil,
+		ID:                   row.ID,
+		Name:                 row.Name,
+		Cutoff:               cutoff,
+		Qualities:            qualities,
+		UpgradeAllowed:       row.UpgradeAllowed != 0,
+		UpgradeUntil:         upgradeUntil,
+		MinCustomFormatScore: int(row.MinCustomFormatScore),
+		UpgradeUntilCFScore:  int(row.UpgradeUntilCfScore),
 	}, nil
 }

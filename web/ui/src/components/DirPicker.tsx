@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useFsBrowse } from "@/api/filesystem";
+import Modal from "@/components/Modal";
 
 interface DirPickerProps {
   open: boolean;
@@ -35,34 +36,7 @@ export function DirPicker({ open, value, onSelect, onClose }: DirPickerProps) {
   }
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.6)",
-        backdropFilter: "blur(2px)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 200,
-      }}
-      onClick={onClose}
-    >
-      <div
-        style={{
-          background: "var(--color-bg-surface)",
-          border: "1px solid var(--color-border-subtle)",
-          borderRadius: 12,
-          width: 520,
-          maxWidth: "calc(100vw - 48px)",
-          maxHeight: "80vh",
-          boxShadow: "var(--shadow-modal)",
-          display: "flex",
-          flexDirection: "column",
-          overflow: "hidden",
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
+    <Modal onClose={onClose} width={520} maxHeight="80vh">
         {/* Header */}
         <div
           style={{
@@ -287,7 +261,6 @@ export function DirPicker({ open, value, onSelect, onClose }: DirPickerProps) {
             </button>
           </div>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

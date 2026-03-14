@@ -14,20 +14,24 @@ import (
 // ── Request / response shapes ────────────────────────────────────────────────
 
 type qualityProfileBody struct {
-	ID             string           `json:"id"              doc:"Profile UUID"`
-	Name           string           `json:"name"            doc:"Human-readable profile name"`
-	Cutoff         plugin.Quality   `json:"cutoff"          doc:"Minimum acceptable quality"`
-	Qualities      []plugin.Quality `json:"qualities"       doc:"Ordered list of accepted qualities"`
-	UpgradeAllowed bool             `json:"upgrade_allowed" doc:"Whether upgrades are permitted"`
-	UpgradeUntil   *plugin.Quality  `json:"upgrade_until,omitempty" doc:"Quality ceiling for upgrades"`
+	ID                   string           `json:"id"                        doc:"Profile UUID"`
+	Name                 string           `json:"name"                      doc:"Human-readable profile name"`
+	Cutoff               plugin.Quality   `json:"cutoff"                    doc:"Minimum acceptable quality"`
+	Qualities            []plugin.Quality `json:"qualities"                 doc:"Ordered list of accepted qualities"`
+	UpgradeAllowed       bool             `json:"upgrade_allowed"           doc:"Whether upgrades are permitted"`
+	UpgradeUntil         *plugin.Quality  `json:"upgrade_until,omitempty"   doc:"Quality ceiling for upgrades"`
+	MinCustomFormatScore int              `json:"min_custom_format_score"   doc:"Minimum CF score to accept a release"`
+	UpgradeUntilCFScore  int              `json:"upgrade_until_cf_score"    doc:"CF score ceiling for upgrades"`
 }
 
 type qualityProfileInput struct {
-	Name           string           `json:"name"            doc:"Human-readable profile name"`
-	Cutoff         plugin.Quality   `json:"cutoff"          doc:"Minimum acceptable quality"`
-	Qualities      []plugin.Quality `json:"qualities"       doc:"Ordered list of accepted qualities"`
-	UpgradeAllowed bool             `json:"upgrade_allowed" doc:"Whether upgrades are permitted"`
-	UpgradeUntil   *plugin.Quality  `json:"upgrade_until,omitempty" doc:"Quality ceiling for upgrades"`
+	Name                 string           `json:"name"                      doc:"Human-readable profile name"`
+	Cutoff               plugin.Quality   `json:"cutoff"                    doc:"Minimum acceptable quality"`
+	Qualities            []plugin.Quality `json:"qualities"                 doc:"Ordered list of accepted qualities"`
+	UpgradeAllowed       bool             `json:"upgrade_allowed"           doc:"Whether upgrades are permitted"`
+	UpgradeUntil         *plugin.Quality  `json:"upgrade_until,omitempty"   doc:"Quality ceiling for upgrades"`
+	MinCustomFormatScore *int             `json:"min_custom_format_score,omitempty" doc:"Minimum CF score to accept a release"`
+	UpgradeUntilCFScore  *int             `json:"upgrade_until_cf_score,omitempty"  doc:"CF score ceiling for upgrades"`
 }
 
 // Single-item output.
@@ -65,22 +69,33 @@ type qualityProfileDeleteOutput struct{}
 
 func profileToBody(p quality.Profile) *qualityProfileBody {
 	return &qualityProfileBody{
-		ID:             p.ID,
-		Name:           p.Name,
-		Cutoff:         p.Cutoff,
-		Qualities:      p.Qualities,
-		UpgradeAllowed: p.UpgradeAllowed,
-		UpgradeUntil:   p.UpgradeUntil,
+		ID:                   p.ID,
+		Name:                 p.Name,
+		Cutoff:               p.Cutoff,
+		Qualities:            p.Qualities,
+		UpgradeAllowed:       p.UpgradeAllowed,
+		UpgradeUntil:         p.UpgradeUntil,
+		MinCustomFormatScore: p.MinCustomFormatScore,
+		UpgradeUntilCFScore:  p.UpgradeUntilCFScore,
 	}
+}
+
+func derefInt(p *int) int {
+	if p != nil {
+		return *p
+	}
+	return 0
 }
 
 func inputToCreateRequest(in qualityProfileInput) quality.CreateRequest {
 	return quality.CreateRequest{
-		Name:           in.Name,
-		Cutoff:         in.Cutoff,
-		Qualities:      in.Qualities,
-		UpgradeAllowed: in.UpgradeAllowed,
-		UpgradeUntil:   in.UpgradeUntil,
+		Name:                 in.Name,
+		Cutoff:               in.Cutoff,
+		Qualities:            in.Qualities,
+		UpgradeAllowed:       in.UpgradeAllowed,
+		UpgradeUntil:         in.UpgradeUntil,
+		MinCustomFormatScore: derefInt(in.MinCustomFormatScore),
+		UpgradeUntilCFScore:  derefInt(in.UpgradeUntilCFScore),
 	}
 }
 

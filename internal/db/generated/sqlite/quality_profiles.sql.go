@@ -12,23 +12,27 @@ import (
 const createQualityProfile = `-- name: CreateQualityProfile :one
 INSERT INTO quality_profiles (
     id, name, cutoff_json, qualities_json,
-    upgrade_allowed, upgrade_until_json, created_at, updated_at
+    upgrade_allowed, upgrade_until_json, created_at, updated_at,
+    min_custom_format_score, upgrade_until_cf_score
 ) VALUES (
     ?, ?, ?, ?,
-    ?, ?, ?, ?
+    ?, ?, ?, ?,
+    ?, ?
 )
-RETURNING id, name, cutoff_json, qualities_json, upgrade_allowed, upgrade_until_json, created_at, updated_at
+RETURNING id, name, cutoff_json, qualities_json, upgrade_allowed, upgrade_until_json, created_at, updated_at, min_custom_format_score, upgrade_until_cf_score
 `
 
 type CreateQualityProfileParams struct {
-	ID               string  `json:"id"`
-	Name             string  `json:"name"`
-	CutoffJson       string  `json:"cutoffJson"`
-	QualitiesJson    string  `json:"qualitiesJson"`
-	UpgradeAllowed   int64   `json:"upgradeAllowed"`
-	UpgradeUntilJson *string `json:"upgradeUntilJson"`
-	CreatedAt        string  `json:"createdAt"`
-	UpdatedAt        string  `json:"updatedAt"`
+	ID                   string  `json:"id"`
+	Name                 string  `json:"name"`
+	CutoffJson           string  `json:"cutoffJson"`
+	QualitiesJson        string  `json:"qualitiesJson"`
+	UpgradeAllowed       int64   `json:"upgradeAllowed"`
+	UpgradeUntilJson     *string `json:"upgradeUntilJson"`
+	CreatedAt            string  `json:"createdAt"`
+	UpdatedAt            string  `json:"updatedAt"`
+	MinCustomFormatScore int64   `json:"minCustomFormatScore"`
+	UpgradeUntilCfScore  int64   `json:"upgradeUntilCfScore"`
 }
 
 func (q *Queries) CreateQualityProfile(ctx context.Context, arg CreateQualityProfileParams) (QualityProfile, error) {
@@ -41,6 +45,8 @@ func (q *Queries) CreateQualityProfile(ctx context.Context, arg CreateQualityPro
 		arg.UpgradeUntilJson,
 		arg.CreatedAt,
 		arg.UpdatedAt,
+		arg.MinCustomFormatScore,
+		arg.UpgradeUntilCfScore,
 	)
 	var i QualityProfile
 	err := row.Scan(
@@ -52,6 +58,8 @@ func (q *Queries) CreateQualityProfile(ctx context.Context, arg CreateQualityPro
 		&i.UpgradeUntilJson,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.MinCustomFormatScore,
+		&i.UpgradeUntilCfScore,
 	)
 	return i, err
 }
@@ -66,7 +74,7 @@ func (q *Queries) DeleteQualityProfile(ctx context.Context, id string) error {
 }
 
 const getQualityProfile = `-- name: GetQualityProfile :one
-SELECT id, name, cutoff_json, qualities_json, upgrade_allowed, upgrade_until_json, created_at, updated_at FROM quality_profiles WHERE id = ?
+SELECT id, name, cutoff_json, qualities_json, upgrade_allowed, upgrade_until_json, created_at, updated_at, min_custom_format_score, upgrade_until_cf_score FROM quality_profiles WHERE id = ?
 `
 
 func (q *Queries) GetQualityProfile(ctx context.Context, id string) (QualityProfile, error) {
@@ -81,12 +89,14 @@ func (q *Queries) GetQualityProfile(ctx context.Context, id string) (QualityProf
 		&i.UpgradeUntilJson,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.MinCustomFormatScore,
+		&i.UpgradeUntilCfScore,
 	)
 	return i, err
 }
 
 const listQualityProfiles = `-- name: ListQualityProfiles :many
-SELECT id, name, cutoff_json, qualities_json, upgrade_allowed, upgrade_until_json, created_at, updated_at FROM quality_profiles ORDER BY name ASC
+SELECT id, name, cutoff_json, qualities_json, upgrade_allowed, upgrade_until_json, created_at, updated_at, min_custom_format_score, upgrade_until_cf_score FROM quality_profiles ORDER BY name ASC
 `
 
 func (q *Queries) ListQualityProfiles(ctx context.Context) ([]QualityProfile, error) {
@@ -107,6 +117,8 @@ func (q *Queries) ListQualityProfiles(ctx context.Context) ([]QualityProfile, er
 			&i.UpgradeUntilJson,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.MinCustomFormatScore,
+			&i.UpgradeUntilCfScore,
 		); err != nil {
 			return nil, err
 		}
@@ -143,24 +155,28 @@ func (q *Queries) QualityProfileInUse(ctx context.Context, arg QualityProfileInU
 
 const updateQualityProfile = `-- name: UpdateQualityProfile :one
 UPDATE quality_profiles SET
-    name               = ?,
-    cutoff_json        = ?,
-    qualities_json     = ?,
-    upgrade_allowed    = ?,
-    upgrade_until_json = ?,
-    updated_at         = ?
+    name                     = ?,
+    cutoff_json              = ?,
+    qualities_json           = ?,
+    upgrade_allowed          = ?,
+    upgrade_until_json       = ?,
+    updated_at               = ?,
+    min_custom_format_score  = ?,
+    upgrade_until_cf_score   = ?
 WHERE id = ?
-RETURNING id, name, cutoff_json, qualities_json, upgrade_allowed, upgrade_until_json, created_at, updated_at
+RETURNING id, name, cutoff_json, qualities_json, upgrade_allowed, upgrade_until_json, created_at, updated_at, min_custom_format_score, upgrade_until_cf_score
 `
 
 type UpdateQualityProfileParams struct {
-	Name             string  `json:"name"`
-	CutoffJson       string  `json:"cutoffJson"`
-	QualitiesJson    string  `json:"qualitiesJson"`
-	UpgradeAllowed   int64   `json:"upgradeAllowed"`
-	UpgradeUntilJson *string `json:"upgradeUntilJson"`
-	UpdatedAt        string  `json:"updatedAt"`
-	ID               string  `json:"id"`
+	Name                 string  `json:"name"`
+	CutoffJson           string  `json:"cutoffJson"`
+	QualitiesJson        string  `json:"qualitiesJson"`
+	UpgradeAllowed       int64   `json:"upgradeAllowed"`
+	UpgradeUntilJson     *string `json:"upgradeUntilJson"`
+	UpdatedAt            string  `json:"updatedAt"`
+	MinCustomFormatScore int64   `json:"minCustomFormatScore"`
+	UpgradeUntilCfScore  int64   `json:"upgradeUntilCfScore"`
+	ID                   string  `json:"id"`
 }
 
 func (q *Queries) UpdateQualityProfile(ctx context.Context, arg UpdateQualityProfileParams) (QualityProfile, error) {
@@ -171,6 +187,8 @@ func (q *Queries) UpdateQualityProfile(ctx context.Context, arg UpdateQualityPro
 		arg.UpgradeAllowed,
 		arg.UpgradeUntilJson,
 		arg.UpdatedAt,
+		arg.MinCustomFormatScore,
+		arg.UpgradeUntilCfScore,
 		arg.ID,
 	)
 	var i QualityProfile
@@ -183,6 +201,8 @@ func (q *Queries) UpdateQualityProfile(ctx context.Context, arg UpdateQualityPro
 		&i.UpgradeUntilJson,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.MinCustomFormatScore,
+		&i.UpgradeUntilCfScore,
 	)
 	return i, err
 }

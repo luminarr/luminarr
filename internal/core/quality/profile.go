@@ -28,6 +28,13 @@ type Profile struct {
 	// or exceeds this quality, no further upgrades are triggered.
 	// Nil means "upgrade without limit" (subject to UpgradeAllowed).
 	UpgradeUntil *plugin.Quality
+	// MinCustomFormatScore is the minimum CF score a release must reach to be
+	// considered acceptable. Releases below this threshold are rejected.
+	MinCustomFormatScore int
+	// UpgradeUntilCFScore caps CF-driven upgrades: once the current file's CF
+	// score meets or exceeds this value (and quality cutoff is met), no further
+	// upgrades are triggered.
+	UpgradeUntilCFScore int
 }
 
 // WantRelease reports whether this profile should grab a release with
@@ -153,7 +160,7 @@ func resolutionRank(r plugin.Resolution) int {
 		return 3
 	case plugin.Resolution720p:
 		return 2
-	case plugin.ResolutionSD:
+	case plugin.Resolution576p, plugin.Resolution480p, plugin.ResolutionSD:
 		return 1
 	default:
 		return 0
@@ -163,6 +170,10 @@ func resolutionRank(r plugin.Resolution) int {
 // sourceRank maps a Source to a comparable integer (higher = better).
 func sourceRank(s plugin.Source) int {
 	switch s {
+	case plugin.SourceRawHD:
+		return 9
+	case plugin.SourceBRDisk:
+		return 8
 	case plugin.SourceRemux:
 		return 7
 	case plugin.SourceBluRay:
@@ -173,10 +184,14 @@ func sourceRank(s plugin.Source) int {
 		return 4
 	case plugin.SourceHDTV:
 		return 3
-	case plugin.SourceDVD:
+	case plugin.SourceDVD, plugin.SourceDVDR:
 		return 2
-	case plugin.SourceTELECINE:
+	case plugin.SourceDVDSCR, plugin.SourceRegional, plugin.SourceTELECINE:
 		return 1
+	case plugin.SourceTelesync, plugin.SourceCAM:
+		return 0
+	case plugin.SourceWorkprint:
+		return 0
 	default:
 		return 0
 	}

@@ -104,7 +104,7 @@ func setup(t *testing.T) *testEnv {
 	blSvc := blocklist.NewService(q)
 	dlSvc := downloader.NewService(q, reg, bus)
 
-	svc := autosearch.NewService(indexerSvc, movieSvc, dlSvc, blSvc, qualSvc, bus, logger)
+	svc := autosearch.NewService(indexerSvc, movieSvc, dlSvc, blSvc, qualSvc, nil, bus, logger)
 
 	return &testEnv{
 		q:       q,

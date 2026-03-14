@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import Modal from "@/components/Modal";
 import {
   useDownloadClients,
   useCreateDownloadClient,
@@ -246,36 +247,7 @@ function DownloadClientModal({ editing, onClose }: ModalProps) {
   ) : null;
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.6)",
-        backdropFilter: "blur(2px)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 100,
-      }}
-      onClick={onClose}
-    >
-      <div
-        style={{
-          background: "var(--color-bg-surface)",
-          border: "1px solid var(--color-border-subtle)",
-          borderRadius: 12,
-          padding: 24,
-          width: 540,
-          maxWidth: "calc(100vw - 48px)",
-          maxHeight: "calc(100vh - 80px)",
-          overflowY: "auto",
-          boxShadow: "var(--shadow-modal)",
-          display: "flex",
-          flexDirection: "column",
-          gap: 20,
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
+    <Modal onClose={onClose} width={540} innerStyle={{ padding: 24, gap: 20, overflowY: "auto" }}>
         {/* Header */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <h2 style={{ margin: 0, fontSize: 16, fontWeight: 600, color: "var(--color-text-primary)" }}>
@@ -685,8 +657,7 @@ function DownloadClientModal({ editing, onClose }: ModalProps) {
             {isPending ? "Saving…" : editing ? "Save Changes" : "Add Client"}
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
 

@@ -10,6 +10,22 @@ import (
 	"time"
 )
 
+const countEditionMismatches = `-- name: CountEditionMismatches :one
+SELECT COUNT(*)
+FROM movies m
+JOIN movie_files mf ON mf.movie_id = m.id
+WHERE m.preferred_edition IS NOT NULL
+  AND m.preferred_edition != ''
+  AND (mf.edition IS NULL OR mf.edition != m.preferred_edition)
+`
+
+func (q *Queries) CountEditionMismatches(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countEditionMismatches)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countMonitoredMoviesWithoutFile = `-- name: CountMonitoredMoviesWithoutFile :one
 SELECT COUNT(*)
 FROM movies m
@@ -63,7 +79,7 @@ INSERT INTO movies (
     ?, ?, ?,
     ?, ?
 )
-RETURNING id, tmdb_id, imdb_id, title, original_title, year, overview, runtime_minutes, genres_json, poster_url, fanart_url, status, monitored, library_id, quality_profile_id, path, added_at, updated_at, metadata_refreshed_at, minimum_availability, release_date
+RETURNING id, tmdb_id, imdb_id, title, original_title, year, overview, runtime_minutes, genres_json, poster_url, fanart_url, status, monitored, library_id, quality_profile_id, path, added_at, updated_at, metadata_refreshed_at, minimum_availability, release_date, preferred_edition
 `
 
 type CreateMovieParams struct {
@@ -137,6 +153,7 @@ func (q *Queries) CreateMovie(ctx context.Context, arg CreateMovieParams) (Movie
 		&i.MetadataRefreshedAt,
 		&i.MinimumAvailability,
 		&i.ReleaseDate,
+		&i.PreferredEdition,
 	)
 	return i, err
 }
@@ -209,7 +226,7 @@ func (q *Queries) DeleteMovieFile(ctx context.Context, id string) error {
 }
 
 const getMovie = `-- name: GetMovie :one
-SELECT id, tmdb_id, imdb_id, title, original_title, year, overview, runtime_minutes, genres_json, poster_url, fanart_url, status, monitored, library_id, quality_profile_id, path, added_at, updated_at, metadata_refreshed_at, minimum_availability, release_date FROM movies WHERE id = ?
+SELECT id, tmdb_id, imdb_id, title, original_title, year, overview, runtime_minutes, genres_json, poster_url, fanart_url, status, monitored, library_id, quality_profile_id, path, added_at, updated_at, metadata_refreshed_at, minimum_availability, release_date, preferred_edition FROM movies WHERE id = ?
 `
 
 func (q *Queries) GetMovie(ctx context.Context, id string) (Movie, error) {
@@ -237,12 +254,13 @@ func (q *Queries) GetMovie(ctx context.Context, id string) (Movie, error) {
 		&i.MetadataRefreshedAt,
 		&i.MinimumAvailability,
 		&i.ReleaseDate,
+		&i.PreferredEdition,
 	)
 	return i, err
 }
 
 const getMovieByTMDBID = `-- name: GetMovieByTMDBID :one
-SELECT id, tmdb_id, imdb_id, title, original_title, year, overview, runtime_minutes, genres_json, poster_url, fanart_url, status, monitored, library_id, quality_profile_id, path, added_at, updated_at, metadata_refreshed_at, minimum_availability, release_date FROM movies WHERE tmdb_id = ?
+SELECT id, tmdb_id, imdb_id, title, original_title, year, overview, runtime_minutes, genres_json, poster_url, fanart_url, status, monitored, library_id, quality_profile_id, path, added_at, updated_at, metadata_refreshed_at, minimum_availability, release_date, preferred_edition FROM movies WHERE tmdb_id = ?
 `
 
 func (q *Queries) GetMovieByTMDBID(ctx context.Context, tmdbID int64) (Movie, error) {
@@ -270,6 +288,7 @@ func (q *Queries) GetMovieByTMDBID(ctx context.Context, tmdbID int64) (Movie, er
 		&i.MetadataRefreshedAt,
 		&i.MinimumAvailability,
 		&i.ReleaseDate,
+		&i.PreferredEdition,
 	)
 	return i, err
 }
@@ -346,7 +365,7 @@ func (q *Queries) ListAllTMDBIDs(ctx context.Context) ([]int64, error) {
 }
 
 const listMonitoredMovies = `-- name: ListMonitoredMovies :many
-SELECT id, tmdb_id, imdb_id, title, original_title, year, overview, runtime_minutes, genres_json, poster_url, fanart_url, status, monitored, library_id, quality_profile_id, path, added_at, updated_at, metadata_refreshed_at, minimum_availability, release_date FROM movies
+SELECT id, tmdb_id, imdb_id, title, original_title, year, overview, runtime_minutes, genres_json, poster_url, fanart_url, status, monitored, library_id, quality_profile_id, path, added_at, updated_at, metadata_refreshed_at, minimum_availability, release_date, preferred_edition FROM movies
 WHERE monitored = 1
 ORDER BY title ASC
 `
@@ -382,6 +401,7 @@ func (q *Queries) ListMonitoredMovies(ctx context.Context) ([]Movie, error) {
 			&i.MetadataRefreshedAt,
 			&i.MinimumAvailability,
 			&i.ReleaseDate,
+			&i.PreferredEdition,
 		); err != nil {
 			return nil, err
 		}
@@ -397,7 +417,7 @@ func (q *Queries) ListMonitoredMovies(ctx context.Context) ([]Movie, error) {
 }
 
 const listMonitoredMoviesWithFiles = `-- name: ListMonitoredMoviesWithFiles :many
-SELECT m.id, m.tmdb_id, m.imdb_id, m.title, m.original_title, m.year, m.overview, m.runtime_minutes, m.genres_json, m.poster_url, m.fanart_url, m.status, m.monitored, m.library_id, m.quality_profile_id, m.path, m.added_at, m.updated_at, m.metadata_refreshed_at, m.minimum_availability, m.release_date, mf.quality_json, qp.cutoff_json
+SELECT m.id, m.tmdb_id, m.imdb_id, m.title, m.original_title, m.year, m.overview, m.runtime_minutes, m.genres_json, m.poster_url, m.fanart_url, m.status, m.monitored, m.library_id, m.quality_profile_id, m.path, m.added_at, m.updated_at, m.metadata_refreshed_at, m.minimum_availability, m.release_date, m.preferred_edition, mf.quality_json, qp.cutoff_json
 FROM movies m
 JOIN movie_files mf ON mf.movie_id = m.id
 JOIN quality_profiles qp ON qp.id = m.quality_profile_id
@@ -427,6 +447,7 @@ type ListMonitoredMoviesWithFilesRow struct {
 	MetadataRefreshedAt *string `json:"metadataRefreshedAt"`
 	MinimumAvailability string  `json:"minimumAvailability"`
 	ReleaseDate         string  `json:"releaseDate"`
+	PreferredEdition    *string `json:"preferredEdition"`
 	QualityJson         string  `json:"qualityJson"`
 	CutoffJson          string  `json:"cutoffJson"`
 }
@@ -462,6 +483,7 @@ func (q *Queries) ListMonitoredMoviesWithFiles(ctx context.Context) ([]ListMonit
 			&i.MetadataRefreshedAt,
 			&i.MinimumAvailability,
 			&i.ReleaseDate,
+			&i.PreferredEdition,
 			&i.QualityJson,
 			&i.CutoffJson,
 		); err != nil {
@@ -479,7 +501,7 @@ func (q *Queries) ListMonitoredMoviesWithFiles(ctx context.Context) ([]ListMonit
 }
 
 const listMonitoredMoviesWithoutFile = `-- name: ListMonitoredMoviesWithoutFile :many
-SELECT m.id, m.tmdb_id, m.imdb_id, m.title, m.original_title, m.year, m.overview, m.runtime_minutes, m.genres_json, m.poster_url, m.fanart_url, m.status, m.monitored, m.library_id, m.quality_profile_id, m.path, m.added_at, m.updated_at, m.metadata_refreshed_at, m.minimum_availability, m.release_date
+SELECT m.id, m.tmdb_id, m.imdb_id, m.title, m.original_title, m.year, m.overview, m.runtime_minutes, m.genres_json, m.poster_url, m.fanart_url, m.status, m.monitored, m.library_id, m.quality_profile_id, m.path, m.added_at, m.updated_at, m.metadata_refreshed_at, m.minimum_availability, m.release_date, m.preferred_edition
 FROM movies m
 LEFT JOIN movie_files mf ON mf.movie_id = m.id
 WHERE m.monitored = 1
@@ -524,6 +546,7 @@ func (q *Queries) ListMonitoredMoviesWithoutFile(ctx context.Context, arg ListMo
 			&i.MetadataRefreshedAt,
 			&i.MinimumAvailability,
 			&i.ReleaseDate,
+			&i.PreferredEdition,
 		); err != nil {
 			return nil, err
 		}
@@ -660,7 +683,7 @@ func (q *Queries) ListMovieSummaries(ctx context.Context) ([]ListMovieSummariesR
 }
 
 const listMovies = `-- name: ListMovies :many
-SELECT id, tmdb_id, imdb_id, title, original_title, year, overview, runtime_minutes, genres_json, poster_url, fanart_url, status, monitored, library_id, quality_profile_id, path, added_at, updated_at, metadata_refreshed_at, minimum_availability, release_date FROM movies
+SELECT id, tmdb_id, imdb_id, title, original_title, year, overview, runtime_minutes, genres_json, poster_url, fanart_url, status, monitored, library_id, quality_profile_id, path, added_at, updated_at, metadata_refreshed_at, minimum_availability, release_date, preferred_edition FROM movies
 ORDER BY title ASC
 LIMIT ? OFFSET ?
 `
@@ -701,6 +724,7 @@ func (q *Queries) ListMovies(ctx context.Context, arg ListMoviesParams) ([]Movie
 			&i.MetadataRefreshedAt,
 			&i.MinimumAvailability,
 			&i.ReleaseDate,
+			&i.PreferredEdition,
 		); err != nil {
 			return nil, err
 		}
@@ -716,7 +740,7 @@ func (q *Queries) ListMovies(ctx context.Context, arg ListMoviesParams) ([]Movie
 }
 
 const listMoviesByLibrary = `-- name: ListMoviesByLibrary :many
-SELECT id, tmdb_id, imdb_id, title, original_title, year, overview, runtime_minutes, genres_json, poster_url, fanart_url, status, monitored, library_id, quality_profile_id, path, added_at, updated_at, metadata_refreshed_at, minimum_availability, release_date FROM movies
+SELECT id, tmdb_id, imdb_id, title, original_title, year, overview, runtime_minutes, genres_json, poster_url, fanart_url, status, monitored, library_id, quality_profile_id, path, added_at, updated_at, metadata_refreshed_at, minimum_availability, release_date, preferred_edition FROM movies
 WHERE library_id = ?
 ORDER BY title ASC
 LIMIT ? OFFSET ?
@@ -759,6 +783,60 @@ func (q *Queries) ListMoviesByLibrary(ctx context.Context, arg ListMoviesByLibra
 			&i.MetadataRefreshedAt,
 			&i.MinimumAvailability,
 			&i.ReleaseDate,
+			&i.PreferredEdition,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMoviesWithEditionMismatch = `-- name: ListMoviesWithEditionMismatch :many
+SELECT m.id, m.title, m.year, m.preferred_edition, mf.edition as file_edition
+FROM movies m
+JOIN movie_files mf ON mf.movie_id = m.id
+WHERE m.preferred_edition IS NOT NULL
+  AND m.preferred_edition != ''
+  AND (mf.edition IS NULL OR mf.edition != m.preferred_edition)
+ORDER BY m.title ASC
+LIMIT ? OFFSET ?
+`
+
+type ListMoviesWithEditionMismatchParams struct {
+	Limit  int64 `json:"limit"`
+	Offset int64 `json:"offset"`
+}
+
+type ListMoviesWithEditionMismatchRow struct {
+	ID               string  `json:"id"`
+	Title            string  `json:"title"`
+	Year             int64   `json:"year"`
+	PreferredEdition *string `json:"preferredEdition"`
+	FileEdition      *string `json:"fileEdition"`
+}
+
+func (q *Queries) ListMoviesWithEditionMismatch(ctx context.Context, arg ListMoviesWithEditionMismatchParams) ([]ListMoviesWithEditionMismatchRow, error) {
+	rows, err := q.db.QueryContext(ctx, listMoviesWithEditionMismatch, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListMoviesWithEditionMismatchRow
+	for rows.Next() {
+		var i ListMoviesWithEditionMismatchRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Year,
+			&i.PreferredEdition,
+			&i.FileEdition,
 		); err != nil {
 			return nil, err
 		}
@@ -839,7 +917,7 @@ UPDATE movies SET
     release_date         = ?,
     updated_at           = ?
 WHERE id = ?
-RETURNING id, tmdb_id, imdb_id, title, original_title, year, overview, runtime_minutes, genres_json, poster_url, fanart_url, status, monitored, library_id, quality_profile_id, path, added_at, updated_at, metadata_refreshed_at, minimum_availability, release_date
+RETURNING id, tmdb_id, imdb_id, title, original_title, year, overview, runtime_minutes, genres_json, poster_url, fanart_url, status, monitored, library_id, quality_profile_id, path, added_at, updated_at, metadata_refreshed_at, minimum_availability, release_date, preferred_edition
 `
 
 type UpdateMovieParams struct {
@@ -903,8 +981,23 @@ func (q *Queries) UpdateMovie(ctx context.Context, arg UpdateMovieParams) (Movie
 		&i.MetadataRefreshedAt,
 		&i.MinimumAvailability,
 		&i.ReleaseDate,
+		&i.PreferredEdition,
 	)
 	return i, err
+}
+
+const updateMovieFileEdition = `-- name: UpdateMovieFileEdition :exec
+UPDATE movie_files SET edition = ? WHERE id = ?
+`
+
+type UpdateMovieFileEditionParams struct {
+	Edition *string `json:"edition"`
+	ID      string  `json:"id"`
+}
+
+func (q *Queries) UpdateMovieFileEdition(ctx context.Context, arg UpdateMovieFileEditionParams) error {
+	_, err := q.db.ExecContext(ctx, updateMovieFileEdition, arg.Edition, arg.ID)
+	return err
 }
 
 const updateMovieFileIndexed = `-- name: UpdateMovieFileIndexed :exec
@@ -969,7 +1062,7 @@ func (q *Queries) UpdateMovieMetadataRefreshed(ctx context.Context, arg UpdateMo
 }
 
 const updateMoviePath = `-- name: UpdateMoviePath :one
-UPDATE movies SET path = ?, updated_at = ? WHERE id = ? RETURNING id, tmdb_id, imdb_id, title, original_title, year, overview, runtime_minutes, genres_json, poster_url, fanart_url, status, monitored, library_id, quality_profile_id, path, added_at, updated_at, metadata_refreshed_at, minimum_availability, release_date
+UPDATE movies SET path = ?, updated_at = ? WHERE id = ? RETURNING id, tmdb_id, imdb_id, title, original_title, year, overview, runtime_minutes, genres_json, poster_url, fanart_url, status, monitored, library_id, quality_profile_id, path, added_at, updated_at, metadata_refreshed_at, minimum_availability, release_date, preferred_edition
 `
 
 type UpdateMoviePathParams struct {
@@ -1003,12 +1096,28 @@ func (q *Queries) UpdateMoviePath(ctx context.Context, arg UpdateMoviePathParams
 		&i.MetadataRefreshedAt,
 		&i.MinimumAvailability,
 		&i.ReleaseDate,
+		&i.PreferredEdition,
 	)
 	return i, err
 }
 
+const updateMoviePreferredEdition = `-- name: UpdateMoviePreferredEdition :exec
+UPDATE movies SET preferred_edition = ?, updated_at = ? WHERE id = ?
+`
+
+type UpdateMoviePreferredEditionParams struct {
+	PreferredEdition *string `json:"preferredEdition"`
+	UpdatedAt        string  `json:"updatedAt"`
+	ID               string  `json:"id"`
+}
+
+func (q *Queries) UpdateMoviePreferredEdition(ctx context.Context, arg UpdateMoviePreferredEditionParams) error {
+	_, err := q.db.ExecContext(ctx, updateMoviePreferredEdition, arg.PreferredEdition, arg.UpdatedAt, arg.ID)
+	return err
+}
+
 const updateMovieStatus = `-- name: UpdateMovieStatus :one
-UPDATE movies SET status = ?, updated_at = ? WHERE id = ? RETURNING id, tmdb_id, imdb_id, title, original_title, year, overview, runtime_minutes, genres_json, poster_url, fanart_url, status, monitored, library_id, quality_profile_id, path, added_at, updated_at, metadata_refreshed_at, minimum_availability, release_date
+UPDATE movies SET status = ?, updated_at = ? WHERE id = ? RETURNING id, tmdb_id, imdb_id, title, original_title, year, overview, runtime_minutes, genres_json, poster_url, fanart_url, status, monitored, library_id, quality_profile_id, path, added_at, updated_at, metadata_refreshed_at, minimum_availability, release_date, preferred_edition
 `
 
 type UpdateMovieStatusParams struct {
@@ -1042,6 +1151,7 @@ func (q *Queries) UpdateMovieStatus(ctx context.Context, arg UpdateMovieStatusPa
 		&i.MetadataRefreshedAt,
 		&i.MinimumAvailability,
 		&i.ReleaseDate,
+		&i.PreferredEdition,
 	)
 	return i, err
 }

@@ -10,15 +10,18 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sort"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/luminarr/luminarr/internal/core/blocklist"
 	"github.com/luminarr/luminarr/internal/core/downloader"
+	"github.com/luminarr/luminarr/internal/core/edition"
 	"github.com/luminarr/luminarr/internal/core/indexer"
 	"github.com/luminarr/luminarr/internal/core/movie"
 	"github.com/luminarr/luminarr/internal/core/quality"
+	"github.com/luminarr/luminarr/internal/core/tag"
 	"github.com/luminarr/luminarr/internal/events"
 	"github.com/luminarr/luminarr/pkg/plugin"
 )
@@ -75,6 +78,7 @@ type Service struct {
 	downloaderSvc *downloader.Service
 	blocklistSvc  *blocklist.Service
 	qualitySvc    *quality.Service
+	tagSvc        *tag.Service
 	bus           *events.Bus
 	logger        *slog.Logger
 }
@@ -86,6 +90,7 @@ func NewService(
 	downloaderSvc *downloader.Service,
 	blocklistSvc *blocklist.Service,
 	qualitySvc *quality.Service,
+	tagSvc *tag.Service,
 	bus *events.Bus,
 	logger *slog.Logger,
 ) *Service {
@@ -95,6 +100,7 @@ func NewService(
 		downloaderSvc: downloaderSvc,
 		blocklistSvc:  blocklistSvc,
 		qualitySvc:    qualitySvc,
+		tagSvc:        tagSvc,
 		bus:           bus,
 		logger:        logger,
 	}
@@ -113,14 +119,17 @@ func (s *Service) SearchMovie(ctx context.Context, movieID string) (*Result, err
 		return nil, fmt.Errorf("fetching movie: %w", err)
 	}
 
-	// 2. Full indexer search.
+	// 2. Compute tag-filtered indexer and download client IDs.
+	allowedIndexerIDs, allowedClientIDs := s.allowedEntityIDs(ctx, movieID)
+
+	// 3. Full indexer search (filtered by tags).
 	query := plugin.SearchQuery{
 		TMDBID: mov.TMDBID,
 		IMDBID: mov.IMDBID,
 		Query:  mov.Title,
 		Year:   mov.Year,
 	}
-	results, searchErr := s.indexerSvc.Search(ctx, query)
+	results, searchErr := s.indexerSvc.Search(ctx, query, allowedIndexerIDs)
 	if len(results) == 0 {
 		if searchErr != nil {
 			return nil, fmt.Errorf("all indexers failed: %w", searchErr)
@@ -132,20 +141,41 @@ func (s *Service) SearchMovie(ctx context.Context, movieID string) (*Result, err
 		}, nil
 	}
 
-	// 3. Load quality profile.
+	// 3b. Apply edition bonus and re-sort.
+	// When the movie has a preferred edition, releases matching it get a
+	// +30 bonus added to their effective score. This influences sort order
+	// (which release gets grabbed first) without affecting whether a release
+	// passes the quality profile gate.
+	if mov.PreferredEdition != "" {
+		for i := range results {
+			bonus := edition.Bonus(mov.PreferredEdition, results[i].Edition)
+			results[i].QualityScore += bonus
+		}
+		sort.SliceStable(results, func(i, j int) bool {
+			si, sj := results[i].QualityScore, results[j].QualityScore
+			if si != sj {
+				return si > sj
+			}
+			return results[i].Seeds > results[j].Seeds
+		})
+	}
+
+	// 4. Load quality profile.
 	prof, err := s.qualitySvc.Get(ctx, mov.QualityProfileID)
 	if err != nil {
 		return nil, fmt.Errorf("loading quality profile: %w", err)
 	}
 
-	// 4. Determine current file quality on disk (nil = no file).
+	// 5. Determine current file quality and edition on disk (nil = no file).
 	var currentQuality *plugin.Quality
+	var currentEdition string
 	if files, fErr := s.movieSvc.ListFiles(ctx, movieID); fErr == nil && len(files) > 0 {
 		best := bestFileQuality(files)
 		currentQuality = &best
+		currentEdition = bestFileEdition(files)
 	}
 
-	// 5. Iterate candidates (sorted best→worst), try each.
+	// 6. Iterate candidates (sorted best→worst), try each.
 	for _, r := range results {
 		// Skip blocklisted releases.
 		if s.blocklistSvc != nil {
@@ -157,8 +187,15 @@ func (s *Service) SearchMovie(ctx context.Context, movieID string) (*Result, err
 			}
 		}
 
-		// Skip releases the quality profile doesn't want.
-		if !prof.WantRelease(r.Quality, currentQuality) {
+		// Skip releases the quality profile doesn't want — unless this is an
+		// edition upgrade: the movie has a preferred edition, the current file
+		// doesn't match it, and this release does. In that case the release
+		// must still be in the profile's allowed quality set.
+		wantByQuality := prof.WantRelease(r.Quality, currentQuality)
+		wantByEdition := mov.PreferredEdition != "" &&
+			!strings.EqualFold(currentEdition, mov.PreferredEdition) &&
+			strings.EqualFold(r.Edition, mov.PreferredEdition)
+		if !wantByQuality && !wantByEdition {
 			continue
 		}
 
@@ -166,7 +203,7 @@ func (s *Service) SearchMovie(ctx context.Context, movieID string) (*Result, err
 		if s.downloaderSvc == nil {
 			return nil, fmt.Errorf("no download client service configured")
 		}
-		dcID, itemID, addErr := s.downloaderSvc.Add(ctx, r.Release)
+		dcID, itemID, addErr := s.downloaderSvc.Add(ctx, r.Release, allowedClientIDs)
 		if addErr != nil {
 			if errors.Is(addErr, downloader.ErrNoCompatibleClient) {
 				return nil, fmt.Errorf("no download client configured for protocol %s", r.Protocol)
@@ -190,6 +227,19 @@ func (s *Service) SearchMovie(ctx context.Context, movieID string) (*Result, err
 
 		// Compute score breakdown for history.
 		_, breakdown := prof.ScoreWithBreakdown(r.Quality)
+		edBonus := edition.Bonus(mov.PreferredEdition, r.Edition)
+		if edBonus > 0 {
+			breakdown.EditionBonus = edBonus
+			breakdown.Total += edBonus
+			breakdown.Dimensions = append(breakdown.Dimensions, plugin.ScoreDimension{
+				Name:    "edition",
+				Score:   edBonus,
+				Max:     edition.EditionBonus,
+				Matched: true,
+				Got:     r.Edition,
+				Want:    mov.PreferredEdition,
+			})
+		}
 		breakdownJSON, _ := json.Marshal(breakdown)
 
 		// Record grab in history. The unique partial index on grab_history
@@ -349,7 +399,59 @@ func bestFileQuality(files []movie.FileInfo) plugin.Quality {
 	return best
 }
 
+// bestFileEdition returns the edition of the highest-scoring file.
+// Returns empty string when files have no edition tag.
+func bestFileEdition(files []movie.FileInfo) string {
+	var bestQ plugin.Quality
+	var bestEdition string
+	for _, f := range files {
+		if f.Quality.BetterThan(bestQ) {
+			bestQ = f.Quality
+			bestEdition = f.Edition
+		}
+	}
+	return bestEdition
+}
+
 // isUniqueViolation reports whether err is a SQLite UNIQUE constraint violation.
 func isUniqueViolation(err error) bool {
 	return err != nil && strings.Contains(err.Error(), "UNIQUE constraint failed")
+}
+
+// allowedEntityIDs returns the indexer and download client IDs that are allowed
+// for the given movie based on tag overlap. Returns nil slices (= no filter)
+// when the tag service is not configured.
+func (s *Service) allowedEntityIDs(ctx context.Context, movieID string) (indexerIDs, clientIDs []string) {
+	if s.tagSvc == nil {
+		return nil, nil
+	}
+	movieTags, err := s.tagSvc.MovieTagIDs(ctx, movieID)
+	if err != nil || len(movieTags) == 0 {
+		// No movie tags → all entities are eligible.
+		return nil, nil
+	}
+
+	// Filter indexers.
+	indexerConfigs, err := s.indexerSvc.List(ctx)
+	if err == nil {
+		for _, cfg := range indexerConfigs {
+			entityTags, _ := s.tagSvc.IndexerTagIDs(ctx, cfg.ID)
+			if tag.TagsOverlap(movieTags, entityTags) {
+				indexerIDs = append(indexerIDs, cfg.ID)
+			}
+		}
+	}
+
+	// Filter download clients.
+	clientConfigs, err := s.downloaderSvc.List(ctx)
+	if err == nil {
+		for _, cfg := range clientConfigs {
+			entityTags, _ := s.tagSvc.DownloadClientTagIDs(ctx, cfg.ID)
+			if tag.TagsOverlap(movieTags, entityTags) {
+				clientIDs = append(clientIDs, cfg.ID)
+			}
+		}
+	}
+
+	return indexerIDs, clientIDs
 }

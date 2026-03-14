@@ -15,12 +15,13 @@ import (
 
 // CollectionStats is a summary of the movie library.
 type CollectionStats struct {
-	TotalMovies   int64 `json:"total_movies"`
-	Monitored     int64 `json:"monitored"`
-	WithFile      int64 `json:"with_file"`
-	Missing       int64 `json:"missing"`
-	NeedsUpgrade  int64 `json:"needs_upgrade"`
-	RecentlyAdded int64 `json:"recently_added"`
+	TotalMovies       int64 `json:"total_movies"`
+	Monitored         int64 `json:"monitored"`
+	WithFile          int64 `json:"with_file"`
+	Missing           int64 `json:"missing"`
+	NeedsUpgrade      int64 `json:"needs_upgrade"`
+	EditionMismatches int64 `json:"edition_mismatches"`
+	RecentlyAdded     int64 `json:"recently_added"`
 }
 
 // QualityBucket is one slice of the quality distribution.
@@ -94,13 +95,19 @@ func (s *Service) Collection(ctx context.Context) (CollectionStats, error) {
 		}
 	}
 
+	var editionMismatches int64
+	if cnt, edErr := s.q.CountEditionMismatches(ctx); edErr == nil {
+		editionMismatches = cnt
+	}
+
 	return CollectionStats{
-		TotalMovies:   row.TotalMovies,
-		Monitored:     derefFloat(row.Monitored),
-		WithFile:      derefFloat(row.WithFile),
-		Missing:       derefFloat(row.Missing),
-		NeedsUpgrade:  needsUpgrade,
-		RecentlyAdded: derefFloat(row.RecentlyAdded),
+		TotalMovies:       row.TotalMovies,
+		Monitored:         derefFloat(row.Monitored),
+		WithFile:          derefFloat(row.WithFile),
+		Missing:           derefFloat(row.Missing),
+		NeedsUpgrade:      needsUpgrade,
+		EditionMismatches: editionMismatches,
+		RecentlyAdded:     derefFloat(row.RecentlyAdded),
 	}, nil
 }
 

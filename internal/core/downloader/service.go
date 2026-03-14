@@ -212,15 +212,32 @@ func (s *Service) Test(ctx context.Context, id string) error {
 }
 
 // Add finds the first enabled download client that supports the release's
-// protocol and submits the release. Returns the download client config ID
-// and the client-assigned item ID.
-func (s *Service) Add(ctx context.Context, r plugin.Release) (downloadClientID, clientItemID string, err error) {
+// protocol and submits the release. If allowedIDs is non-nil, only clients
+// whose ID appears in the slice are considered (tag-based filtering). Pass nil
+// to consider all enabled clients. Returns the download client config ID and
+// the client-assigned item ID.
+func (s *Service) Add(ctx context.Context, r plugin.Release, allowedIDs []string) (downloadClientID, clientItemID string, err error) {
 	rows, err := s.q.ListEnabledDownloadClients(ctx)
 	if err != nil {
 		return "", "", fmt.Errorf("listing enabled download clients: %w", err)
 	}
 
+	// Build allowed set for O(1) lookup when filtering by tags.
+	var allowedSet map[string]struct{}
+	if allowedIDs != nil {
+		allowedSet = make(map[string]struct{}, len(allowedIDs))
+		for _, id := range allowedIDs {
+			allowedSet[id] = struct{}{}
+		}
+	}
+
 	for _, row := range rows {
+		// Skip clients not in the allowed set.
+		if allowedSet != nil {
+			if _, ok := allowedSet[row.ID]; !ok {
+				continue
+			}
+		}
 		cfg, err := rowToConfig(row)
 		if err != nil {
 			return "", "", fmt.Errorf("parsing download client config %q: %w", row.ID, err)

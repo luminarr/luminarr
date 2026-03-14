@@ -4,6 +4,7 @@ import { useCollection, useAddMissing, useAddSelected } from "@/api/collections"
 import { useLibraries } from "@/api/libraries";
 import { useQualityProfiles } from "@/api/quality-profiles";
 import type { CollectionItem } from "@/types";
+import Modal from "@/components/Modal";
 
 const TMDB_POSTER_BASE = "https://image.tmdb.org/t/p/w185";
 
@@ -77,41 +78,6 @@ function AddDropdowns({
   );
 }
 
-// ── Modal shell ────────────────────────────────────────────────────────────
-
-function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
-  return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.6)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 1000,
-      }}
-      onClick={onClose}
-    >
-      <div
-        style={{
-          background: "var(--color-bg-elevated)",
-          border: "1px solid var(--color-border-default)",
-          borderRadius: 10,
-          width: 400,
-          padding: 24,
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h3 style={{ margin: "0 0 16px", fontSize: 15, fontWeight: 600, color: "var(--color-text-primary)" }}>
-          {title}
-        </h3>
-        {children}
-      </div>
-    </div>
-  );
-}
-
 // ── Add Missing Modal ──────────────────────────────────────────────────────
 
 function AddMissingModal({
@@ -138,7 +104,10 @@ function AddMissingModal({
   }
 
   return (
-    <Modal title={`Add ${missingCount} Missing Film${missingCount === 1 ? "" : "s"}`} onClose={onClose}>
+    <Modal onClose={onClose} width={400} innerStyle={{ padding: 24 }}>
+      <h3 style={{ margin: "0 0 16px", fontSize: 15, fontWeight: 600, color: "var(--color-text-primary)" }}>
+        {`Add ${missingCount} Missing Film${missingCount === 1 ? "" : "s"}`}
+      </h3>
       <AddDropdowns
         libraryId={libraryId} setLibraryId={setLibraryId}
         profileId={profileId} setProfileId={setProfileId}
@@ -189,7 +158,10 @@ function AddSelectedModal({
   }
 
   return (
-    <Modal title={`Add ${selectedCount} Selected Film${selectedCount === 1 ? "" : "s"}`} onClose={onClose}>
+    <Modal onClose={onClose} width={400} innerStyle={{ padding: 24 }}>
+      <h3 style={{ margin: "0 0 16px", fontSize: 15, fontWeight: 600, color: "var(--color-text-primary)" }}>
+        {`Add ${selectedCount} Selected Film${selectedCount === 1 ? "" : "s"}`}
+      </h3>
       <AddDropdowns
         libraryId={libraryId} setLibraryId={setLibraryId}
         profileId={profileId} setProfileId={setProfileId}

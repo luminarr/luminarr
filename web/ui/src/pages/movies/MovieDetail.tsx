@@ -17,8 +17,10 @@ import {
   useMovieSuggestions,
   useRenameMovie,
   useAutoSearch,
+  useEditions,
   type GrabReleaseRequest,
 } from "@/api/movies";
+import Modal from "@/components/Modal";
 import ScoreChip from "@/components/ScoreChip";
 import IndexerPill from "@/components/IndexerPill";
 import QualityBadge from "@/components/QualityBadge";
@@ -221,6 +223,21 @@ function ReleaseRow({ release, grabbed, grabError, onGrab, isPending }: ReleaseR
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 4, flexWrap: "wrap" }}>
           <QualityBadge quality={release.quality} />
+          {release.edition && (
+            <span
+              style={{
+                display: "inline-block",
+                padding: "1px 6px",
+                borderRadius: 4,
+                fontSize: 10,
+                fontWeight: 600,
+                background: "color-mix(in srgb, var(--color-info, #3b82f6) 15%, transparent)",
+                color: "var(--color-info, #3b82f6)",
+              }}
+            >
+              {release.edition}
+            </span>
+          )}
           <span style={{ fontSize: 11, color: "var(--color-text-muted)" }}>
             {formatBytes(release.size)}
           </span>
@@ -301,31 +318,7 @@ function RenameModal({
   }
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.55)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 200,
-      }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-    >
-      <div
-        style={{
-          background: "var(--color-bg-surface)",
-          border: "1px solid var(--color-border-default)",
-          borderRadius: 10,
-          padding: "24px 28px",
-          width: 560,
-          maxWidth: "90vw",
-          maxHeight: "80vh",
-          overflow: "auto",
-          boxShadow: "var(--shadow-modal)",
-        }}
-      >
+    <Modal onClose={onClose} width={560} maxWidth="90vw" maxHeight="80vh" innerStyle={{ padding: "24px 28px", overflow: "auto" }}>
         <h2 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700, color: "var(--color-text-primary)" }}>
           Rename Files
         </h2>
@@ -394,8 +387,7 @@ function RenameModal({
             {rename.isPending ? "Renaming…" : "Rename"}
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -1053,6 +1045,7 @@ export default function MovieDetail() {
   const updateMovie = useUpdateMovie();
   const refreshMovie = useRefreshMovie();
   const autoSearch = useAutoSearch();
+  const { data: editions } = useEditions();
 
   const [tab, setTab] = useState<Tab>("overview");
   const [confirming, setConfirming] = useState(false);
@@ -1067,6 +1060,7 @@ export default function MovieDetail() {
       library_id: movie.library_id,
       quality_profile_id: movie.quality_profile_id,
       minimum_availability: movie.minimum_availability,
+      preferred_edition: movie.preferred_edition,
     });
   }
 
@@ -1079,6 +1073,20 @@ export default function MovieDetail() {
       library_id: movie.library_id,
       quality_profile_id: movie.quality_profile_id,
       minimum_availability: value,
+      preferred_edition: movie.preferred_edition,
+    });
+  }
+
+  function handlePreferredEditionChange(value: string) {
+    if (!movie) return;
+    updateMovie.mutate({
+      id: movie.id,
+      title: movie.title,
+      monitored: movie.monitored,
+      library_id: movie.library_id,
+      quality_profile_id: movie.quality_profile_id,
+      minimum_availability: movie.minimum_availability,
+      preferred_edition: value || undefined,
     });
   }
 
@@ -1333,6 +1341,39 @@ export default function MovieDetail() {
                     <option value="in_cinemas">In Cinemas</option>
                     <option value="released">Released</option>
                     <option value="tba">TBA</option>
+                  </select>
+                </div>
+
+                {/* Preferred edition selector */}
+                <div
+                  style={{
+                    background: "var(--color-bg-elevated)",
+                    border: "1px solid var(--color-border-subtle)",
+                    borderRadius: 6,
+                    padding: "8px 14px",
+                  }}
+                >
+                  <div style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--color-text-muted)", marginBottom: 4 }}>
+                    Preferred Edition
+                  </div>
+                  <select
+                    value={movie.preferred_edition || ""}
+                    onChange={(e) => handlePreferredEditionChange(e.target.value)}
+                    disabled={updateMovie.isPending}
+                    style={{
+                      fontSize: 13,
+                      color: movie.preferred_edition ? "var(--color-text-primary)" : "var(--color-text-muted)",
+                      background: "transparent",
+                      border: "none",
+                      padding: 0,
+                      cursor: "pointer",
+                      outline: "none",
+                    }}
+                  >
+                    <option value="">Any</option>
+                    {editions?.map((ed) => (
+                      <option key={ed} value={ed}>{ed}</option>
+                    ))}
                   </select>
                 </div>
               </div>

@@ -21,22 +21,27 @@ var (
 	re2160p = regexp.MustCompile(`(?i)(?:4k|uhd|2160p)`)
 	re1080p = regexp.MustCompile(`(?i)1080p`)
 	re720p  = regexp.MustCompile(`(?i)720p`)
-	// 480p, 576p explicitly → SD. DVDRip/DVDR on their own also imply SD.
-	reSD = regexp.MustCompile(`(?i)(?:480p|576p)`)
+	re576p  = regexp.MustCompile(`(?i)576p`)
+	re480p  = regexp.MustCompile(`(?i)480p`)
 
 	// ── Source ───────────────────────────────────────────────────────────────
-	// Order matters: REMUX must be detected before BluRay to avoid double-classifying.
-	reRemux  = regexp.MustCompile(`(?i)(?:remux|bdremux)`)
-	reBluRay = regexp.MustCompile(`(?i)blu[\s\-]?ray|bluray`)
-	reWEBDL  = regexp.MustCompile(`(?i)web[\s\-.]?dl`)
-	reWEBRip = regexp.MustCompile(`(?i)web[\s\-.]?rip`)
-	reHDTV   = regexp.MustCompile(`(?i)hdtv`)
-	// DVDRip, DVD.Rip, DVDR all classify as DVD/SD.
-	reDVD = regexp.MustCompile(`(?i)dvd[\s\-.]?rip|dvdr\b`)
-	// CAM, HDCAM, CAMRip.
-	reCAM = regexp.MustCompile(`(?i)(?:hd)?cam(?:rip)?`)
-	// TELESYNC (TS) and TELECINE — match as whole words to avoid false hits.
-	reTS = regexp.MustCompile(`(?i)(?:\btelesync\b|\btelecine\b|\bts\b)`)
+	// Order matters: disc images first, then REMUX before BluRay, DVDSCR before
+	// DVD to avoid mis-parses.
+	reRawHD     = regexp.MustCompile(`(?i)\braw[\s\-]?hd\b`)
+	reBRDisk    = regexp.MustCompile(`(?i)(?:\bbdmv\b|\bbd25\b|\bbd50\b|\bbr[\s\-]?disk\b)`)
+	reRemux     = regexp.MustCompile(`(?i)(?:remux|bdremux)`)
+	reBluRay    = regexp.MustCompile(`(?i)blu[\s\-]?ray|bluray`)
+	reWEBDL     = regexp.MustCompile(`(?i)web[\s\-.]?dl`)
+	reWEBRip    = regexp.MustCompile(`(?i)web[\s\-.]?rip`)
+	reHDTV      = regexp.MustCompile(`(?i)hdtv`)
+	reDVDSCR    = regexp.MustCompile(`(?i)(?:\bdvdscr\b|\bscreener\b|\bscr\b)`)
+	reDVDR      = regexp.MustCompile(`(?i)(?:\bdvd[\s\-]?r\b|\bdvd9\b|\bdvd5\b|\bdvdr\b)`)
+	reDVDRip    = regexp.MustCompile(`(?i)dvd[\s\-.]?rip`)
+	reRegional  = regexp.MustCompile(`(?i)(?:\br5\b|\bregional\b)`)
+	reTelecine  = regexp.MustCompile(`(?i)(?:\btelecine\b|\bhdtc\b|\btc\b)`)
+	reTelesync  = regexp.MustCompile(`(?i)(?:\btelesync\b|\bhdts\b|\bpdvd\b|\bts\b)`)
+	reCAM       = regexp.MustCompile(`(?i)(?:hd)?cam(?:rip)?`)
+	reWorkprint = regexp.MustCompile(`(?i)(?:\bworkprint\b|\bwp\b)`)
 
 	// ── HDR ──────────────────────────────────────────────────────────────────
 	// DolbyVision (DV / DoVi / Dolby.Vision) must be checked before HDR10
@@ -89,7 +94,7 @@ func Parse(title string) (plugin.Quality, error) {
 }
 
 // parseResolution returns the resolution inferred from explicit tokens in the
-// title, falling back to SD when the source implies standard definition (DVD).
+// title, falling back to SD when the source implies standard definition.
 func parseResolution(norm string, src plugin.Source) plugin.Resolution {
 	switch {
 	case re2160p.MatchString(norm):
@@ -98,20 +103,27 @@ func parseResolution(norm string, src plugin.Source) plugin.Resolution {
 		return plugin.Resolution1080p
 	case re720p.MatchString(norm):
 		return plugin.Resolution720p
-	case reSD.MatchString(norm):
-		return plugin.ResolutionSD
-	case src == plugin.SourceDVD:
-		// DVDRip/DVDR without an explicit resolution token are always SD.
+	case re576p.MatchString(norm):
+		return plugin.Resolution576p
+	case re480p.MatchString(norm):
+		return plugin.Resolution480p
+	case src == plugin.SourceDVD || src == plugin.SourceDVDR || src == plugin.SourceDVDSCR || src == plugin.SourceRegional:
+		// SD sources without an explicit resolution token are always SD.
 		return plugin.ResolutionSD
 	default:
 		return plugin.ResolutionUnknown
 	}
 }
 
-// parseSource identifies the release origin. REMUX must be checked before
-// BluRay; DVD must be checked before CAM to prevent "DVDCAM" mis-parses.
+// parseSource identifies the release origin. Order matters:
+// disc images first, REMUX before BluRay, DVDSCR before DVD/DVDR,
+// telecine before telesync (both use short forms that could overlap).
 func parseSource(norm string) plugin.Source {
 	switch {
+	case reRawHD.MatchString(norm):
+		return plugin.SourceRawHD
+	case reBRDisk.MatchString(norm):
+		return plugin.SourceBRDisk
 	case reRemux.MatchString(norm):
 		return plugin.SourceRemux
 	case reBluRay.MatchString(norm):
@@ -123,12 +135,25 @@ func parseSource(norm string) plugin.Source {
 		return plugin.SourceWEBRip
 	case reHDTV.MatchString(norm):
 		return plugin.SourceHDTV
-	case reDVD.MatchString(norm):
+	// DVDSCR before DVD/DVDR to prevent partial match.
+	case reDVDSCR.MatchString(norm):
+		return plugin.SourceDVDSCR
+	// DVDR (full disc image) before DVDRip.
+	case reDVDR.MatchString(norm):
+		return plugin.SourceDVDR
+	case reDVDRip.MatchString(norm):
 		return plugin.SourceDVD
-	case reTS.MatchString(norm):
+	case reRegional.MatchString(norm):
+		return plugin.SourceRegional
+	// TELECINE before TELESYNC: "TC" is telecine, "TS" is telesync.
+	case reTelecine.MatchString(norm):
 		return plugin.SourceTELECINE
+	case reTelesync.MatchString(norm):
+		return plugin.SourceTelesync
 	case reCAM.MatchString(norm):
 		return plugin.SourceCAM
+	case reWorkprint.MatchString(norm):
+		return plugin.SourceWorkprint
 	default:
 		return plugin.SourceUnknown
 	}
@@ -222,6 +247,10 @@ func buildName(res plugin.Resolution, src plugin.Source, codec plugin.Codec, hdr
 
 func sourceLabel(src plugin.Source) string {
 	switch src {
+	case plugin.SourceRawHD:
+		return "Raw-HD"
+	case plugin.SourceBRDisk:
+		return "BR-DISK"
 	case plugin.SourceRemux:
 		return "Bluray Remux"
 	case plugin.SourceBluRay:
@@ -232,12 +261,22 @@ func sourceLabel(src plugin.Source) string {
 		return "WEBRip"
 	case plugin.SourceHDTV:
 		return "HDTV"
+	case plugin.SourceDVDSCR:
+		return "DVDSCR"
+	case plugin.SourceDVDR:
+		return "DVD-R"
 	case plugin.SourceDVD:
 		return "DVD"
-	case plugin.SourceCAM:
-		return "CAM"
+	case plugin.SourceRegional:
+		return "Regional"
 	case plugin.SourceTELECINE:
 		return "Telecine"
+	case plugin.SourceTelesync:
+		return "Telesync"
+	case plugin.SourceCAM:
+		return "CAM"
+	case plugin.SourceWorkprint:
+		return "Workprint"
 	default:
 		return ""
 	}
@@ -251,6 +290,10 @@ func resolutionLabel(res plugin.Resolution) string {
 		return "1080p"
 	case plugin.Resolution720p:
 		return "720p"
+	case plugin.Resolution576p:
+		return "576p"
+	case plugin.Resolution480p:
+		return "480p"
 	case plugin.ResolutionSD:
 		return "SD"
 	default:

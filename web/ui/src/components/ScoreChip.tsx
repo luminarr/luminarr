@@ -7,10 +7,12 @@ export default function ScoreChip({ breakdown }: { breakdown?: ScoreBreakdown })
   if (!breakdown) return null;
 
   const score = breakdown.total;
+  const maxScore = breakdown.dimensions.reduce((sum, d) => sum + d.max, 0) || 100;
+  const pct = maxScore > 0 ? (score / maxScore) * 100 : 0;
   const color =
-    score >= 80
+    pct >= 80
       ? "var(--color-success)"
-      : score >= 50
+      : pct >= 50
         ? "var(--color-warning)"
         : "var(--color-danger)";
 
@@ -31,7 +33,7 @@ export default function ScoreChip({ breakdown }: { breakdown?: ScoreBreakdown })
           userSelect: "none",
         }}
       >
-        {score}/100
+        {score}/{maxScore}
       </span>
 
       {open && (
@@ -94,7 +96,7 @@ export default function ScoreChip({ breakdown }: { breakdown?: ScoreBreakdown })
             }}
           >
             <span style={{ color: "var(--color-text-secondary)" }}>Total</span>
-            <span style={{ color }}>{score}/100</span>
+            <span style={{ color }}>{score}/{maxScore}</span>
           </div>
         </div>
       )}

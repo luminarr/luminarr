@@ -10,6 +10,7 @@ import (
 	"github.com/luminarr/luminarr/internal/core/movie"
 	"github.com/luminarr/luminarr/internal/core/quality"
 	"github.com/luminarr/luminarr/internal/core/queue"
+	"github.com/luminarr/luminarr/internal/core/tag"
 	"github.com/luminarr/luminarr/internal/scheduler"
 )
 
@@ -20,6 +21,7 @@ type Config struct {
 	QualityService *quality.Service
 	LibraryService *library.Service
 	QueueService   *queue.Service
+	TagService     *tag.Service
 	Scheduler      *scheduler.Scheduler
 }
 
@@ -55,7 +57,7 @@ func RegisterRoutes(api huma.API, cfg Config) {
 	registerMovieRoutes(api, cfg.DB, cfg.MovieService, cfg.LibraryService)
 	registerQualityProfileRoutes(api, cfg.DB, cfg.QualityService)
 	registerRootFolderRoutes(api, cfg.DB, cfg.LibraryService)
-	registerTagRoutes(api)
+	registerTagRoutes(api, cfg.TagService)
 	registerQueueRoutes(api, cfg.QueueService)
 	registerCommandRoutes(api, cfg.DB, cfg.MovieService, cfg.Scheduler)
 }

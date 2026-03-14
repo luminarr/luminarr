@@ -313,7 +313,7 @@ func TestService_Search_ReturnsAndSortsByQuality(t *testing.T) {
 	req.Enabled = true
 	_, _ = svc.Create(ctx, req)
 
-	results, err := svc.Search(ctx, plugin.SearchQuery{TMDBID: 12345, Query: "Movie", Year: 2023})
+	results, err := svc.Search(ctx, plugin.SearchQuery{TMDBID: 12345, Query: "Movie", Year: 2023}, nil)
 	if err != nil {
 		t.Fatalf("Search() error = %v", err)
 	}
@@ -335,7 +335,7 @@ func TestService_Search_NoIndexers(t *testing.T) {
 	svc := newServiceFromSQL(sqlDB, &mockIndexer{})
 	ctx := context.Background()
 
-	results, err := svc.Search(ctx, plugin.SearchQuery{Query: "Movie"})
+	results, err := svc.Search(ctx, plugin.SearchQuery{Query: "Movie"}, nil)
 	if err != nil {
 		t.Errorf("Search() with no indexers error = %v, want nil", err)
 	}
@@ -356,7 +356,7 @@ func TestService_Search_DisabledIndexerSkipped(t *testing.T) {
 	req.Enabled = false
 	_, _ = svc.Create(ctx, req)
 
-	results, err := svc.Search(ctx, plugin.SearchQuery{Query: "Movie"})
+	results, err := svc.Search(ctx, plugin.SearchQuery{Query: "Movie"}, nil)
 	if err != nil {
 		t.Errorf("Search() error = %v", err)
 	}

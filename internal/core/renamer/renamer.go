@@ -37,6 +37,7 @@ type Movie struct {
 	Title         string
 	OriginalTitle string
 	Year          int
+	Edition       string // detected edition of the file; empty = untagged
 }
 
 // Apply returns the formatted filename (without extension) for the given movie,
@@ -48,6 +49,7 @@ type Movie struct {
 //	{Release Year}         → movie.Year
 //	{Quality Full}         → quality.Name  (e.g. "Bluray-1080p")
 //	{MediaInfo VideoCodec} → quality.Codec (e.g. "x265")
+//	{Edition}              → movie.Edition (e.g. "Director's Cut"); empty when untagged
 func Apply(format string, m Movie, q plugin.Quality) string {
 	return ApplyWithOptions(format, m, q, ColonDelete)
 }
@@ -61,6 +63,7 @@ func ApplyWithOptions(format string, m Movie, q plugin.Quality, colon ColonRepla
 		"{Release Year}", yearStr(m.Year),
 		"{Quality Full}", q.Name,
 		"{MediaInfo VideoCodec}", string(q.Codec),
+		"{Edition}", m.Edition,
 	)
 	result := r.Replace(format)
 	return sanitize(result)

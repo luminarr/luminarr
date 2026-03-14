@@ -4,56 +4,59 @@ import (
 	"context"
 	"net/http"
 	"sync"
-	"sync/atomic"
 
 	"github.com/danielgtaylor/huma/v2"
+
+	"github.com/luminarr/luminarr/internal/core/tag"
 )
 
-// tagStore is a simple in-memory tag store for Radarr v3 compatibility.
-// Tags are not persisted — they exist only for the lifetime of the process.
-// This is sufficient for Overseerr which creates tags on add and passes them
-// along, but doesn't depend on persistence.
-type tagStore struct {
-	mu   sync.RWMutex
-	tags []RadarrTag
-	next atomic.Int64
+// tagMapper provides a stable bidirectional mapping between our UUID-based tag
+// IDs and the integer IDs that Radarr v3 clients (Overseerr, Homepage) expect.
+// The mapping is rebuilt lazily from the real tag service and persists for the
+// process lifetime. Integer IDs are assigned sequentially starting from 1.
+type tagMapper struct {
+	mu      sync.RWMutex
+	uuidInt map[string]int64 // UUID → integer ID
+	intUUID map[int64]string // integer ID → UUID
+	next    int64
 }
 
-func newTagStore() *tagStore {
-	s := &tagStore{}
-	s.next.Store(1)
-	return s
-}
-
-func (s *tagStore) list() []RadarrTag {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	result := make([]RadarrTag, len(s.tags))
-	copy(result, s.tags)
-	return result
-}
-
-func (s *tagStore) create(label string) RadarrTag {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	// Return existing if label matches.
-	for _, t := range s.tags {
-		if t.Label == label {
-			return t
-		}
+func newTagMapper() *tagMapper {
+	return &tagMapper{
+		uuidInt: make(map[string]int64),
+		intUUID: make(map[int64]string),
+		next:    1,
 	}
-
-	tag := RadarrTag{
-		ID:    s.next.Add(1) - 1,
-		Label: label,
-	}
-	s.tags = append(s.tags, tag)
-	return tag
 }
 
-func registerTagRoutes(api huma.API) *tagStore {
-	store := newTagStore()
+// intID returns a stable integer ID for the given UUID, creating one if needed.
+func (m *tagMapper) intID(uuid string) int64 {
+	m.mu.RLock()
+	if id, ok := m.uuidInt[uuid]; ok {
+		m.mu.RUnlock()
+		return id
+	}
+	m.mu.RUnlock()
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	// Double-check after acquiring write lock.
+	if id, ok := m.uuidInt[uuid]; ok {
+		return id
+	}
+	id := m.next
+	m.next++
+	m.uuidInt[uuid] = id
+	m.intUUID[id] = uuid
+	return id
+}
+
+func registerTagRoutes(api huma.API, svc *tag.Service) *tagMapper {
+	mapper := newTagMapper()
+
+	if svc == nil {
+		return mapper
+	}
 
 	huma.Register(api, huma.Operation{
 		OperationID: "radarr-list-tags",
@@ -61,8 +64,19 @@ func registerTagRoutes(api huma.API) *tagStore {
 		Path:        "/api/v3/tag",
 		Summary:     "List tags (Radarr v3 compatible)",
 		Tags:        []string{"RadarrCompat"},
-	}, func(_ context.Context, _ *struct{}) (*struct{ Body []RadarrTag }, error) {
-		return &struct{ Body []RadarrTag }{Body: store.list()}, nil
+	}, func(ctx context.Context, _ *struct{}) (*struct{ Body []RadarrTag }, error) {
+		tags, err := svc.List(ctx)
+		if err != nil {
+			return nil, huma.NewError(http.StatusInternalServerError, "failed to list tags", err)
+		}
+		result := make([]RadarrTag, len(tags))
+		for i, t := range tags {
+			result[i] = RadarrTag{
+				ID:    mapper.intID(t.ID),
+				Label: t.Name,
+			}
+		}
+		return &struct{ Body []RadarrTag }{Body: result}, nil
 	})
 
 	type createTagInput struct {
@@ -76,16 +90,22 @@ func registerTagRoutes(api huma.API) *tagStore {
 		Path:        "/api/v3/tag",
 		Summary:     "Create tag (Radarr v3 compatible)",
 		Tags:        []string{"RadarrCompat"},
-	}, func(_ context.Context, input *createTagInput) (*struct {
+	}, func(ctx context.Context, input *createTagInput) (*struct {
 		Status int
 		Body   RadarrTag
 	}, error) {
-		tag := store.create(input.Body.Label)
+		t, err := svc.Create(ctx, input.Body.Label)
+		if err != nil {
+			return nil, huma.NewError(http.StatusConflict, err.Error())
+		}
 		return &struct {
 			Status int
 			Body   RadarrTag
-		}{Status: http.StatusCreated, Body: tag}, nil
+		}{Status: http.StatusCreated, Body: RadarrTag{
+			ID:    mapper.intID(t.ID),
+			Label: t.Name,
+		}}, nil
 	})
 
-	return store
+	return mapper
 }

@@ -20,6 +20,7 @@ import (
 	"github.com/luminarr/luminarr/internal/api"
 	"github.com/luminarr/luminarr/internal/config"
 	"github.com/luminarr/luminarr/internal/core/blocklist"
+	"github.com/luminarr/luminarr/internal/core/customformat"
 	"github.com/luminarr/luminarr/internal/core/downloader"
 	"github.com/luminarr/luminarr/internal/core/downloadhandling"
 	"github.com/luminarr/luminarr/internal/core/health"
@@ -32,6 +33,7 @@ import (
 	"github.com/luminarr/luminarr/internal/core/quality"
 	"github.com/luminarr/luminarr/internal/core/queue"
 	"github.com/luminarr/luminarr/internal/core/stats"
+	"github.com/luminarr/luminarr/internal/core/tag"
 	dbsqlite "github.com/luminarr/luminarr/internal/db/generated/sqlite"
 	"github.com/luminarr/luminarr/internal/events"
 	"github.com/luminarr/luminarr/internal/ratelimit"
@@ -143,6 +145,8 @@ func newIntegrationRouterFromDB(t *testing.T, q *dbsqlite.Queries, sqlDBs ...*sq
 	mmSvc := mediamanagement.NewService(q)
 	dhSvc := downloadhandling.NewService(q)
 	msSvc := mediaserver.NewService(q, reg)
+	tagSvc := tag.NewService(q)
+	cfSvc := customformat.NewService(q)
 	sched := scheduler.New(logger)
 
 	var sqlDB *sql.DB
@@ -172,6 +176,8 @@ func newIntegrationRouterFromDB(t *testing.T, q *dbsqlite.Queries, sqlDBs ...*sq
 		MediaManagementService:   mmSvc,
 		DownloadHandlingService:  dhSvc,
 		MediaServerService:       msSvc,
+		TagService:               tagSvc,
+		CustomFormatService:      cfSvc,
 		Bus:                      bus,
 	})
 }
@@ -2042,7 +2048,171 @@ func TestIntegration_V3_Auth_EmptyKey_RejectsEmptyQueryParam(t *testing.T) {
 	}
 }
 
+// ── /api/v1/custom-formats ───────────────────────────────────────────────────
+
+func TestIntegration_CustomFormats_CRUD(t *testing.T) {
+	h := newIntegrationRouter(t)
+
+	// POST — create
+	createBody := map[string]any{
+		"name":                  "TrueHD ATMOS",
+		"include_when_renaming": true,
+		"specifications": []map[string]any{
+			{
+				"name":           "TrueHD",
+				"implementation": "release_title",
+				"negate":         false,
+				"required":       true,
+				"fields":         map[string]string{"value": `(?i)\bTrueHD\b`},
+			},
+		},
+	}
+	rec := do(t, h, http.MethodPost, "/api/v1/custom-formats", createBody)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("POST /custom-formats = %d, want 201; body: %s", rec.Code, rec.Body)
+	}
+
+	var created map[string]any
+	mustDecode(t, rec, &created)
+	cfID, ok := created["id"].(string)
+	if !ok || cfID == "" {
+		t.Fatalf("created custom format has no id; body: %v", created)
+	}
+	if created["name"] != "TrueHD ATMOS" {
+		t.Errorf("name = %v, want TrueHD ATMOS", created["name"])
+	}
+
+	// GET — list
+	rec = do(t, h, http.MethodGet, "/api/v1/custom-formats", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /custom-formats = %d, want 200; body: %s", rec.Code, rec.Body)
+	}
+	var list []map[string]any
+	mustDecode(t, rec, &list)
+	if len(list) != 1 {
+		t.Fatalf("list length = %d, want 1", len(list))
+	}
+
+	// GET — single
+	rec = do(t, h, http.MethodGet, "/api/v1/custom-formats/"+cfID, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /custom-formats/%s = %d, want 200; body: %s", cfID, rec.Code, rec.Body)
+	}
+
+	// PUT — update
+	updateBody := map[string]any{
+		"name":                  "TrueHD ATMOS v2",
+		"include_when_renaming": false,
+		"specifications": []map[string]any{
+			{
+				"name":           "TrueHD",
+				"implementation": "release_title",
+				"negate":         false,
+				"required":       false,
+				"fields":         map[string]string{"value": `(?i)\bTrueHD\b`},
+			},
+			{
+				"name":           "Atmos",
+				"implementation": "release_title",
+				"negate":         false,
+				"required":       false,
+				"fields":         map[string]string{"value": `(?i)\bAtmos\b`},
+			},
+		},
+	}
+	rec = do(t, h, http.MethodPut, "/api/v1/custom-formats/"+cfID, updateBody)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("PUT /custom-formats/%s = %d, want 200; body: %s", cfID, rec.Code, rec.Body)
+	}
+	var updated map[string]any
+	mustDecode(t, rec, &updated)
+	if updated["name"] != "TrueHD ATMOS v2" {
+		t.Errorf("updated name = %v, want TrueHD ATMOS v2", updated["name"])
+	}
+
+	// DELETE
+	rec = do(t, h, http.MethodDelete, "/api/v1/custom-formats/"+cfID, nil)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("DELETE /custom-formats/%s = %d, want 204; body: %s", cfID, rec.Code, rec.Body)
+	}
+
+	// Verify deletion
+	rec = do(t, h, http.MethodGet, "/api/v1/custom-formats", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /custom-formats after delete = %d; body: %s", rec.Code, rec.Body)
+	}
+	mustDecode(t, rec, &list)
+	if len(list) != 0 {
+		t.Errorf("list after delete = %d, want 0", len(list))
+	}
+}
+
+func TestIntegration_CustomFormats_Schema(t *testing.T) {
+	h := newIntegrationRouter(t)
+	rec := do(t, h, http.MethodGet, "/api/v1/custom-formats/schema", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /custom-formats/schema = %d, want 200; body: %s", rec.Code, rec.Body)
+	}
+	var schema []map[string]any
+	mustDecode(t, rec, &schema)
+	if len(schema) != 10 {
+		t.Errorf("schema length = %d, want 10", len(schema))
+	}
+}
+
+func TestIntegration_CustomFormats_ImportExport(t *testing.T) {
+	h := newIntegrationRouter(t)
+
+	trashJSON := `{
+		"trash_id": "abc123",
+		"name": "Imported CF",
+		"includeCustomFormatWhenRenaming": false,
+		"specifications": [
+			{
+				"name": "x265",
+				"implementation": "ReleaseTitleSpecification",
+				"negate": false,
+				"required": false,
+				"fields": {"value": "(?i)x265"}
+			}
+		]
+	}`
+
+	// Import
+	rec := doRaw(t, h, http.MethodPost, "/api/v1/custom-formats/import", []byte(trashJSON), "application/json")
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("POST /custom-formats/import = %d, want 201; body: %s", rec.Code, rec.Body)
+	}
+	var imported []map[string]any
+	mustDecode(t, rec, &imported)
+	if len(imported) != 1 {
+		t.Fatalf("imported length = %d, want 1", len(imported))
+	}
+	if imported[0]["name"] != "Imported CF" {
+		t.Errorf("imported name = %v, want Imported CF", imported[0]["name"])
+	}
+
+	// Export all
+	rec = do(t, h, http.MethodGet, "/api/v1/custom-formats/export", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /custom-formats/export = %d, want 200; body: %s", rec.Code, rec.Body)
+	}
+}
+
 // ── helpers ───────────────────────────────────────────────────────────────────
+
+// doRaw performs a request with a raw byte body (for import endpoints).
+func doRaw(t *testing.T, handler http.Handler, method, path string, body []byte, contentType string) *httptest.ResponseRecorder {
+	t.Helper()
+	req := httptest.NewRequest(method, path, bytes.NewReader(body))
+	req.Header.Set("X-Api-Key", testAPIKey)
+	if contentType != "" {
+		req.Header.Set("Content-Type", contentType)
+	}
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	return rec
+}
 
 func mustDecode(t *testing.T, rec *httptest.ResponseRecorder, out any) {
 	t.Helper()

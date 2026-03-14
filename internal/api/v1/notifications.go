@@ -10,6 +10,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 
 	"github.com/luminarr/luminarr/internal/core/notification"
+	"github.com/luminarr/luminarr/internal/core/tag"
 	"github.com/luminarr/luminarr/internal/registry"
 )
 
@@ -22,6 +23,7 @@ type notificationBody struct {
 	Enabled   bool            `json:"enabled"`
 	Settings  json.RawMessage `json:"settings"      doc:"Plugin-specific settings as JSON"`
 	OnEvents  []string        `json:"on_events"     doc:"Event types that trigger this notification"`
+	TagIDs    []string        `json:"tag_ids"       doc:"Assigned tag UUIDs"`
 	CreatedAt time.Time       `json:"created_at"`
 	UpdatedAt time.Time       `json:"updated_at"`
 }
@@ -44,6 +46,7 @@ type notificationCreateBody struct {
 	Enabled  bool            `json:"enabled"`
 	Settings json.RawMessage `json:"settings,omitempty"`
 	OnEvents []string        `json:"on_events,omitempty"`
+	TagIDs   []string        `json:"tag_ids,omitempty"  doc:"Tag UUIDs to assign"`
 }
 
 type notificationCreateInput struct {
@@ -85,7 +88,7 @@ func notifToBody(cfg notification.Config) *notificationBody {
 // ── Route registration ────────────────────────────────────────────────────────
 
 // RegisterNotificationRoutes registers the /api/v1/notifications endpoints.
-func RegisterNotificationRoutes(api huma.API, svc *notification.Service) {
+func RegisterNotificationRoutes(api huma.API, svc *notification.Service, tagSvc *tag.Service) {
 	// GET /api/v1/notifications
 	huma.Register(api, huma.Operation{
 		OperationID: "list-notifications",
@@ -100,7 +103,11 @@ func RegisterNotificationRoutes(api huma.API, svc *notification.Service) {
 		}
 		bodies := make([]*notificationBody, len(cfgs))
 		for i, c := range cfgs {
-			bodies[i] = notifToBody(c)
+			b := notifToBody(c)
+			if tagSvc != nil {
+				b.TagIDs, _ = tagSvc.NotificationTagIDs(ctx, c.ID)
+			}
+			bodies[i] = b
 		}
 		return &notificationListOutput{Body: bodies}, nil
 	})
@@ -124,7 +131,15 @@ func RegisterNotificationRoutes(api huma.API, svc *notification.Service) {
 		if err != nil {
 			return nil, huma.NewError(http.StatusUnprocessableEntity, "failed to create notification", err)
 		}
-		return &notificationGetOutput{Body: notifToBody(cfg)}, nil
+		b := notifToBody(cfg)
+		if tagSvc != nil && len(input.Body.TagIDs) > 0 {
+			_ = tagSvc.SetNotificationTags(ctx, cfg.ID, input.Body.TagIDs)
+			b.TagIDs = input.Body.TagIDs
+		}
+		if b.TagIDs == nil {
+			b.TagIDs = []string{}
+		}
+		return &notificationGetOutput{Body: b}, nil
 	})
 
 	// GET /api/v1/notifications/{id}
@@ -142,7 +157,11 @@ func RegisterNotificationRoutes(api huma.API, svc *notification.Service) {
 			}
 			return nil, huma.NewError(http.StatusInternalServerError, "failed to get notification", err)
 		}
-		return &notificationGetOutput{Body: notifToBody(cfg)}, nil
+		b := notifToBody(cfg)
+		if tagSvc != nil {
+			b.TagIDs, _ = tagSvc.NotificationTagIDs(ctx, cfg.ID)
+		}
+		return &notificationGetOutput{Body: b}, nil
 	})
 
 	// PUT /api/v1/notifications/{id}
@@ -166,7 +185,16 @@ func RegisterNotificationRoutes(api huma.API, svc *notification.Service) {
 			}
 			return nil, huma.NewError(http.StatusUnprocessableEntity, "failed to update notification", err)
 		}
-		return &notificationGetOutput{Body: notifToBody(cfg)}, nil
+		b := notifToBody(cfg)
+		if tagSvc != nil {
+			if input.Body.TagIDs != nil {
+				_ = tagSvc.SetNotificationTags(ctx, cfg.ID, input.Body.TagIDs)
+				b.TagIDs = input.Body.TagIDs
+			} else {
+				b.TagIDs, _ = tagSvc.NotificationTagIDs(ctx, cfg.ID)
+			}
+		}
+		return &notificationGetOutput{Body: b}, nil
 	})
 
 	// DELETE /api/v1/notifications/{id}

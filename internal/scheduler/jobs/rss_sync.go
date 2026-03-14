@@ -130,7 +130,7 @@ func runRSSSync(
 		}
 
 		// Submit to a download client.
-		dcID, itemID, err := dlSvc.Add(ctx, best.Release)
+		dcID, itemID, err := dlSvc.Add(ctx, best.Release, nil)
 		if err != nil {
 			if errors.Is(err, downloader.ErrNoCompatibleClient) {
 				logger.Warn("no download client configured for protocol",

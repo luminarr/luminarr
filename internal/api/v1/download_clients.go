@@ -10,6 +10,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 
 	"github.com/luminarr/luminarr/internal/core/downloader"
+	"github.com/luminarr/luminarr/internal/core/tag"
 	"github.com/luminarr/luminarr/internal/registry"
 )
 
@@ -22,6 +23,7 @@ type downloadClientBody struct {
 	Enabled   bool            `json:"enabled"   doc:"Whether this client is active"`
 	Priority  int             `json:"priority"  doc:"Priority; lower = used first when multiple clients match"`
 	Settings  json.RawMessage `json:"settings"  doc:"Plugin-specific settings (URL, credentials, etc.)"`
+	TagIDs    []string        `json:"tag_ids"   doc:"Assigned tag UUIDs"`
 	CreatedAt time.Time       `json:"created_at"`
 	UpdatedAt time.Time       `json:"updated_at"`
 }
@@ -32,6 +34,7 @@ type downloadClientInput struct {
 	Enabled  *bool           `json:"enabled,omitempty"  doc:"Whether this client is active (default: true)"`
 	Priority *int            `json:"priority,omitempty" doc:"Priority; lower = used first (default: 1)"`
 	Settings json.RawMessage `json:"settings"           doc:"Plugin-specific connection settings"`
+	TagIDs   []string        `json:"tag_ids,omitempty"  doc:"Tag UUIDs to assign"`
 }
 
 type downloadClientOutput struct {
@@ -108,7 +111,7 @@ func downloadClientInputToRequest(in downloadClientInput) downloader.CreateReque
 // ── Route registration ───────────────────────────────────────────────────────
 
 // RegisterDownloadClientRoutes registers all /api/v1/download-clients endpoints.
-func RegisterDownloadClientRoutes(api huma.API, svc *downloader.Service) {
+func RegisterDownloadClientRoutes(api huma.API, svc *downloader.Service, tagSvc *tag.Service) {
 	// GET /api/v1/download-clients
 	huma.Register(api, huma.Operation{
 		OperationID: "list-download-clients",
@@ -123,7 +126,11 @@ func RegisterDownloadClientRoutes(api huma.API, svc *downloader.Service) {
 		}
 		bodies := make([]*downloadClientBody, len(configs))
 		for i, c := range configs {
-			bodies[i] = downloadClientToBody(c)
+			b := downloadClientToBody(c)
+			if tagSvc != nil {
+				b.TagIDs, _ = tagSvc.DownloadClientTagIDs(ctx, c.ID)
+			}
+			bodies[i] = b
 		}
 		return &downloadClientListOutput{Body: bodies}, nil
 	})
@@ -141,7 +148,15 @@ func RegisterDownloadClientRoutes(api huma.API, svc *downloader.Service) {
 		if err != nil {
 			return nil, huma.NewError(http.StatusBadRequest, "failed to create download client", err)
 		}
-		return &downloadClientOutput{Body: downloadClientToBody(cfg)}, nil
+		b := downloadClientToBody(cfg)
+		if tagSvc != nil && len(input.Body.TagIDs) > 0 {
+			_ = tagSvc.SetDownloadClientTags(ctx, cfg.ID, input.Body.TagIDs)
+			b.TagIDs = input.Body.TagIDs
+		}
+		if b.TagIDs == nil {
+			b.TagIDs = []string{}
+		}
+		return &downloadClientOutput{Body: b}, nil
 	})
 
 	// GET /api/v1/download-clients/{id}
@@ -159,7 +174,11 @@ func RegisterDownloadClientRoutes(api huma.API, svc *downloader.Service) {
 			}
 			return nil, huma.NewError(http.StatusInternalServerError, "failed to get download client", err)
 		}
-		return &downloadClientOutput{Body: downloadClientToBody(cfg)}, nil
+		b := downloadClientToBody(cfg)
+		if tagSvc != nil {
+			b.TagIDs, _ = tagSvc.DownloadClientTagIDs(ctx, cfg.ID)
+		}
+		return &downloadClientOutput{Body: b}, nil
 	})
 
 	// PUT /api/v1/download-clients/{id}
@@ -177,7 +196,16 @@ func RegisterDownloadClientRoutes(api huma.API, svc *downloader.Service) {
 			}
 			return nil, huma.NewError(http.StatusInternalServerError, "failed to update download client", err)
 		}
-		return &downloadClientOutput{Body: downloadClientToBody(cfg)}, nil
+		b := downloadClientToBody(cfg)
+		if tagSvc != nil {
+			if input.Body.TagIDs != nil {
+				_ = tagSvc.SetDownloadClientTags(ctx, cfg.ID, input.Body.TagIDs)
+				b.TagIDs = input.Body.TagIDs
+			} else {
+				b.TagIDs, _ = tagSvc.DownloadClientTagIDs(ctx, cfg.ID)
+			}
+		}
+		return &downloadClientOutput{Body: b}, nil
 	})
 
 	// DELETE /api/v1/download-clients/{id}

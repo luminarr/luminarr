@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/luminarr/luminarr/internal/core/dbutil"
+	"github.com/luminarr/luminarr/internal/core/edition"
 	"github.com/luminarr/luminarr/internal/core/quality"
 	dbsqlite "github.com/luminarr/luminarr/internal/db/generated/sqlite"
 	"github.com/luminarr/luminarr/internal/events"
@@ -224,11 +225,11 @@ func (s *Service) Test(ctx context.Context, id string) error {
 	return idx.Test(ctx)
 }
 
-// Search queries all enabled indexers for the given search query and returns
-// scored, sorted results. Results from all indexers are merged; errors from
-// individual indexers are collected and returned alongside whatever results
-// were gathered.
-func (s *Service) Search(ctx context.Context, query plugin.SearchQuery) ([]SearchResult, error) {
+// Search queries enabled indexers for the given search query and returns
+// scored, sorted results. If allowedIDs is non-nil, only indexers whose ID
+// appears in the slice are searched (tag-based filtering). Pass nil to search
+// all enabled indexers.
+func (s *Service) Search(ctx context.Context, query plugin.SearchQuery, allowedIDs []string) ([]SearchResult, error) {
 	rows, err := s.q.ListEnabledIndexers(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("listing enabled indexers: %w", err)
@@ -236,6 +237,15 @@ func (s *Service) Search(ctx context.Context, query plugin.SearchQuery) ([]Searc
 
 	if len(rows) == 0 {
 		return nil, nil
+	}
+
+	// Build allowed set for O(1) lookup when filtering by tags.
+	var allowedSet map[string]struct{}
+	if allowedIDs != nil {
+		allowedSet = make(map[string]struct{}, len(allowedIDs))
+		for _, id := range allowedIDs {
+			allowedSet[id] = struct{}{}
+		}
 	}
 
 	type indexerResult struct {
@@ -249,6 +259,12 @@ func (s *Service) Search(ctx context.Context, query plugin.SearchQuery) ([]Searc
 	var wg sync.WaitGroup
 
 	for _, row := range rows {
+		// Skip indexers not in the allowed set.
+		if allowedSet != nil {
+			if _, ok := allowedSet[row.ID]; !ok {
+				continue
+			}
+		}
 		wg.Add(1)
 		go func(row dbsqlite.IndexerConfig) {
 			defer wg.Done()
@@ -293,6 +309,12 @@ func (s *Service) Search(ctx context.Context, query plugin.SearchQuery) ([]Searc
 			if r.Quality.Source == "" || r.Quality.Source == plugin.SourceUnknown {
 				if q, err := quality.Parse(r.Title); err == nil {
 					r.Quality = q
+				}
+			}
+			// Parse edition from title if not already set.
+			if r.Edition == "" {
+				if ed := edition.Parse(r.Title); ed != nil {
+					r.Edition = ed.Name
 				}
 			}
 			allResults = append(allResults, SearchResult{
@@ -390,6 +412,11 @@ func (s *Service) GetRecent(ctx context.Context) ([]SearchResult, error) {
 					r.Quality = q
 				}
 			}
+			if r.Edition == "" {
+				if ed := edition.Parse(r.Title); ed != nil {
+					r.Edition = ed.Name
+				}
+			}
 			allResults = append(allResults, SearchResult{
 				Release:      r,
 				IndexerID:    res.indexerID,
@@ -436,6 +463,11 @@ func (s *Service) Grab(ctx context.Context, movieID, indexerID string, r plugin.
 		itemID = &clientItemID
 	}
 
+	var releaseEdition *string
+	if r.Edition != "" {
+		releaseEdition = &r.Edition
+	}
+
 	now := time.Now().UTC().Format(time.RFC3339)
 	row, err := s.q.CreateGrabHistory(ctx, dbsqlite.CreateGrabHistoryParams{
 		ID:                uuid.New().String(),
@@ -455,6 +487,7 @@ func (s *Service) Grab(ctx context.Context, movieID, indexerID string, r plugin.
 		DownloadStatus:    "queued",
 		DownloadedBytes:   0,
 		ScoreBreakdown:    scoreBreakdownJSON,
+		ReleaseEdition:    releaseEdition,
 	})
 	if err != nil {
 		return dbsqlite.GrabHistory{}, fmt.Errorf("recording grab history: %w", err)

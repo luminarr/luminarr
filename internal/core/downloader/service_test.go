@@ -318,7 +318,7 @@ func TestService_Add_SubmitsToClient(t *testing.T) {
 		Protocol:    plugin.ProtocolTorrent,
 		DownloadURL: "magnet:?xt=urn:btih:aabbccddeeff00112233445566778899aabbccdd",
 	}
-	clientID, itemID, err := svc.Add(ctx, release)
+	clientID, itemID, err := svc.Add(ctx, release, nil)
 	if err != nil {
 		t.Fatalf("Add() error = %v", err)
 	}
@@ -336,7 +336,7 @@ func TestService_Add_NoCompatibleClient(t *testing.T) {
 	ctx := context.Background()
 
 	// No enabled clients registered — should fail.
-	_, _, err := svc.Add(ctx, plugin.Release{Protocol: plugin.ProtocolTorrent})
+	_, _, err := svc.Add(ctx, plugin.Release{Protocol: plugin.ProtocolTorrent}, nil)
 	if !errors.Is(err, downloader.ErrNoCompatibleClient) {
 		t.Errorf("Add() error = %v, want ErrNoCompatibleClient", err)
 	}
