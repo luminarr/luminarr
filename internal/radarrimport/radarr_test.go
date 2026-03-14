@@ -70,7 +70,7 @@ func TestMapProfile_AllItemsIncluded(t *testing.T) {
 		ID:             1,
 		Name:           "Any",
 		UpgradeAllowed: false,
-		Cutoff:          7,
+		Cutoff:         7,
 		Items: []radarrProfileItem{
 			{Quality: radarrProfileQuality{ID: 1, Name: "SDTV"}, Allowed: false},
 			{Quality: radarrProfileQuality{ID: 7, Name: "Bluray-1080p"}, Allowed: true},
@@ -89,7 +89,7 @@ func TestMapProfile_NestedGroups(t *testing.T) {
 		ID:             2,
 		Name:           "HD",
 		UpgradeAllowed: true,
-		Cutoff:          4,
+		Cutoff:         4,
 		Items: []radarrProfileItem{
 			// A group containing 720p qualities
 			{
