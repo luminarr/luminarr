@@ -22,14 +22,14 @@ func mustMarshal(t *testing.T, v any) []byte {
 
 func newTestPlugin(t *testing.T, cfg Config, serverURL string) *Plugin {
 	t.Helper()
-	c := trakt.New(cfg.AccessToken, nil).WithBaseURL(serverURL).WithHTTPClient(&http.Client{})
+	c := trakt.New("test-client-id", nil).WithBaseURL(serverURL).WithHTTPClient(&http.Client{})
 	return &Plugin{cfg: cfg, client: c}
 }
 
 // ── Factory ──────────────────────────────────────────────────────────────────
 
 func TestFactory_Valid_Watchlist(t *testing.T) {
-	settings := json.RawMessage(`{"access_token":"tok","username":"jdoe","list_type":"watchlist"}`)
+	settings := json.RawMessage(`{"username":"jdoe","list_type":"watchlist"}`)
 	p, err := registry.Default.NewImportList("trakt_list", settings)
 	if err != nil {
 		t.Fatalf("NewImportList() error = %v", err)
@@ -40,7 +40,7 @@ func TestFactory_Valid_Watchlist(t *testing.T) {
 }
 
 func TestFactory_Valid_CustomList(t *testing.T) {
-	settings := json.RawMessage(`{"access_token":"tok","username":"jdoe","list_type":"custom","list_slug":"my-list"}`)
+	settings := json.RawMessage(`{"username":"jdoe","list_type":"custom","list_slug":"my-list"}`)
 	_, err := registry.Default.NewImportList("trakt_list", settings)
 	if err != nil {
 		t.Fatalf("NewImportList() error = %v", err)
@@ -48,23 +48,15 @@ func TestFactory_Valid_CustomList(t *testing.T) {
 }
 
 func TestFactory_DefaultsToWatchlist(t *testing.T) {
-	settings := json.RawMessage(`{"access_token":"tok","username":"jdoe"}`)
+	settings := json.RawMessage(`{"username":"jdoe"}`)
 	_, err := registry.Default.NewImportList("trakt_list", settings)
 	if err != nil {
 		t.Fatalf("NewImportList() error = %v", err)
 	}
 }
 
-func TestFactory_MissingAccessToken(t *testing.T) {
-	settings := json.RawMessage(`{"username":"jdoe","list_type":"watchlist"}`)
-	_, err := registry.Default.NewImportList("trakt_list", settings)
-	if err == nil {
-		t.Fatal("expected error for missing access_token")
-	}
-}
-
 func TestFactory_MissingUsername(t *testing.T) {
-	settings := json.RawMessage(`{"access_token":"tok","list_type":"watchlist"}`)
+	settings := json.RawMessage(`{"list_type":"watchlist"}`)
 	_, err := registry.Default.NewImportList("trakt_list", settings)
 	if err == nil {
 		t.Fatal("expected error for missing username")
@@ -72,7 +64,7 @@ func TestFactory_MissingUsername(t *testing.T) {
 }
 
 func TestFactory_CustomWithoutListSlug(t *testing.T) {
-	settings := json.RawMessage(`{"access_token":"tok","username":"jdoe","list_type":"custom"}`)
+	settings := json.RawMessage(`{"username":"jdoe","list_type":"custom"}`)
 	_, err := registry.Default.NewImportList("trakt_list", settings)
 	if err == nil {
 		t.Fatal("expected error for custom list_type without list_slug")
@@ -102,7 +94,7 @@ func TestFetch_Watchlist_Success(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p := newTestPlugin(t, Config{AccessToken: "tok", Username: "jdoe", ListType: "watchlist"}, srv.URL)
+	p := newTestPlugin(t, Config{Username: "jdoe", ListType: "watchlist"}, srv.URL)
 	items, err := p.Fetch(context.Background())
 	if err != nil {
 		t.Fatalf("Fetch() error = %v", err)
@@ -131,7 +123,7 @@ func TestFetch_CustomList_Success(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p := newTestPlugin(t, Config{AccessToken: "tok", Username: "jdoe", ListType: "custom", ListSlug: "sci-fi"}, srv.URL)
+	p := newTestPlugin(t, Config{Username: "jdoe", ListType: "custom", ListSlug: "sci-fi"}, srv.URL)
 	items, err := p.Fetch(context.Background())
 	if err != nil {
 		t.Fatalf("Fetch() error = %v", err)
@@ -150,7 +142,7 @@ func TestFetch_APIError(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p := newTestPlugin(t, Config{AccessToken: "bad", Username: "jdoe", ListType: "watchlist"}, srv.URL)
+	p := newTestPlugin(t, Config{Username: "jdoe", ListType: "watchlist"}, srv.URL)
 	_, err := p.Fetch(context.Background())
 	if err == nil {
 		t.Fatal("expected error for 401")
@@ -166,7 +158,7 @@ func TestTest_Success(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p := newTestPlugin(t, Config{AccessToken: "tok", Username: "jdoe", ListType: "watchlist"}, srv.URL)
+	p := newTestPlugin(t, Config{Username: "jdoe", ListType: "watchlist"}, srv.URL)
 	if err := p.Test(context.Background()); err != nil {
 		t.Fatalf("Test() = %v", err)
 	}
@@ -178,33 +170,8 @@ func TestTest_APIError(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p := newTestPlugin(t, Config{AccessToken: "tok", Username: "jdoe", ListType: "watchlist"}, srv.URL)
+	p := newTestPlugin(t, Config{Username: "jdoe", ListType: "watchlist"}, srv.URL)
 	if err := p.Test(context.Background()); err == nil {
 		t.Fatal("expected error for 403")
-	}
-}
-
-// ── Sanitizer ────────────────────────────────────────────────────────────────
-
-func TestSanitizer_RedactsAccessToken(t *testing.T) {
-	raw := json.RawMessage(`{"access_token":"super-secret","username":"jdoe","list_type":"watchlist"}`)
-	out := registry.Default.SanitizeImportListSettings("trakt_list", raw)
-
-	var result map[string]string
-	if err := json.Unmarshal(out, &result); err != nil {
-		t.Fatalf("unmarshal sanitized: %v", err)
-	}
-	if result["access_token"] != "***" {
-		t.Errorf("access_token = %q, want ***", result["access_token"])
-	}
-	if result["username"] != "jdoe" {
-		t.Errorf("username was modified: %q", result["username"])
-	}
-}
-
-func TestSanitizer_MalformedJSON(t *testing.T) {
-	out := registry.Default.SanitizeImportListSettings("trakt_list", json.RawMessage(`bad`))
-	if string(out) != "{}" {
-		t.Errorf("sanitizer = %s, want {}", string(out))
 	}
 }
