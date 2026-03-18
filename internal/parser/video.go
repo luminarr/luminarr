@@ -11,27 +11,53 @@ import (
 
 var (
 	// ── Resolution ───────────────────────────────────────────────────────
-	re2160p = regexp.MustCompile(`(?i)(?:4k|uhd|2160p)`)
-	re1080p = regexp.MustCompile(`(?i)1080p`)
-	re720p  = regexp.MustCompile(`(?i)720p`)
+	re2160p = regexp.MustCompile(`(?i)(?:\b4k\b|\buhd\b|2160[pi]|3840x2160)`)
+	re1080p = regexp.MustCompile(`(?i)(?:1080[pi]|1920x1080)`)
+	re720p  = regexp.MustCompile(`(?i)(?:720p|1280x720)`)
 	re576p  = regexp.MustCompile(`(?i)576p`)
-	re480p  = regexp.MustCompile(`(?i)480p`)
+	re480p  = regexp.MustCompile(`(?i)(?:480[pi]|640x480|540p)`)
 
 	// ── Source ───────────────────────────────────────────────────────────
+	// RawHD: MPEG-2 HDTV captures (must check MPEG-2 + HDTV combo)
 	reRawHD     = regexp.MustCompile(`(?i)\braw[\s\-]?hd\b`)
-	reBRDisk    = regexp.MustCompile(`(?i)(?:\bbdmv\b|\bbd25\b|\bbd50\b|\bbr[\s\-]?disk\b)`)
-	reRemux     = regexp.MustCompile(`(?i)(?:remux|bdremux)`)
-	reBluRay    = regexp.MustCompile(`(?i)blu[\s\-]?ray|bluray`)
-	reWEBDL     = regexp.MustCompile(`(?i)web[\s\-.]?dl`)
-	reWEBRip    = regexp.MustCompile(`(?i)web[\s\-.]?rip`)
-	reHDTV      = regexp.MustCompile(`(?i)hdtv`)
-	reDVDSCR    = regexp.MustCompile(`(?i)(?:\bdvdscr\b|\bscreener\b|\bscr\b)`)
-	reDVDR      = regexp.MustCompile(`(?i)(?:\bdvd[\s\-]?r\b|\bdvd9\b|\bdvd5\b|\bdvdr\b)`)
-	reDVDRip    = regexp.MustCompile(`(?i)dvd[\s\-.]?rip`)
-	reRegional  = regexp.MustCompile(`(?i)(?:\br5\b|\bregional\b)`)
-	reTelecine  = regexp.MustCompile(`(?i)(?:\btelecine\b|\bhdtc\b|\btc\b)`)
-	reTelesync  = regexp.MustCompile(`(?i)(?:\btelesync\b|\bhdts\b|\bpdvd\b|\bts\b)`)
-	reCAM       = regexp.MustCompile(`(?i)(?:hd)?cam(?:rip)?`)
+	reMPEG2HDTV = regexp.MustCompile(`(?i)mpeg[\s\-]?2`)
+
+	// BRDisk: full Blu-ray disc images, ISOs, HD DVD discs, COMPLETE BLURAY
+	reBRDisk = regexp.MustCompile(`(?i)(?:\bbdmv\b|\bbd[\s\-]?25\b|\bbd[\s\-]?50\b|\bbd[\s\-]?66\b|\bbr[\s\-]?disk\b|\bbdiso\b|blu[\s\-]?ray[^\n]*\.iso\b|\bcomplete[\s.]blu[\s\-]?ray\b|\bhd[\s.]dvd\b|\buntouched\b|(?:^|\W)iso(?:\W|$))`)
+
+	// Remux (must precede BluRay so REMUX wins)
+	reRemux = regexp.MustCompile(`(?i)(?:\bremux\b|\bbdremux\b|\buhd[\s\-]?remux\b)`)
+
+	// BluRay and its many variants: Blu-ray, BDRip, BDMux, BDLight,
+	// UHDBD, UHDBDRip, UHD2BD, HDDVDRip, HDDVD, MBluRay, m2ts,
+	// BD720p, BD1080p, BD2160p, [BD], (BD ...), BD inside brackets
+	reBluRay = regexp.MustCompile(`(?i)(?:blu[\s\-]?ray|bluray|\bbdrip\b|\bbdmux\b|\bbdlight\b|\buhdbd\b|\buhdbdrip\b|\buhd2bd\b|\bhddvd(?:rip)?\b|\bmbluray\b|\bm2ts\b|\bbd\d{3,4}p\b|\bbd\b[\s]+\d{3,4}p|[\[\(]bd[\s\]\)]|\bbd\b[\s]*[\]\)])`)
+
+	// WEB-DL and its variants (including bare "WEB", iTunesHD, WebHD)
+	reWEBDL = regexp.MustCompile(`(?i)(?:web[\s\-.]?dl|\bwebdl\b|\bituneshd\b|\bwebhd\b)`)
+
+	// WEBRip and WEBMux
+	reWEBRip = regexp.MustCompile(`(?i)(?:web[\s\-.]?rip|\bwebrip\b|\bwebmux\b)`)
+
+	// Bare "WEB" as fallback for WEB-DL (after WEB-DL and WEBRip fail)
+	reWEBBare = regexp.MustCompile(`(?i)(?:\bweb\b|\[web\])`)
+
+	// HDTV and its variants: PDTV, DSR, TVRip, HD TV, SD TV
+	reHDTV = regexp.MustCompile(`(?i)(?:\bhdtv\b|\bpdtv\b|\bdsr\b|\btvrip\b|\bhd[\s\-.]tv\b|\bsd[\s\-.]tv\b)`)
+
+	reDVDSCR = regexp.MustCompile(`(?i)(?:\bdvdscr\b|\bscreener\b|\bscr\b)`)
+
+	// DVDR variants: DVD-R, DVDR, DVD5, DVD9 (with optional numeric prefix like 2xDVD9, 2DVD5)
+	reDVDR = regexp.MustCompile(`(?i)(?:\bdvd[\s\-]?r\b|\bm?dvdr\b|\d*x?dvd9\b|\d*dvd5\b)`)
+
+	reDVDRip   = regexp.MustCompile(`(?i)dvd[\s\-.]?rip`)
+	reDVDBare  = regexp.MustCompile(`(?i)\bdvd\b`)
+	reRegional = regexp.MustCompile(`(?i)(?:\br5\b|\bregional\b)`)
+	reTelecine = regexp.MustCompile(`(?i)(?:\btelecine\b|\bhdtc\b|\btc\b)`)
+
+	// Telesync and its variants: TSRip, TeleSynch
+	reTelesync  = regexp.MustCompile(`(?i)(?:\btelesync\b|\btelesynch?\b|\bhdts\b|\bpdvd\b|\bts(?:rip)?\b)`)
+	reCAM       = regexp.MustCompile(`(?i)(?:hd|hq|new)?cam(?:rip)?\b`)
 	reWorkprint = regexp.MustCompile(`(?i)(?:\bworkprint\b|\bwp\b)`)
 
 	// ── HDR ──────────────────────────────────────────────────────────────
@@ -48,26 +74,60 @@ var (
 )
 
 func parseSource(norm string) plugin.Source {
-	switch {
-	case reRawHD.MatchString(norm):
+	// RAW-HD explicit tag.
+	if reRawHD.MatchString(norm) {
 		return plugin.SourceRawHD
-	case reBRDisk.MatchString(norm):
+	}
+
+	// MPEG-2 + HDTV = RawHD (Radarr: TV source + RAWHD modifier).
+	hasHDTV := reHDTV.MatchString(norm)
+	if reMPEG2HDTV.MatchString(norm) && hasHDTV {
+		return plugin.SourceRawHD
+	}
+
+	// BRDisk must precede Remux and BluRay: full discs, ISOs, HD DVD.
+	if reBRDisk.MatchString(norm) {
 		return plugin.SourceBRDisk
-	case reRemux.MatchString(norm):
+	}
+
+	// Remux must precede BluRay so "BluRay REMUX" → Remux.
+	if reRemux.MatchString(norm) {
 		return plugin.SourceRemux
-	case reBluRay.MatchString(norm):
+	}
+
+	// BluRay (including BDRip, BDMux, BDLight, UHDBD, etc.)
+	if reBluRay.MatchString(norm) {
 		return plugin.SourceBluRay
-	case reWEBDL.MatchString(norm):
+	}
+
+	// WEB-DL explicit.
+	if reWEBDL.MatchString(norm) {
 		return plugin.SourceWEBDL
-	case reWEBRip.MatchString(norm):
+	}
+
+	// WEBRip / WEBMux.
+	if reWEBRip.MatchString(norm) {
 		return plugin.SourceWEBRip
-	case reHDTV.MatchString(norm):
+	}
+
+	// Bare "WEB" falls back to WEB-DL (Radarr treats bare WEB as WEBDL).
+	if reWEBBare.MatchString(norm) {
+		return plugin.SourceWEBDL
+	}
+
+	// HDTV / PDTV / DSR / TVRip / HD TV / SD TV.
+	if hasHDTV {
 		return plugin.SourceHDTV
+	}
+
+	switch {
 	case reDVDSCR.MatchString(norm):
 		return plugin.SourceDVDSCR
 	case reDVDR.MatchString(norm):
 		return plugin.SourceDVDR
 	case reDVDRip.MatchString(norm):
+		return plugin.SourceDVD
+	case reDVDBare.MatchString(norm):
 		return plugin.SourceDVD
 	case reRegional.MatchString(norm):
 		return plugin.SourceRegional
@@ -84,7 +144,30 @@ func parseSource(norm string) plugin.Source {
 	}
 }
 
+// reExplicitRes matches explicit numeric resolution tags (e.g. "2160p",
+// "1080p", "720p"). These take precedence over implicit hints like "4K"
+// or "UHD" which may refer to the source disc rather than the output
+// resolution (e.g. "1080p.UHD.BluRay" is 1080p, not 2160p).
+var reExplicitRes = regexp.MustCompile(`(?i)\b(2160|1080|720|576|480|540)[pi]\b`)
+
 func parseResolution(norm string, src plugin.Source) plugin.Resolution {
+	// First check for explicit numeric resolution (highest priority).
+	if m := reExplicitRes.FindStringSubmatch(norm); m != nil {
+		switch m[1] {
+		case "2160":
+			return plugin.Resolution2160p
+		case "1080":
+			return plugin.Resolution1080p
+		case "720":
+			return plugin.Resolution720p
+		case "576":
+			return plugin.Resolution576p
+		case "480", "540":
+			return plugin.Resolution480p
+		}
+	}
+
+	// Dimension-based resolution (3840x2160, 1920x1080, etc.)
 	switch {
 	case re2160p.MatchString(norm):
 		return plugin.Resolution2160p

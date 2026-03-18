@@ -7,7 +7,8 @@ var (
 	reProper2 = regexp.MustCompile(`(?i)\bproper2\b`)
 	reRepack  = regexp.MustCompile(`(?i)\brepack\d?\b`)
 	reRepack2 = regexp.MustCompile(`(?i)\brepack2\b`)
-	reRerip   = regexp.MustCompile(`(?i)\brerip\b`)
+	reRerip   = regexp.MustCompile(`(?i)\brerip\d?\b`)
+	reRerip2  = regexp.MustCompile(`(?i)\brerip2\b`)
 	reReal    = regexp.MustCompile(`(?i)\breal\b`)
 
 	reHybrid       = regexp.MustCompile(`(?i)\bhybrid\b`)
@@ -23,7 +24,7 @@ var (
 func parseRevision(norm string) Revision {
 	rev := Revision{Version: 1}
 	switch {
-	case reProper2.MatchString(norm) || reRepack2.MatchString(norm):
+	case reProper2.MatchString(norm) || reRepack2.MatchString(norm) || reRerip2.MatchString(norm):
 		rev.Version = 3
 	case reProper.MatchString(norm) || reRepack.MatchString(norm) || reRerip.MatchString(norm):
 		rev.Version = 2
