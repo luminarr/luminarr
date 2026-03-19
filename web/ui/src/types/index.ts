@@ -668,6 +668,40 @@ export interface ImportListSyncResult {
   errors: string[];
 }
 
+// ── Release Explain ────────────────────────────────────────────────────────
+
+export interface ReleaseDecision {
+  title: string;
+  guid: string;
+  outcome: "grabbed" | "skipped";
+  reason: string;
+  explanation: string;
+  quality_score: number;
+  cf_score: number;
+}
+
+export interface ExplainResult {
+  movie_id: string;
+  profile_name: string;
+  current_file?: Quality;
+  decisions: ReleaseDecision[];
+}
+
+// ── Upgrade Recommendations ────────────────────────────────────────────────
+
+export interface UpgradeTier {
+  label: string;
+  from_quality: string;
+  to_quality: string;
+  count: number;
+  movie_ids: string[];
+}
+
+export interface UpgradeRecommendations {
+  total: number;
+  tiers: UpgradeTier[];
+}
+
 // ── Custom Format Presets ──────────────────────────────────────────────────
 
 export interface CustomFormatSpecification {
