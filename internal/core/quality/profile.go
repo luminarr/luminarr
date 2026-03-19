@@ -74,6 +74,33 @@ func (p *Profile) WantRelease(releaseQuality plugin.Quality, currentFileQuality 
 	return p.IsUpgrade(releaseQuality, current)
 }
 
+// RejectReason returns a typed reason string explaining why WantRelease would
+// return false. Returns "" if the release would be wanted (no rejection).
+// The reason strings match autosearch.SkipReason constants.
+func (p *Profile) RejectReason(releaseQuality plugin.Quality, currentFileQuality *plugin.Quality) string {
+	if !p.isAllowed(releaseQuality) {
+		return "quality_not_in_profile"
+	}
+	if currentFileQuality == nil {
+		return "" // no file → want anything allowed
+	}
+	current := *currentFileQuality
+	if !current.AtLeast(p.Cutoff) {
+		if !releaseQuality.AtLeast(current) {
+			return "no_upgrade_needed"
+		}
+		return ""
+	}
+	// Cutoff met.
+	if !p.UpgradeAllowed {
+		return "upgrade_disabled"
+	}
+	if !p.IsUpgrade(releaseQuality, current) {
+		return "no_upgrade_needed"
+	}
+	return ""
+}
+
 // IsUpgrade reports whether releaseQuality is a strict improvement over
 // currentQuality, subject to the UpgradeUntil ceiling defined in this profile.
 func (p *Profile) IsUpgrade(releaseQuality plugin.Quality, currentQuality plugin.Quality) bool {

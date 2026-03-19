@@ -117,6 +117,14 @@ export interface ScoreBreakdown {
   edition_bonus?: number;
 }
 
+export interface QualityConflict {
+  dimension: string;
+  severity: "warning" | "caution";
+  current: string;
+  candidate: string;
+  summary: string;
+}
+
 export interface Release {
   guid: string;
   title: string;
@@ -133,6 +141,7 @@ export interface Release {
   score_breakdown?: ScoreBreakdown;
   edition?: string;
   release_group?: string;
+  conflicts?: QualityConflict[];
 }
 
 export interface GrabHistory {

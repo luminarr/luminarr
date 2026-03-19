@@ -284,4 +284,25 @@ func RegisterStatsRoutes(api huma.API, svc *stats.Service) {
 		}
 		return out, nil
 	})
+
+	// GET /api/v1/stats/quality/movies — list movie IDs matching a quality tier.
+	huma.Register(api, huma.Operation{
+		OperationID: "stats-quality-movies",
+		Method:      http.MethodGet,
+		Path:        "/api/v1/stats/quality/movies",
+		Summary:     "List movie IDs matching a quality tier (resolution and/or source filter)",
+		Tags:        []string{"Statistics"},
+	}, func(ctx context.Context, input *struct {
+		Resolution string `query:"resolution" doc:"Filter by resolution (e.g. 1080p, 2160p)"`
+		Source     string `query:"source" doc:"Filter by source (e.g. bluray, webdl, remux)"`
+	}) (*struct{ Body []string }, error) {
+		ids, err := svc.MovieIDsByQualityTier(ctx, input.Resolution, input.Source)
+		if err != nil {
+			return nil, huma.NewError(http.StatusInternalServerError, err.Error())
+		}
+		if ids == nil {
+			ids = []string{}
+		}
+		return &struct{ Body []string }{Body: ids}, nil
+	})
 }

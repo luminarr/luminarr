@@ -13,6 +13,7 @@ import (
 
 	"github.com/luminarr/luminarr/internal/core/autosearch"
 	"github.com/luminarr/luminarr/internal/core/blocklist"
+	"github.com/luminarr/luminarr/internal/core/conflict"
 	"github.com/luminarr/luminarr/internal/core/downloader"
 	"github.com/luminarr/luminarr/internal/core/indexer"
 	"github.com/luminarr/luminarr/internal/core/movie"
@@ -37,6 +38,7 @@ type releaseBody struct {
 	Edition        string                `json:"edition,omitempty"      doc:"Detected edition (e.g. Director's Cut, Extended)"`
 	QualityScore   int                   `json:"quality_score"`
 	ScoreBreakdown plugin.ScoreBreakdown `json:"score_breakdown"`
+	Conflicts      []conflict.Conflict   `json:"conflicts,omitempty" doc:"Regressions compared to current file on disk"`
 }
 
 type releaseListOutput struct {
@@ -110,6 +112,28 @@ type bulkSearchAcceptedOutput struct {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
+func bestFileQuality(files []movie.FileInfo) plugin.Quality {
+	var best plugin.Quality
+	for _, f := range files {
+		if f.Quality.BetterThan(best) {
+			best = f.Quality
+		}
+	}
+	return best
+}
+
+func bestFileEdition(files []movie.FileInfo) string {
+	var bestQ plugin.Quality
+	var bestEdition string
+	for _, f := range files {
+		if f.Quality.BetterThan(bestQ) {
+			bestQ = f.Quality
+			bestEdition = f.Edition
+		}
+	}
+	return bestEdition
+}
+
 func indexerResultToBody(r indexer.SearchResult) *releaseBody {
 	return &releaseBody{
 		GUID:           r.GUID,
@@ -171,12 +195,24 @@ func RegisterReleaseRoutes(api huma.API, indexerSvc *indexer.Service, movieSvc *
 			}
 		}
 
+		// Load current file quality for conflict detection.
+		var currentQuality *plugin.Quality
+		var currentEdition string
+		if files, fErr := movieSvc.ListFiles(ctx, input.MovieID); fErr == nil && len(files) > 0 {
+			best := bestFileQuality(files)
+			currentQuality = &best
+			currentEdition = bestFileEdition(files)
+		}
+
 		bodies := make([]*releaseBody, len(results))
 		for i, r := range results {
 			if prof != nil {
 				r.QualityScore, r.ScoreBreakdown = prof.ScoreWithBreakdown(r.Quality)
 			}
 			bodies[i] = indexerResultToBody(r)
+			if currentQuality != nil {
+				bodies[i].Conflicts = conflict.Compare(*currentQuality, r.Quality, currentEdition, r.Edition)
+			}
 		}
 
 		if len(bodies) == 0 && searchErr != nil {
@@ -323,6 +359,25 @@ func RegisterReleaseRoutes(api huma.API, indexerSvc *indexer.Service, movieSvc *
 			}
 		}
 		return &autoSearchOutput{Body: result}, nil
+	})
+
+	// GET /api/v1/movies/{id}/releases/explain — dry-run search returning per-candidate decisions.
+	huma.Register(api, huma.Operation{
+		OperationID: "explain-releases",
+		Method:      http.MethodGet,
+		Path:        "/api/v1/movies/{id}/releases/explain",
+		Summary:     "Explain why each release candidate would be grabbed or skipped",
+		Description: "Performs a dry-run search: evaluates every candidate against the quality profile and custom formats, returning a decision for each. Does not grab anything.",
+		Tags:        []string{"Releases"},
+	}, func(ctx context.Context, input *releasesSearchInput) (*struct{ Body *autosearch.ExplainResult }, error) {
+		result, err := autoSearchSvc.SearchMovieExplain(ctx, input.MovieID)
+		if err != nil {
+			if errors.Is(err, movie.ErrNotFound) {
+				return nil, huma.Error404NotFound("movie not found")
+			}
+			return nil, huma.NewError(http.StatusInternalServerError, err.Error())
+		}
+		return &struct{ Body *autosearch.ExplainResult }{Body: result}, nil
 	})
 
 	// POST /api/v1/movies/search — bulk automatic search (async).

@@ -125,6 +125,7 @@ type Querier interface {
 	ListMonitoredMoviesWithFiles(ctx context.Context) ([]ListMonitoredMoviesWithFilesRow, error)
 	ListMonitoredMoviesWithoutFile(ctx context.Context, arg ListMonitoredMoviesWithoutFileParams) ([]Movie, error)
 	ListMovieFileQualities(ctx context.Context) ([]string, error)
+	ListMovieFileQualitiesWithIDs(ctx context.Context) ([]ListMovieFileQualitiesWithIDsRow, error)
 	ListMovieFiles(ctx context.Context, movieID string) ([]MovieFile, error)
 	ListMovieFilesByLibrary(ctx context.Context, libraryID string) ([]MovieFile, error)
 	ListMovieGenresJSON(ctx context.Context) ([]string, error)

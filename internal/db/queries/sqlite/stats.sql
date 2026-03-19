@@ -29,6 +29,9 @@ FROM movie_files;
 -- name: ListMovieFileQualities :many
 SELECT quality_json FROM movie_files;
 
+-- name: ListMovieFileQualitiesWithIDs :many
+SELECT movie_id, quality_json FROM movie_files;
+
 -- name: GetGrabStats :one
 SELECT
     COUNT(*)                                                                    AS total_grabs,
