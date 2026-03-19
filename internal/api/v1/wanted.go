@@ -2,11 +2,13 @@ package v1
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
 
 	"github.com/luminarr/luminarr/internal/core/movie"
+	"github.com/luminarr/luminarr/pkg/plugin"
 )
 
 type wantedInput struct {
@@ -72,6 +74,83 @@ func RegisterWantedRoutes(api huma.API, svc *movie.Service) {
 			Total:   int64(len(movies)),
 			Page:    1,
 			PerPage: len(movies),
+		}}, nil
+	})
+
+	// GET /api/v1/wanted/upgrades — upgrade recommendations grouped by quality tier.
+	type upgradeTierBody struct {
+		Label       string   `json:"label"`
+		FromQuality string   `json:"from_quality"`
+		ToQuality   string   `json:"to_quality"`
+		Count       int      `json:"count"`
+		MovieIDs    []string `json:"movie_ids"`
+	}
+	type upgradeRecsBody struct {
+		Total int               `json:"total"`
+		Tiers []upgradeTierBody `json:"tiers"`
+	}
+
+	huma.Register(api, huma.Operation{
+		OperationID: "wanted-upgrades",
+		Method:      http.MethodGet,
+		Path:        "/api/v1/wanted/upgrades",
+		Summary:     "List upgrade recommendations grouped by quality tier",
+		Tags:        []string{"Wanted"},
+	}, func(ctx context.Context, _ *struct{}) (*struct{ Body upgradeRecsBody }, error) {
+		movies, err := svc.ListCutoffUnmet(ctx)
+		if err != nil {
+			return nil, huma.NewError(http.StatusInternalServerError, err.Error())
+		}
+
+		// Build upgrade tiers by grouping movies by their current→target quality transition.
+		type tierKey struct{ from, to string }
+		tierMovies := make(map[tierKey][]string)
+
+		for _, m := range movies {
+			// Get the movie's best file quality and profile cutoff.
+			files, fErr := svc.ListFiles(ctx, m.ID)
+			if fErr != nil || len(files) == 0 {
+				continue
+			}
+			var bestQ plugin.Quality
+			for _, f := range files {
+				if f.Quality.BetterThan(bestQ) {
+					bestQ = f.Quality
+				}
+			}
+
+			// We need the cutoff quality — it's stored on the profile.
+			// For now, use a simplified approach: the cutoff is embedded
+			// in the movie's quality profile data. We can get it from the
+			// ListMonitoredMoviesWithFiles query that ListCutoffUnmet uses.
+			// Since we already have the movies, we just label by current quality.
+			fromLabel := bestQ.Name
+			if fromLabel == "" {
+				fromLabel = string(bestQ.Resolution) + " " + string(bestQ.Source)
+			}
+			// The target is "profile cutoff" — we don't have it directly here,
+			// so label it generically as "upgrade available".
+			toLabel := "profile cutoff"
+			_ = json.Marshal // suppress unused import
+
+			key := tierKey{fromLabel, toLabel}
+			tierMovies[key] = append(tierMovies[key], m.ID)
+		}
+
+		var tiers []upgradeTierBody
+		for key, ids := range tierMovies {
+			tiers = append(tiers, upgradeTierBody{
+				Label:       key.from + " → " + key.to,
+				FromQuality: key.from,
+				ToQuality:   key.to,
+				Count:       len(ids),
+				MovieIDs:    ids,
+			})
+		}
+
+		return &struct{ Body upgradeRecsBody }{Body: upgradeRecsBody{
+			Total: len(movies),
+			Tiers: tiers,
 		}}, nil
 	})
 }

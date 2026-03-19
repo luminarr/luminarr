@@ -1,3 +1,5 @@
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   AreaChart,
   Area,
@@ -299,12 +301,44 @@ function sortedGroup(
     .filter((it) => it.count > 0);
 }
 
+// Tier = resolution + source combination
+function buildTiers(buckets: QualityBucket[]) {
+  const map: Record<string, { resolution: string; source: string; count: number }> = {};
+  for (const b of buckets) {
+    const key = `${b.resolution}|${b.source}`;
+    if (!map[key]) map[key] = { resolution: b.resolution, source: b.source, count: 0 };
+    map[key].count += b.count;
+  }
+  return Object.values(map)
+    .filter((t) => t.count > 0)
+    .sort((a, b) => {
+      const ra = RESOLUTION_ORDER.indexOf(a.resolution);
+      const rb = RESOLUTION_ORDER.indexOf(b.resolution);
+      if (ra !== rb) {
+        if (ra === -1) return 1;
+        if (rb === -1) return -1;
+        return ra - rb;
+      }
+      const sa = SOURCE_ORDER.indexOf(a.source);
+      const sb = SOURCE_ORDER.indexOf(b.source);
+      if (sa === -1 && sb === -1) return b.count - a.count;
+      if (sa === -1) return 1;
+      if (sb === -1) return -1;
+      return sa - sb;
+    })
+    .map((t) => ({ label: `${t.resolution} ${t.source}`, count: t.count, resolution: t.resolution, source: t.source }));
+}
+
+type QualityDimension = "dimension" | "tier";
+
 function QualityMiniChart({
   title,
   data,
+  onBarClick,
 }: {
   title: string;
   data: { label: string; count: number }[];
+  onBarClick?: (label: string) => void;
 }) {
   if (data.length === 0) return null;
   return (
@@ -326,6 +360,11 @@ function QualityMiniChart({
           data={data}
           layout="vertical"
           margin={{ top: 0, right: 40, left: 0, bottom: 0 }}
+          style={onBarClick ? { cursor: "pointer" } : undefined}
+          onClick={onBarClick ? (payload) => {
+            const label = payload?.activePayload?.[0]?.payload?.label as string | undefined;
+            if (label) onBarClick(label);
+          } : undefined}
         >
           <XAxis type="number" hide />
           <YAxis
@@ -358,6 +397,9 @@ function QualityMiniChart({
 }
 
 function QualityCard({ data }: { data: QualityBucket[] }) {
+  const navigate = useNavigate();
+  const [view, setView] = useState<QualityDimension>("dimension");
+
   const total = data.reduce((s, b) => s + b.count, 0);
   if (total === 0) {
     return (
@@ -371,21 +413,65 @@ function QualityCard({ data }: { data: QualityBucket[] }) {
   const sources = sortedGroup(data, "source", SOURCE_ORDER);
   const codecs = sortedGroup(data, "codec", CODEC_ORDER);
   const hdrs = sortedGroup(data, "hdr", HDR_ORDER);
+  const tiers = buildTiers(data);
+
+  function handleTierClick(label: string) {
+    const tier = tiers.find((t) => t.label === label);
+    if (!tier) return;
+    const params = new URLSearchParams();
+    params.set("quality_resolution", tier.resolution);
+    params.set("quality_source", tier.source);
+    navigate(`/?${params.toString()}`);
+  }
+
+  const toggleStyle = (active: boolean): React.CSSProperties => ({
+    background: active ? "var(--color-bg-elevated)" : "transparent",
+    border: active ? "1px solid var(--color-border-default)" : "1px solid transparent",
+    borderRadius: 5,
+    padding: "3px 10px",
+    fontSize: 11,
+    fontWeight: active ? 600 : 400,
+    color: active ? "var(--color-text-primary)" : "var(--color-text-muted)",
+    cursor: "pointer",
+  });
 
   return (
     <Card title="Quality Distribution">
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
-          gap: 24,
-        }}
-      >
-        <QualityMiniChart title="Resolution" data={resolutions} />
-        <QualityMiniChart title="Source" data={sources} />
-        <QualityMiniChart title="Codec" data={codecs} />
-        <QualityMiniChart title="HDR" data={hdrs} />
+      {/* View toggle */}
+      <div style={{ display: "flex", gap: 4, marginBottom: 20 }}>
+        <button style={toggleStyle(view === "dimension")} onClick={() => setView("dimension")}>
+          By Dimension
+        </button>
+        <button style={toggleStyle(view === "tier")} onClick={() => setView("tier")}>
+          By Tier
+        </button>
       </div>
+
+      {view === "dimension" ? (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
+            gap: 24,
+          }}
+        >
+          <QualityMiniChart title="Resolution" data={resolutions} />
+          <QualityMiniChart title="Source" data={sources} />
+          <QualityMiniChart title="Codec" data={codecs} />
+          <QualityMiniChart title="HDR" data={hdrs} />
+        </div>
+      ) : (
+        <div>
+          <p style={{ margin: "0 0 10px", fontSize: 11, color: "var(--color-text-muted)" }}>
+            Click a tier to filter the movie library.
+          </p>
+          <QualityMiniChart
+            title="Resolution + Source"
+            data={tiers}
+            onBarClick={handleTierClick}
+          />
+        </div>
+      )}
     </Card>
   );
 }

@@ -164,6 +164,50 @@ func (s *Service) QualityDistribution(ctx context.Context) ([]QualityBucket, err
 	return buckets, nil
 }
 
+// MovieIDsByQualityTier returns movie IDs whose best file matches the given
+// resolution and/or source. Empty filter values match any value.
+func (s *Service) MovieIDsByQualityTier(ctx context.Context, resolution, source string) ([]string, error) {
+	rows, err := s.q.ListMovieFileQualitiesWithIDs(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("listing file qualities with IDs: %w", err)
+	}
+
+	// Track best quality per movie to avoid duplicates.
+	type movieQuality struct {
+		resolution string
+		source     string
+		score      int
+	}
+	best := make(map[string]movieQuality)
+
+	for _, row := range rows {
+		var q plugin.Quality
+		if err := json.Unmarshal([]byte(row.QualityJson), &q); err != nil {
+			continue
+		}
+		sc := q.Score()
+		if prev, ok := best[row.MovieID]; !ok || sc > prev.score {
+			best[row.MovieID] = movieQuality{
+				resolution: string(q.Resolution),
+				source:     string(q.Source),
+				score:      sc,
+			}
+		}
+	}
+
+	var ids []string
+	for movieID, mq := range best {
+		if resolution != "" && mq.resolution != resolution {
+			continue
+		}
+		if source != "" && mq.source != source {
+			continue
+		}
+		ids = append(ids, movieID)
+	}
+	return ids, nil
+}
+
 // Storage returns the current total bytes and file count.
 func (s *Service) Storage(ctx context.Context) (StorageStat, error) {
 	row, err := s.q.GetStorageTotals(ctx)

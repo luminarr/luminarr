@@ -253,6 +253,38 @@ func (q *Queries) ListMovieFileQualities(ctx context.Context) ([]string, error) 
 	return items, nil
 }
 
+const listMovieFileQualitiesWithIDs = `-- name: ListMovieFileQualitiesWithIDs :many
+SELECT movie_id, quality_json FROM movie_files
+`
+
+type ListMovieFileQualitiesWithIDsRow struct {
+	MovieID     string `json:"movieId"`
+	QualityJson string `json:"qualityJson"`
+}
+
+func (q *Queries) ListMovieFileQualitiesWithIDs(ctx context.Context) ([]ListMovieFileQualitiesWithIDsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listMovieFileQualitiesWithIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListMovieFileQualitiesWithIDsRow
+	for rows.Next() {
+		var i ListMovieFileQualitiesWithIDsRow
+		if err := rows.Scan(&i.MovieID, &i.QualityJson); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listMovieGenresJSON = `-- name: ListMovieGenresJSON :many
 SELECT genres_json FROM movies WHERE genres_json IS NOT NULL AND genres_json != '[]'
 `

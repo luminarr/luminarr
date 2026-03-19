@@ -336,3 +336,111 @@ func TestStorageStat_totals(t *testing.T) {
 		t.Errorf("FileCount: got %d, want 2", s.FileCount)
 	}
 }
+
+func TestMovieIDsByQualityTier(t *testing.T) {
+	q := testutil.NewTestDB(t)
+	ctx := context.Background()
+	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	bus := events.New(logger)
+	movieSvc := movie.NewService(q, nil, bus, logger)
+	svc := stats.NewService(q, movieSvc)
+
+	// Seed three movies with different qualities.
+	m1080BluRay := testutil.SeedMovie(t, q, testutil.WithTMDBID(9001))
+	m1080WebDL := testutil.SeedMovie(t, q, testutil.WithTMDBID(9002))
+	m720WebDL := testutil.SeedMovie(t, q, testutil.WithTMDBID(9003))
+	// A movie with no file — should not appear in any result.
+	_ = testutil.SeedMovie(t, q, testutil.WithTMDBID(9004))
+
+	if err := movieSvc.AttachFile(ctx, m1080BluRay.ID, "/movies/a.mkv", 8_000_000_000, plugin.Quality{
+		Resolution: "1080p", Source: "Bluray", Codec: "x265",
+	}); err != nil {
+		t.Fatalf("AttachFile m1080BluRay: %v", err)
+	}
+	if err := movieSvc.AttachFile(ctx, m1080WebDL.ID, "/movies/b.mkv", 4_000_000_000, plugin.Quality{
+		Resolution: "1080p", Source: "WebDL", Codec: "x264",
+	}); err != nil {
+		t.Fatalf("AttachFile m1080WebDL: %v", err)
+	}
+	if err := movieSvc.AttachFile(ctx, m720WebDL.ID, "/movies/c.mkv", 2_000_000_000, plugin.Quality{
+		Resolution: "720p", Source: "WebDL", Codec: "x264",
+	}); err != nil {
+		t.Fatalf("AttachFile m720WebDL: %v", err)
+	}
+
+	t.Run("filter by resolution only", func(t *testing.T) {
+		ids, err := svc.MovieIDsByQualityTier(ctx, "1080p", "")
+		if err != nil {
+			t.Fatalf("MovieIDsByQualityTier: %v", err)
+		}
+		if len(ids) != 2 {
+			t.Fatalf("expected 2 movie IDs for 1080p, got %d", len(ids))
+		}
+		idSet := toSet(ids)
+		if !idSet[m1080BluRay.ID] {
+			t.Errorf("expected m1080BluRay (%s) in results", m1080BluRay.ID)
+		}
+		if !idSet[m1080WebDL.ID] {
+			t.Errorf("expected m1080WebDL (%s) in results", m1080WebDL.ID)
+		}
+	})
+
+	t.Run("filter by source only", func(t *testing.T) {
+		ids, err := svc.MovieIDsByQualityTier(ctx, "", "WebDL")
+		if err != nil {
+			t.Fatalf("MovieIDsByQualityTier: %v", err)
+		}
+		if len(ids) != 2 {
+			t.Fatalf("expected 2 movie IDs for WebDL, got %d", len(ids))
+		}
+		idSet := toSet(ids)
+		if !idSet[m1080WebDL.ID] {
+			t.Errorf("expected m1080WebDL (%s) in results", m1080WebDL.ID)
+		}
+		if !idSet[m720WebDL.ID] {
+			t.Errorf("expected m720WebDL (%s) in results", m720WebDL.ID)
+		}
+	})
+
+	t.Run("filter by both resolution and source — intersection", func(t *testing.T) {
+		ids, err := svc.MovieIDsByQualityTier(ctx, "1080p", "Bluray")
+		if err != nil {
+			t.Fatalf("MovieIDsByQualityTier: %v", err)
+		}
+		if len(ids) != 1 {
+			t.Fatalf("expected 1 movie ID for 1080p+Bluray, got %d", len(ids))
+		}
+		if ids[0] != m1080BluRay.ID {
+			t.Errorf("expected m1080BluRay (%s), got %s", m1080BluRay.ID, ids[0])
+		}
+	})
+
+	t.Run("empty filters — returns all movies with files", func(t *testing.T) {
+		ids, err := svc.MovieIDsByQualityTier(ctx, "", "")
+		if err != nil {
+			t.Fatalf("MovieIDsByQualityTier: %v", err)
+		}
+		if len(ids) != 3 {
+			t.Fatalf("expected 3 movie IDs with empty filters, got %d", len(ids))
+		}
+	})
+
+	t.Run("no matches — returns empty slice", func(t *testing.T) {
+		ids, err := svc.MovieIDsByQualityTier(ctx, "2160p", "")
+		if err != nil {
+			t.Fatalf("MovieIDsByQualityTier: %v", err)
+		}
+		if len(ids) != 0 {
+			t.Errorf("expected 0 movie IDs for 2160p, got %d", len(ids))
+		}
+	})
+}
+
+// toSet converts a string slice to a set for membership testing.
+func toSet(ss []string) map[string]bool {
+	m := make(map[string]bool, len(ss))
+	for _, s := range ss {
+		m[s] = true
+	}
+	return m
+}

@@ -1,10 +1,49 @@
 import { useState, useCallback, useMemo } from "react";
-import { useMovieReleases, useGrabRelease, type GrabReleaseRequest } from "@/api/movies";
-import type { Release } from "@/types";
+import { TriangleAlert, HelpCircle, ChevronDown, ChevronUp } from "lucide-react";
+import { useMovieReleases, useGrabRelease, useExplainReleases, type GrabReleaseRequest } from "@/api/movies";
+import type { Release, QualityConflict, ReleaseDecision, ExplainResult } from "@/types";
 import { formatBytes, sortReleases, RELEASE_SORT_LABELS, type ReleaseSortField } from "@/lib/utils";
 import IndexerPill from "@/components/IndexerPill";
 import QualityBadge from "@/components/QualityBadge";
 import Modal from "@/components/Modal";
+
+// ── Conflict pills ─────────────────────────────────────────────────────────────
+
+function ConflictPills({ conflicts }: { conflicts: QualityConflict[] }) {
+  if (conflicts.length === 0) return null;
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 6 }}>
+      {conflicts.map((c, i) => {
+        const isWarning = c.severity === "warning";
+        return (
+          <span
+            key={i}
+            title={`${c.dimension}: ${c.current} → ${c.candidate}`}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 4,
+              padding: "2px 7px",
+              borderRadius: 4,
+              fontSize: 10,
+              fontWeight: 500,
+              background: isWarning
+                ? "color-mix(in srgb, var(--color-warning) 14%, transparent)"
+                : "color-mix(in srgb, var(--color-text-muted) 10%, transparent)",
+              color: isWarning ? "var(--color-warning)" : "var(--color-text-muted)",
+              border: `1px solid ${isWarning ? "color-mix(in srgb, var(--color-warning) 30%, transparent)" : "var(--color-border-subtle)"}`,
+            }}
+          >
+            {isWarning && <TriangleAlert size={10} strokeWidth={2} style={{ flexShrink: 0 }} />}
+            {c.summary}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Release row ────────────────────────────────────────────────────────────────
 
 interface ReleaseRowProps {
   release: Release;
@@ -15,16 +54,17 @@ interface ReleaseRowProps {
 }
 
 function ReleaseRow({ release, grabbed, grabError, onGrab, isPending }: ReleaseRowProps) {
+  const hasConflicts = (release.conflicts?.length ?? 0) > 0;
   return (
     <div
       style={{
         display: "flex",
-        alignItems: "center",
+        alignItems: "flex-start",
         gap: 12,
         padding: "10px 14px",
         background: "var(--color-bg-elevated)",
         borderRadius: 6,
-        border: "1px solid var(--color-border-subtle)",
+        border: `1px solid ${hasConflicts ? "color-mix(in srgb, var(--color-warning) 25%, var(--color-border-subtle))" : "var(--color-border-subtle)"}`,
         flexShrink: 0,
       }}
     >
@@ -75,13 +115,16 @@ function ReleaseRow({ release, grabbed, grabError, onGrab, isPending }: ReleaseR
             </span>
           )}
         </div>
+        {release.conflicts && release.conflicts.length > 0 && (
+          <ConflictPills conflicts={release.conflicts} />
+        )}
         {grabError && (
           <p style={{ margin: "4px 0 0", fontSize: 11, color: "var(--color-danger)" }}>{grabError}</p>
         )}
       </div>
 
       {grabbed ? (
-        <span style={{ fontSize: 12, color: "var(--color-success)", flexShrink: 0 }}>Grabbed ✓</span>
+        <span style={{ fontSize: 12, color: "var(--color-success)", flexShrink: 0, marginTop: 2 }}>Grabbed ✓</span>
       ) : (
         <button
           onClick={onGrab}
@@ -96,6 +139,7 @@ function ReleaseRow({ release, grabbed, grabError, onGrab, isPending }: ReleaseR
             fontWeight: 500,
             cursor: isPending ? "not-allowed" : "pointer",
             flexShrink: 0,
+            marginTop: 2,
           }}
           onMouseEnter={(e) => {
             if (!isPending) (e.currentTarget as HTMLButtonElement).style.background = "var(--color-accent-hover)";
@@ -111,6 +155,142 @@ function ReleaseRow({ release, grabbed, grabError, onGrab, isPending }: ReleaseR
   );
 }
 
+// ── Decision panel ─────────────────────────────────────────────────────────────
+
+function OutcomeBadge({ outcome }: { outcome: ReleaseDecision["outcome"] }) {
+  const isGrabbed = outcome === "grabbed";
+  return (
+    <span
+      style={{
+        display: "inline-block",
+        padding: "1px 7px",
+        borderRadius: 4,
+        fontSize: 10,
+        fontWeight: 600,
+        textTransform: "uppercase",
+        letterSpacing: "0.05em",
+        flexShrink: 0,
+        background: isGrabbed
+          ? "color-mix(in srgb, var(--color-success) 15%, transparent)"
+          : "color-mix(in srgb, var(--color-text-muted) 12%, transparent)",
+        color: isGrabbed ? "var(--color-success)" : "var(--color-text-muted)",
+      }}
+    >
+      {outcome}
+    </span>
+  );
+}
+
+function DecisionRow({ decision }: { decision: ReleaseDecision }) {
+  return (
+    <div
+      style={{
+        padding: "8px 0",
+        borderBottom: "1px solid var(--color-border-subtle)",
+        display: "flex",
+        alignItems: "flex-start",
+        gap: 10,
+      }}
+    >
+      <OutcomeBadge outcome={decision.outcome} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div
+          style={{
+            fontSize: 11,
+            color: "var(--color-text-primary)",
+            fontFamily: "var(--font-family-mono)",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+          title={decision.title}
+        >
+          {decision.title}
+        </div>
+        <div style={{ fontSize: 11, color: "var(--color-text-muted)", marginTop: 2 }}>
+          {decision.explanation}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DecisionPanel({ movieId, explain }: { movieId: string; explain: ExplainResult | undefined }) {
+  const [expanded, setExpanded] = useState(false);
+
+  if (!explain) return null;
+
+  return (
+    <div
+      style={{
+        margin: "0 0 16px",
+        border: "1px solid var(--color-border-subtle)",
+        borderRadius: 8,
+        background: "var(--color-bg-surface)",
+        overflow: "hidden",
+      }}
+    >
+      {/* Summary header — always visible */}
+      <button
+        onClick={() => setExpanded((v) => !v)}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          width: "100%",
+          padding: "10px 14px",
+          background: "none",
+          border: "none",
+          cursor: "pointer",
+          textAlign: "left",
+        }}
+      >
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <span style={{ fontSize: 12, fontWeight: 600, color: "var(--color-text-primary)" }}>
+            Profile: {explain.profile_name}
+          </span>
+          {explain.current_file && (
+            <span style={{ fontSize: 11, color: "var(--color-text-muted)", marginLeft: 10 }}>
+              Current: {explain.current_file.name || `${explain.current_file.resolution} ${explain.current_file.source}`}
+            </span>
+          )}
+        </div>
+        <span style={{ fontSize: 11, color: "var(--color-text-muted)", flexShrink: 0 }}>
+          {explain.decisions.length} decision{explain.decisions.length !== 1 ? "s" : ""}
+        </span>
+        {expanded
+          ? <ChevronUp size={14} style={{ color: "var(--color-text-muted)", flexShrink: 0 }} />
+          : <ChevronDown size={14} style={{ color: "var(--color-text-muted)", flexShrink: 0 }} />
+        }
+      </button>
+
+      {/* Decision list */}
+      {expanded && (
+        <div
+          style={{
+            padding: "0 14px 10px",
+            borderTop: "1px solid var(--color-border-subtle)",
+            maxHeight: 300,
+            overflowY: "auto",
+          }}
+        >
+          {explain.decisions.length === 0 ? (
+            <p style={{ margin: "10px 0 0", fontSize: 12, color: "var(--color-text-muted)" }}>
+              No decisions recorded.
+            </p>
+          ) : (
+            explain.decisions.map((d) => (
+              <DecisionRow key={d.guid} decision={d} />
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Modal ──────────────────────────────────────────────────────────────────────
+
 interface ManualSearchModalProps {
   movieId: string;
   movieTitle: string;
@@ -125,6 +305,9 @@ export function ManualSearchModal({ movieId, movieTitle, onClose }: ManualSearch
   const [grabErrors, setGrabErrors] = useState<Record<string, string>>({});
   const [sortField, setSortField] = useState<ReleaseSortField>("seeds");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [showExplain, setShowExplain] = useState(false);
+
+  const explain = useExplainReleases(movieId, showExplain);
 
   const sortedReleases = useMemo(
     () => (data ? sortReleases(data, sortField, sortDir) : []),
@@ -184,27 +367,89 @@ export function ManualSearchModal({ movieId, movieTitle, onClose }: ManualSearch
               {movieTitle}
             </div>
           </div>
-          <button
-            onClick={onClose}
-            style={{
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              color: "var(--color-text-muted)",
-              fontSize: 18,
-              lineHeight: 1,
-              padding: "4px 6px",
-              borderRadius: 4,
-            }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "var(--color-text-primary)"; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "var(--color-text-muted)"; }}
-          >
-            ✕
-          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            {/* Why? button */}
+            <button
+              onClick={() => setShowExplain((v) => !v)}
+              title="Show scoring decisions"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 5,
+                background: showExplain
+                  ? "color-mix(in srgb, var(--color-accent) 12%, transparent)"
+                  : "none",
+                border: showExplain
+                  ? "1px solid color-mix(in srgb, var(--color-accent) 30%, transparent)"
+                  : "1px solid transparent",
+                borderRadius: 6,
+                padding: "5px 10px",
+                fontSize: 12,
+                fontWeight: 500,
+                color: showExplain ? "var(--color-accent)" : "var(--color-text-muted)",
+                cursor: "pointer",
+                transition: "color 120ms ease, background 120ms ease, border-color 120ms ease",
+              }}
+              onMouseEnter={(e) => {
+                if (!showExplain) {
+                  (e.currentTarget as HTMLButtonElement).style.color = "var(--color-text-secondary)";
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!showExplain) {
+                  (e.currentTarget as HTMLButtonElement).style.color = "var(--color-text-muted)";
+                }
+              }}
+            >
+              <HelpCircle size={14} strokeWidth={1.75} />
+              Why?
+              {explain.isLoading && <span style={{ marginLeft: 2 }}>…</span>}
+            </button>
+
+            <button
+              onClick={onClose}
+              style={{
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                color: "var(--color-text-muted)",
+                fontSize: 18,
+                lineHeight: 1,
+                padding: "4px 6px",
+                borderRadius: 4,
+              }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "var(--color-text-primary)"; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "var(--color-text-muted)"; }}
+            >
+              ✕
+            </button>
+          </div>
         </div>
 
         {/* Body */}
         <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
+          {/* Decision panel (Feature 2) */}
+          {showExplain && (
+            explain.isLoading ? (
+              <div className="skeleton" style={{ height: 44, borderRadius: 8, marginBottom: 16 }} />
+            ) : explain.error ? (
+              <div
+                style={{
+                  padding: "10px 14px",
+                  marginBottom: 16,
+                  borderRadius: 8,
+                  border: "1px solid var(--color-border-subtle)",
+                  fontSize: 12,
+                  color: "var(--color-danger)",
+                }}
+              >
+                Could not load decisions: {(explain.error as Error).message}
+              </div>
+            ) : explain.data ? (
+              <DecisionPanel movieId={movieId} explain={explain.data} />
+            ) : null
+          )}
+
           {isLoading && (
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {[1, 2, 3, 4].map((i) => (

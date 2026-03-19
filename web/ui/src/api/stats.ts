@@ -110,3 +110,14 @@ export function useGenreStats() {
     queryFn: () => apiFetch<GenreBucket[]>("/stats/genres"),
   });
 }
+
+export function useQualityMovies(resolution: string, source: string, enabled: boolean) {
+  const params = new URLSearchParams();
+  if (resolution) params.set("resolution", resolution);
+  if (source) params.set("source", source);
+  return useQuery({
+    queryKey: ["stats", "quality", "movies", resolution, source],
+    queryFn: () => apiFetch<string[]>(`/stats/quality/movies?${params.toString()}`),
+    enabled: enabled && (!!resolution || !!source),
+  });
+}

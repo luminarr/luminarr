@@ -117,6 +117,14 @@ export interface ScoreBreakdown {
   edition_bonus?: number;
 }
 
+export interface QualityConflict {
+  dimension: string;
+  severity: "warning" | "caution";
+  current: string;
+  candidate: string;
+  summary: string;
+}
+
 export interface Release {
   guid: string;
   title: string;
@@ -133,6 +141,7 @@ export interface Release {
   score_breakdown?: ScoreBreakdown;
   edition?: string;
   release_group?: string;
+  conflicts?: QualityConflict[];
 }
 
 export interface GrabHistory {
@@ -657,6 +666,40 @@ export interface ImportListSyncResult {
   movies_added: number;
   movies_skipped: number;
   errors: string[];
+}
+
+// ── Release Explain ────────────────────────────────────────────────────────
+
+export interface ReleaseDecision {
+  title: string;
+  guid: string;
+  outcome: "grabbed" | "skipped";
+  reason: string;
+  explanation: string;
+  quality_score: number;
+  cf_score: number;
+}
+
+export interface ExplainResult {
+  movie_id: string;
+  profile_name: string;
+  current_file?: Quality;
+  decisions: ReleaseDecision[];
+}
+
+// ── Upgrade Recommendations ────────────────────────────────────────────────
+
+export interface UpgradeTier {
+  label: string;
+  from_quality: string;
+  to_quality: string;
+  count: number;
+  movie_ids: string[];
+}
+
+export interface UpgradeRecommendations {
+  total: number;
+  tiers: UpgradeTier[];
 }
 
 // ── Custom Format Presets ──────────────────────────────────────────────────

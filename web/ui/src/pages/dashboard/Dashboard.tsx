@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { LayoutGrid, List } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -11,6 +11,7 @@ import {
   useEditions,
 } from "@/api/movies";
 import { useLibraries } from "@/api/libraries";
+import { useQualityMovies } from "@/api/stats";
 import { useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "@/api/client";
 import { useQualityProfiles } from "@/api/quality-profiles";
@@ -1588,6 +1589,20 @@ export default function Dashboard() {
   const bulkDeleteAbort = useRef(false);
   const qc = useQueryClient();
 
+  // Quality filter from URL params (set by StatsPage tier clicks)
+  const [searchParams, setSearchParams] = useSearchParams();
+  const qualityResolution = searchParams.get("quality_resolution") ?? "";
+  const qualitySource = searchParams.get("quality_source") ?? "";
+
+  function clearQualityFilter() {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete("quality_resolution");
+      next.delete("quality_source");
+      return next;
+    });
+  }
+
   function toggleSelectMode() {
     setSelectionMode((v) => !v);
     setSelectedIds(new Set());
@@ -1639,6 +1654,12 @@ export default function Dashboard() {
 
   const { data, isLoading, error } = useMovies({ per_page: 2000 });
   const { data: libraries } = useLibraries();
+  const hasQualityFilter = !!(qualityResolution || qualitySource);
+  const { data: qualityMovieIds } = useQualityMovies(
+    qualityResolution,
+    qualitySource,
+    hasQualityFilter
+  );
 
   // Derive unique status values from actual data
   const statuses = useMemo(() => {
@@ -1678,6 +1699,12 @@ export default function Dashboard() {
       result = result.filter((m) => m.library_id === libraryFilter);
     }
 
+    // Quality tier filter (from URL params, set by StatsPage tier clicks)
+    if (qualityMovieIds) {
+      const idSet = new Set(qualityMovieIds);
+      result = result.filter((m) => idSet.has(m.id));
+    }
+
     return [...result].sort((a, b) => {
       let cmp = 0;
       if (sortField === "title") cmp = a.title.localeCompare(b.title);
@@ -1693,6 +1720,7 @@ export default function Dashboard() {
     statusFilter,
     onDiskFilter,
     libraryFilter,
+    qualityMovieIds,
     sortField,
     sortDir,
   ]);
@@ -1713,6 +1741,7 @@ export default function Dashboard() {
     setStatusFilter("all");
     setOnDiskFilter("all");
     setLibraryFilter("");
+    clearQualityFilter();
   }
 
   const totalCount = data?.total ?? 0;
@@ -1721,7 +1750,8 @@ export default function Dashboard() {
     monitoredFilter !== "all" ||
     statusFilter !== "all" ||
     onDiskFilter !== "all" ||
-    !!libraryFilter;
+    !!libraryFilter ||
+    hasQualityFilter;
 
   return (
     <div style={{ padding: 24 }}>
@@ -1916,6 +1946,48 @@ export default function Dashboard() {
         >
           {sortDir === "asc" ? "A→Z" : "Z→A"}
         </button>
+
+        {/* Quality filter chip */}
+        {hasQualityFilter && (
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "5px 10px",
+              background: "color-mix(in srgb, var(--color-accent) 12%, transparent)",
+              border: "1px solid color-mix(in srgb, var(--color-accent) 30%, transparent)",
+              borderRadius: 6,
+              fontSize: 12,
+              fontWeight: 500,
+              color: "var(--color-accent)",
+            }}
+          >
+            <span>
+              {[qualityResolution, qualitySource].filter(Boolean).join(" ")}
+            </span>
+            <button
+              onClick={clearQualityFilter}
+              title="Clear quality filter"
+              style={{
+                background: "none",
+                border: "none",
+                padding: 0,
+                cursor: "pointer",
+                color: "var(--color-accent)",
+                display: "flex",
+                alignItems: "center",
+                lineHeight: 1,
+                fontSize: 14,
+                opacity: 0.75,
+              }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.opacity = "1"; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.opacity = "0.75"; }}
+            >
+              ×
+            </button>
+          </div>
+        )}
 
         {/* Spacer */}
         <div style={{ flex: 1 }} />

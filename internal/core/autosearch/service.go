@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/luminarr/luminarr/internal/core/blocklist"
+	"github.com/luminarr/luminarr/internal/core/conflict"
 	"github.com/luminarr/luminarr/internal/core/customformat"
 	"github.com/luminarr/luminarr/internal/core/downloader"
 	"github.com/luminarr/luminarr/internal/core/edition"
@@ -257,6 +258,18 @@ func (s *Service) SearchMovie(ctx context.Context, movieID string) (*Result, err
 			continue
 		}
 
+		// Log any quality conflicts (warn-only — does not block the grab).
+		if currentQuality != nil {
+			conflicts := conflict.Compare(*currentQuality, r.Quality, currentEdition, r.Edition)
+			for _, c := range conflicts {
+				s.logger.Warn("auto-search: conflict detected",
+					"movie_id", movieID,
+					"release", r.Title,
+					"conflict", c.Summary,
+				)
+			}
+		}
+
 		// Compute score breakdown for history.
 		_, breakdown := prof.ScoreWithBreakdown(r.Quality)
 		edBonus := edition.Bonus(mov.PreferredEdition, r.Edition)
@@ -327,6 +340,177 @@ func (s *Service) SearchMovie(ctx context.Context, movieID string) (*Result, err
 		Status:  StatusNoMatch,
 		Reason:  "no releases satisfy quality profile",
 	}, nil
+}
+
+// ExplainResult holds the dry-run decisions for all candidate releases.
+type ExplainResult struct {
+	MovieID     string            `json:"movie_id"`
+	ProfileName string            `json:"profile_name"`
+	CurrentFile *plugin.Quality   `json:"current_file,omitempty"`
+	Decisions   []ReleaseDecision `json:"decisions"`
+}
+
+// SearchMovieExplain performs the same search and evaluation as SearchMovie
+// but does NOT grab anything. It returns a decision for every candidate,
+// explaining why each was accepted or rejected.
+func (s *Service) SearchMovieExplain(ctx context.Context, movieID string) (*ExplainResult, error) {
+	mov, err := s.movieSvc.Get(ctx, movieID)
+	if err != nil {
+		return nil, fmt.Errorf("fetching movie: %w", err)
+	}
+
+	allowedIndexerIDs, _ := s.allowedEntityIDs(ctx, movieID)
+
+	query := plugin.SearchQuery{
+		TMDBID: mov.TMDBID, IMDBID: mov.IMDBID,
+		Query: mov.Title, Year: mov.Year,
+	}
+	results, _ := s.indexerSvc.Search(ctx, query, allowedIndexerIDs)
+
+	prof, err := s.qualitySvc.Get(ctx, mov.QualityProfileID)
+	if err != nil {
+		return nil, fmt.Errorf("loading quality profile: %w", err)
+	}
+
+	// Load CF data.
+	var allCFs []customformat.CustomFormat
+	var profileCFScores map[string]int
+	if s.cfSvc != nil {
+		if cfs, e := s.cfSvc.List(ctx); e == nil {
+			allCFs = cfs
+		}
+		if sc, e := s.cfSvc.ListScores(ctx, prof.ID); e == nil {
+			profileCFScores = sc
+		}
+	}
+
+	var currentQuality *plugin.Quality
+	var currentEdition string
+	if files, fErr := s.movieSvc.ListFiles(ctx, movieID); fErr == nil && len(files) > 0 {
+		best := bestFileQuality(files)
+		currentQuality = &best
+		currentEdition = bestFileEdition(files)
+	}
+
+	// Apply edition bonus and re-sort (same as SearchMovie).
+	if mov.PreferredEdition != "" {
+		for i := range results {
+			bonus := edition.Bonus(mov.PreferredEdition, results[i].Edition)
+			results[i].QualityScore += bonus
+		}
+		sort.SliceStable(results, func(i, j int) bool {
+			si, sj := results[i].QualityScore, results[j].QualityScore
+			if si != sj {
+				return si > sj
+			}
+			return results[i].Seeds > results[j].Seeds
+		})
+	}
+
+	var decisions []ReleaseDecision
+	grabbed := false
+
+	for _, r := range results {
+		// CF evaluation.
+		var cfScore int
+		var matchedCFIDs []string
+		if len(allCFs) > 0 {
+			cfRel := buildCFReleaseInfo(r.Release)
+			matchedCFIDs = customformat.MatchRelease(allCFs, cfRel)
+			cfScore = customformat.ScoreRelease(matchedCFIDs, profileCFScores)
+		}
+		cfNames := matchedCFNames(allCFs, matchedCFIDs)
+
+		_, breakdown := prof.ScoreWithBreakdown(r.Quality)
+		breakdown.CustomFormatScore = cfScore
+		breakdown.MatchedFormats = cfNames
+
+		explainCtx := ExplainContext{
+			ProfileName:    prof.Name,
+			MinCFScore:     prof.MinCustomFormatScore,
+			CurrentFile:    currentFileLabel(currentQuality),
+			CFScore:        cfScore,
+			MatchedFormats: cfNames,
+			QualityName:    r.Quality.Name,
+			QualityScore:   r.QualityScore,
+			TotalScore:     breakdown.Total + cfScore,
+		}
+
+		mkDecision := func(reason SkipReason) ReleaseDecision {
+			outcome := "skipped"
+			if reason == ReasonGrabbed {
+				outcome = "grabbed"
+			}
+			return ReleaseDecision{
+				Title:          r.Title,
+				GUID:           r.GUID,
+				Outcome:        outcome,
+				Reason:         reason,
+				Explanation:    Explain(reason, explainCtx),
+				QualityScore:   r.QualityScore,
+				CFScore:        cfScore,
+				MatchedFormats: cfNames,
+				Breakdown:      &breakdown,
+			}
+		}
+
+		// Blocklist.
+		if s.blocklistSvc != nil {
+			blocked, _ := s.blocklistSvc.IsBlocklisted(ctx, r.GUID)
+			if blocked {
+				decisions = append(decisions, mkDecision(ReasonBlocklisted))
+				continue
+			}
+		}
+
+		// CF minimum.
+		if prof.MinCustomFormatScore != 0 && cfScore < prof.MinCustomFormatScore {
+			decisions = append(decisions, mkDecision(ReasonCFScoreBelowMinimum))
+			continue
+		}
+
+		// Quality profile.
+		wantByQuality := prof.WantRelease(r.Quality, currentQuality)
+		wantByEdition := mov.PreferredEdition != "" &&
+			!strings.EqualFold(currentEdition, mov.PreferredEdition) &&
+			strings.EqualFold(r.Edition, mov.PreferredEdition)
+
+		if !wantByQuality && !wantByEdition {
+			reason := SkipReason(prof.RejectReason(r.Quality, currentQuality))
+			if reason == "" {
+				reason = ReasonNoUpgradeNeeded
+			}
+			decisions = append(decisions, mkDecision(reason))
+			continue
+		}
+
+		// Would be grabbed (first passing candidate).
+		if !grabbed {
+			decisions = append(decisions, mkDecision(ReasonGrabbed))
+			grabbed = true
+		} else {
+			// Subsequent passing candidates — they would have been grabbed
+			// if the first one wasn't available.
+			decisions = append(decisions, mkDecision(ReasonGrabbed))
+		}
+	}
+
+	return &ExplainResult{
+		MovieID:     movieID,
+		ProfileName: prof.Name,
+		CurrentFile: currentQuality,
+		Decisions:   decisions,
+	}, nil
+}
+
+func currentFileLabel(q *plugin.Quality) string {
+	if q == nil {
+		return "(no file)"
+	}
+	if q.Name != "" {
+		return q.Name
+	}
+	return string(q.Resolution) + " " + string(q.Source)
 }
 
 // SearchMovies runs SearchMovie for each movie ID with bounded concurrency.

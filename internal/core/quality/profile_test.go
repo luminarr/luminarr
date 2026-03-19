@@ -293,3 +293,155 @@ func TestAllowedQualities(t *testing.T) {
 		t.Error("AllowedQualities() returned a reference to internal slice — expected a copy")
 	}
 }
+
+// ── RejectReason tests ────────────────────────────────────────────────────────
+
+func TestRejectReason(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name           string
+		profile        *quality.Profile
+		releaseQuality plugin.Quality
+		currentFile    *plugin.Quality
+		wantReason     string
+	}{
+		{
+			name:           "quality not in allowed set",
+			profile:        standardProfile(false, nil),
+			releaseQuality: qSD(), // SD not in HD profile
+			currentFile:    nil,
+			wantReason:     "quality_not_in_profile",
+		},
+		{
+			name:           "no file on disk (nil current) — no rejection",
+			profile:        standardProfile(false, nil),
+			releaseQuality: q1080pWEB(),
+			currentFile:    nil,
+			wantReason:     "",
+		},
+		{
+			// To test "below cutoff, release worse": need current below cutoff
+			// but release worse than current. Use a profile with cutoff at
+			// 1080p BluRay, current at 1080p WEB (below cutoff), release at
+			// 720p (worse than current).
+			name: "current below cutoff, release is worse than current",
+			profile: &quality.Profile{
+				ID:     "wide",
+				Name:   "Wide",
+				Cutoff: q1080pBluRay(),
+				Qualities: []plugin.Quality{
+					q1080pRemux(),
+					q1080pBluRay(),
+					q1080pWEB(),
+					q720p(),
+				},
+				UpgradeAllowed: false,
+			},
+			releaseQuality: q720p(),
+			currentFile:    ptr(q1080pWEB()), // below cutoff (1080p WEB < 1080p BluRay), but release 720p < current 1080p WEB
+			wantReason:     "no_upgrade_needed",
+		},
+		{
+			name: "current below cutoff, release is better — no rejection",
+			profile: &quality.Profile{
+				ID:     "wide",
+				Name:   "Wide",
+				Cutoff: q1080pBluRay(),
+				Qualities: []plugin.Quality{
+					q1080pRemux(),
+					q1080pBluRay(),
+					q1080pWEB(),
+					q720p(),
+				},
+				UpgradeAllowed: false,
+			},
+			releaseQuality: q1080pBluRay(),
+			currentFile:    ptr(q720p()), // below cutoff, release is better
+			wantReason:     "",
+		},
+		{
+			name:           "current meets cutoff, upgrades disabled — upgrade_disabled",
+			profile:        standardProfile(false, nil),
+			releaseQuality: q1080pBluRay(),
+			currentFile:    ptr(q1080pWEB()), // meets cutoff
+			wantReason:     "upgrade_disabled",
+		},
+		{
+			name:           "current meets cutoff, upgrades enabled, release not better — no_upgrade_needed",
+			profile:        standardProfile(true, nil),
+			releaseQuality: q720p(),
+			currentFile:    ptr(q1080pWEB()), // meets cutoff, release is worse
+			wantReason:     "no_upgrade_needed",
+		},
+		{
+			name:           "current meets cutoff, upgrades enabled, release is better — no rejection",
+			profile:        standardProfile(true, nil),
+			releaseQuality: q1080pBluRay(),
+			currentFile:    ptr(q1080pWEB()), // meets cutoff, release is upgrade
+			wantReason:     "",
+		},
+		{
+			name: "empty qualities list (allow-any profile) — no rejection",
+			profile: &quality.Profile{
+				ID:             "any",
+				Name:           "Any",
+				Cutoff:         q720p(),
+				Qualities:      nil, // empty = allow any
+				UpgradeAllowed: false,
+			},
+			releaseQuality: qSD(),
+			currentFile:    nil,
+			wantReason:     "",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := tc.profile.RejectReason(tc.releaseQuality, tc.currentFile)
+			if got != tc.wantReason {
+				t.Errorf("RejectReason() = %q, want %q", got, tc.wantReason)
+			}
+		})
+	}
+}
+
+// TestRejectReason_consistentWithWantRelease verifies that RejectReason returns
+// "" if and only if WantRelease returns true, for a broad sweep of inputs.
+func TestRejectReason_consistentWithWantRelease(t *testing.T) {
+	t.Parallel()
+
+	qualities := []plugin.Quality{qSD(), q720p(), q1080pWEB(), q1080pBluRay(), q1080pRemux(), q2160pWEB()}
+	profiles := []*quality.Profile{
+		standardProfile(false, nil),
+		standardProfile(true, nil),
+		standardProfile(true, ptr(q1080pRemux())),
+	}
+
+	for _, prof := range profiles {
+		for _, release := range qualities {
+			// nil current
+			want := prof.WantRelease(release, nil)
+			reason := prof.RejectReason(release, nil)
+			if want && reason != "" {
+				t.Errorf("profile=%s release=%v current=nil: WantRelease=true but RejectReason=%q", prof.Name, release, reason)
+			}
+			if !want && reason == "" {
+				t.Errorf("profile=%s release=%v current=nil: WantRelease=false but RejectReason is empty", prof.Name, release)
+			}
+			// with various current files
+			for _, current := range qualities {
+				cur := current
+				want := prof.WantRelease(release, &cur)
+				reason := prof.RejectReason(release, &cur)
+				if want && reason != "" {
+					t.Errorf("profile=%s release=%v current=%v: WantRelease=true but RejectReason=%q", prof.Name, release, cur, reason)
+				}
+				if !want && reason == "" {
+					t.Errorf("profile=%s release=%v current=%v: WantRelease=false but RejectReason is empty", prof.Name, release, cur)
+				}
+			}
+		}
+	}
+}

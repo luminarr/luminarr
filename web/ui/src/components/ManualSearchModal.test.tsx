@@ -255,4 +255,214 @@ describe("ManualSearchModal", () => {
     // Descending age: High (500d) → Mid (100d) → Low (10d)
     expect(titles).toEqual(["High.Score", "Mid.Score", "Low.Score"]);
   });
+
+  // ── Conflict pills ────────────────────────────────────────────────────────
+
+  it("shows conflict warning pills when release has conflicts", async () => {
+    const conflictRelease: Release = {
+      ...releaseFixture,
+      conflicts: [
+        {
+          dimension: "codec",
+          severity: "warning",
+          current: "x265",
+          candidate: "x264",
+          summary: "Codec downgrade",
+        },
+      ],
+    };
+    server.use(
+      http.get("/api/v1/movies/movie-1/releases", () =>
+        HttpResponse.json([conflictRelease])
+      )
+    );
+
+    renderWithProviders(<ManualSearchModal {...defaultProps} />);
+    await waitFor(() => {
+      expect(screen.getByText("Codec downgrade")).toBeInTheDocument();
+    });
+  });
+
+  it("does not show conflict section when no conflicts", async () => {
+    const cleanRelease: Release = {
+      ...releaseFixture,
+      conflicts: [],
+    };
+    server.use(
+      http.get("/api/v1/movies/movie-1/releases", () =>
+        HttpResponse.json([cleanRelease])
+      )
+    );
+
+    renderWithProviders(<ManualSearchModal {...defaultProps} />);
+    await waitFor(() => {
+      expect(screen.getByText("1 release found")).toBeInTheDocument();
+    });
+    // No conflict summary text should be present
+    expect(screen.queryByText("Codec downgrade")).not.toBeInTheDocument();
+    expect(screen.queryByText("downgrade")).not.toBeInTheDocument();
+  });
+
+  it("warning severity pill renders the TriangleAlert icon", async () => {
+    const conflictRelease: Release = {
+      ...releaseFixture,
+      conflicts: [
+        {
+          dimension: "source",
+          severity: "warning",
+          current: "remux",
+          candidate: "webdl",
+          summary: "Source downgrade",
+        },
+      ],
+    };
+    server.use(
+      http.get("/api/v1/movies/movie-1/releases", () =>
+        HttpResponse.json([conflictRelease])
+      )
+    );
+
+    renderWithProviders(<ManualSearchModal {...defaultProps} />);
+    await waitFor(() => {
+      expect(screen.getByText("Source downgrade")).toBeInTheDocument();
+    });
+
+    // The warning pill wraps both the icon SVG and the summary text inside the
+    // same <span>. The lucide TriangleAlert renders as an <svg> element.
+    const pill = screen.getByText("Source downgrade").closest("span")!;
+    expect(pill.querySelector("svg")).not.toBeNull();
+  });
+
+  it("caution severity pill does not render the TriangleAlert icon", async () => {
+    const conflictRelease: Release = {
+      ...releaseFixture,
+      conflicts: [
+        {
+          dimension: "hdr",
+          severity: "caution",
+          current: "HDR10",
+          candidate: "none",
+          summary: "HDR difference",
+        },
+      ],
+    };
+    server.use(
+      http.get("/api/v1/movies/movie-1/releases", () =>
+        HttpResponse.json([conflictRelease])
+      )
+    );
+
+    renderWithProviders(<ManualSearchModal {...defaultProps} />);
+    await waitFor(() => {
+      expect(screen.getByText("HDR difference")).toBeInTheDocument();
+    });
+
+    // Caution pills omit the icon — no SVG inside the pill span
+    const pill = screen.getByText("HDR difference").closest("span")!;
+    expect(pill.querySelector("svg")).toBeNull();
+  });
+
+  // ── Explain panel (Why? button) ───────────────────────────────────────────
+
+  it("Why button is visible in the modal header", () => {
+    server.use(
+      http.get("/api/v1/movies/movie-1/releases", () => HttpResponse.json([]))
+    );
+
+    renderWithProviders(<ManualSearchModal {...defaultProps} />);
+    expect(screen.getByText("Why?")).toBeInTheDocument();
+  });
+
+  it("clicking Why? shows the decision panel with profile name", async () => {
+    const explainData = {
+      movie_id: "movie-1",
+      profile_name: "HD-1080p",
+      current_file: {
+        resolution: "720p",
+        source: "webdl",
+        codec: "x264",
+        hdr: "",
+        name: "WEBDL-720p",
+      },
+      decisions: [
+        {
+          title: "Fight.Club.1999.1080p.BluRay.x264-GROUP",
+          guid: "release-1",
+          outcome: "grabbed" as const,
+          reason: "score_above_cutoff",
+          explanation: "Score 850 exceeds cutoff of 500",
+          quality_score: 850,
+          cf_score: 0,
+        },
+      ],
+    };
+
+    server.use(
+      http.get("/api/v1/movies/movie-1/releases", () => HttpResponse.json([])),
+      http.get("/api/v1/movies/movie-1/releases/explain", () =>
+        HttpResponse.json(explainData)
+      )
+    );
+
+    renderWithProviders(<ManualSearchModal {...defaultProps} />);
+    fireEvent.click(screen.getByText("Why?"));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Profile: HD-1080p/)).toBeInTheDocument();
+    });
+    // Decision count summary is shown in the collapsed header
+    expect(screen.getByText("1 decision")).toBeInTheDocument();
+  });
+
+  it("expanding the decision panel shows individual decision rows", async () => {
+    const explainData = {
+      movie_id: "movie-1",
+      profile_name: "HD-1080p",
+      decisions: [
+        {
+          title: "Fight.Club.1999.1080p.BluRay.x264-GROUP",
+          guid: "release-1",
+          outcome: "grabbed" as const,
+          reason: "score_above_cutoff",
+          explanation: "Score 850 exceeds cutoff of 500",
+          quality_score: 850,
+          cf_score: 0,
+        },
+        {
+          title: "Fight.Club.1999.720p.HDTV-GROUP",
+          guid: "release-2",
+          outcome: "skipped" as const,
+          reason: "below_cutoff",
+          explanation: "Score 200 is below cutoff",
+          quality_score: 200,
+          cf_score: 0,
+        },
+      ],
+    };
+
+    server.use(
+      http.get("/api/v1/movies/movie-1/releases", () => HttpResponse.json([])),
+      http.get("/api/v1/movies/movie-1/releases/explain", () =>
+        HttpResponse.json(explainData)
+      )
+    );
+
+    renderWithProviders(<ManualSearchModal {...defaultProps} />);
+    fireEvent.click(screen.getByText("Why?"));
+
+    await waitFor(() => {
+      expect(screen.getByText("2 decisions")).toBeInTheDocument();
+    });
+
+    // Click the collapsible header to expand
+    fireEvent.click(screen.getByText("2 decisions").closest("button")!);
+
+    await waitFor(() => {
+      expect(screen.getByText("Score 850 exceeds cutoff of 500")).toBeInTheDocument();
+    });
+    expect(screen.getByText("Score 200 is below cutoff")).toBeInTheDocument();
+    // Both outcome badges
+    expect(screen.getByText("grabbed")).toBeInTheDocument();
+    expect(screen.getByText("skipped")).toBeInTheDocument();
+  });
 });
