@@ -383,7 +383,8 @@ function QualityMiniChart({
             radius={[0, 4, 4, 0]}
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             onClick={onBarClick ? (entry: any) => {
-              if (entry?.label) onBarClick(String(entry.label));
+              const label = entry?.payload?.label;
+              if (label) onBarClick(String(label));
             } : undefined}
           >
             {data.map((_, i) => (

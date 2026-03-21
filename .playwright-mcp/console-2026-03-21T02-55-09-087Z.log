@@ -1,0 +1,6 @@
+[    1058ms] [WARNING] WebSocket connection to 'ws://localhost:5174/api/v1/ws' failed: WebSocket is closed before the connection is established. @ http://localhost:5174/src/api/websocket.ts:89
+[    1299ms] [ERROR] WebSocket connection to 'ws://localhost:5174/api/v1/ws' failed: HTTP Authentication failed; no valid credentials available @ http://localhost:5174/src/api/websocket.ts:16
+[    2301ms] [ERROR] WebSocket connection to 'ws://localhost:5174/api/v1/ws' failed: HTTP Authentication failed; no valid credentials available @ http://localhost:5174/src/api/websocket.ts:16
+[    4303ms] [ERROR] WebSocket connection to 'ws://localhost:5174/api/v1/ws' failed: HTTP Authentication failed; no valid credentials available @ http://localhost:5174/src/api/websocket.ts:16
+[    8304ms] [ERROR] WebSocket connection to 'ws://localhost:5174/api/v1/ws' failed: HTTP Authentication failed; no valid credentials available @ http://localhost:5174/src/api/websocket.ts:16
+[   16306ms] [ERROR] WebSocket connection to 'ws://localhost:5174/api/v1/ws' failed: HTTP Authentication failed; no valid credentials available @ http://localhost:5174/src/api/websocket.ts:16
