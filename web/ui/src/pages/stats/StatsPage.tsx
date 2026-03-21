@@ -361,8 +361,9 @@ function QualityMiniChart({
           layout="vertical"
           margin={{ top: 0, right: 40, left: 0, bottom: 0 }}
           style={onBarClick ? { cursor: "pointer" } : undefined}
-          onClick={onBarClick ? (payload) => {
-            const label = payload?.activePayload?.[0]?.payload?.label as string | undefined;
+          onClick={onBarClick ? (payload: Record<string, unknown>) => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const label = (payload as any)?.activePayload?.[0]?.payload?.label as string | undefined;
             if (label) onBarClick(label);
           } : undefined}
         >

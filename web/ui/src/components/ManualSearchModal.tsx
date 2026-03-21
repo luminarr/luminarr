@@ -215,7 +215,7 @@ function DecisionRow({ decision }: { decision: ReleaseDecision }) {
   );
 }
 
-function DecisionPanel({ movieId, explain }: { movieId: string; explain: ExplainResult | undefined }) {
+function DecisionPanel({ explain }: { explain: ExplainResult | undefined }) {
   const [expanded, setExpanded] = useState(false);
 
   if (!explain) return null;
@@ -446,7 +446,7 @@ export function ManualSearchModal({ movieId, movieTitle, onClose }: ManualSearch
                 Could not load decisions: {(explain.error as Error).message}
               </div>
             ) : explain.data ? (
-              <DecisionPanel movieId={movieId} explain={explain.data} />
+              <DecisionPanel explain={explain.data} />
             ) : null
           )}
 
