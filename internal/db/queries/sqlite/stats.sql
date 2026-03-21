@@ -22,15 +22,18 @@ FROM movies;
 
 -- name: GetStorageTotals :one
 SELECT
-    COALESCE(SUM(size_bytes), 0) AS total_bytes,
-    COUNT(*)                      AS file_count
-FROM movie_files;
+    COALESCE(SUM(mf.size_bytes), 0) AS total_bytes,
+    COUNT(*)                         AS file_count
+FROM movie_files mf
+JOIN movies m ON m.id = mf.movie_id;
 
 -- name: ListMovieFileQualities :many
-SELECT quality_json FROM movie_files;
+SELECT mf.quality_json FROM movie_files mf
+JOIN movies m ON m.id = mf.movie_id;
 
 -- name: ListMovieFileQualitiesWithIDs :many
-SELECT movie_id, quality_json FROM movie_files;
+SELECT mf.movie_id, mf.quality_json FROM movie_files mf
+JOIN movies m ON m.id = mf.movie_id;
 
 -- name: GetGrabStats :one
 SELECT

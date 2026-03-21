@@ -33,6 +33,13 @@ type QualityBucket struct {
 	Count      int64  `json:"count"`
 }
 
+// QualityTier is a resolution+source group with a properly deduplicated movie count.
+type QualityTier struct {
+	Resolution string `json:"resolution"`
+	Source     string `json:"source"`
+	Count      int64  `json:"count"`
+}
+
 // StorageStat is the current total storage used by movie files.
 type StorageStat struct {
 	TotalBytes int64 `json:"total_bytes"`
@@ -211,6 +218,48 @@ func (s *Service) MovieIDsByQualityTier(ctx context.Context, resolution, source 
 		ids = append(ids, id)
 	}
 	return ids, nil
+}
+
+// QualityTiers returns unique movie counts grouped by resolution+source.
+// Each movie is counted once per tier even if it has multiple files at that tier.
+func (s *Service) QualityTiers(ctx context.Context) ([]QualityTier, error) {
+	rows, err := s.q.ListMovieFileQualitiesWithIDs(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("listing file qualities: %w", err)
+	}
+
+	type tierKey struct{ resolution, source string }
+	tierMovies := make(map[tierKey]map[string]bool)
+
+	for _, row := range rows {
+		var q plugin.Quality
+		if err := json.Unmarshal([]byte(row.QualityJson), &q); err != nil {
+			continue
+		}
+		res := string(q.Resolution)
+		if res == "" {
+			res = "unknown"
+		}
+		src := string(q.Source)
+		if src == "" {
+			src = "unknown"
+		}
+		k := tierKey{res, src}
+		if tierMovies[k] == nil {
+			tierMovies[k] = make(map[string]bool)
+		}
+		tierMovies[k][row.MovieID] = true
+	}
+
+	tiers := make([]QualityTier, 0, len(tierMovies))
+	for k, movies := range tierMovies {
+		tiers = append(tiers, QualityTier{
+			Resolution: k.resolution,
+			Source:     k.source,
+			Count:      int64(len(movies)),
+		})
+	}
+	return tiers, nil
 }
 
 // Storage returns the current total bytes and file count.

@@ -138,9 +138,10 @@ func (q *Queries) GetMoviesAddedByMonth(ctx context.Context) ([]GetMoviesAddedBy
 
 const getStorageTotals = `-- name: GetStorageTotals :one
 SELECT
-    COALESCE(SUM(size_bytes), 0) AS total_bytes,
-    COUNT(*)                      AS file_count
-FROM movie_files
+    COALESCE(SUM(mf.size_bytes), 0) AS total_bytes,
+    COUNT(*)                         AS file_count
+FROM movie_files mf
+JOIN movies m ON m.id = mf.movie_id
 `
 
 type GetStorageTotalsRow struct {
@@ -227,7 +228,8 @@ func (q *Queries) InsertStorageSnapshot(ctx context.Context, arg InsertStorageSn
 }
 
 const listMovieFileQualities = `-- name: ListMovieFileQualities :many
-SELECT quality_json FROM movie_files
+SELECT mf.quality_json FROM movie_files mf
+JOIN movies m ON m.id = mf.movie_id
 `
 
 func (q *Queries) ListMovieFileQualities(ctx context.Context) ([]string, error) {
@@ -254,7 +256,8 @@ func (q *Queries) ListMovieFileQualities(ctx context.Context) ([]string, error) 
 }
 
 const listMovieFileQualitiesWithIDs = `-- name: ListMovieFileQualitiesWithIDs :many
-SELECT movie_id, quality_json FROM movie_files
+SELECT mf.movie_id, mf.quality_json FROM movie_files mf
+JOIN movies m ON m.id = mf.movie_id
 `
 
 type ListMovieFileQualitiesWithIDsRow struct {

@@ -25,6 +25,11 @@ const qualityBuckets = [
   { resolution: "2160p", source: "WebDL", codec: "x265", hdr: "HDR10", count: 10 },
 ];
 
+const qualityTiers = [
+  { resolution: "1080p", source: "Bluray", count: 30 },
+  { resolution: "2160p", source: "WebDL", count: 10 },
+];
+
 const storageStats = {
   total_bytes: 2_000_000_000_000,
   file_count: 40,
@@ -58,6 +63,7 @@ function useFullStatsHandlers() {
   server.use(
     http.get("/api/v1/stats/collection", () => HttpResponse.json(collectionStats)),
     http.get("/api/v1/stats/quality", () => HttpResponse.json(qualityBuckets)),
+    http.get("/api/v1/stats/quality/tiers", () => HttpResponse.json(qualityTiers)),
     http.get("/api/v1/stats/storage", () => HttpResponse.json(storageStats)),
     http.get("/api/v1/stats/grabs", () => HttpResponse.json(grabStats)),
     http.get("/api/v1/stats/decades", () => HttpResponse.json(decadeStats)),
@@ -175,6 +181,7 @@ describe("StatsPage", () => {
     server.use(
       http.get("/api/v1/stats/collection", () => HttpResponse.json(collectionStats)),
       http.get("/api/v1/stats/quality", () => HttpResponse.json([])),
+      http.get("/api/v1/stats/quality/tiers", () => HttpResponse.json([])),
       http.get("/api/v1/stats/storage", () => HttpResponse.json(storageStats)),
       http.get("/api/v1/stats/grabs", () => HttpResponse.json(grabStats)),
       http.get("/api/v1/stats/decades", () => HttpResponse.json(decadeStats)),

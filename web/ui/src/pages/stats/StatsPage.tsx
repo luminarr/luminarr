@@ -17,6 +17,7 @@ import {
 import {
   useCollectionStats,
   useQualityStats,
+  useQualityTiers,
   useStorageStats,
   useGrabStats,
   useDecadeStats,
@@ -26,6 +27,7 @@ import {
 import type {
   CollectionStats,
   QualityBucket,
+  QualityTier,
   StorageStats,
   GrabStats,
   DecadeBucket,
@@ -301,34 +303,6 @@ function sortedGroup(
     .filter((it) => it.count > 0);
 }
 
-// Tier = resolution + source combination
-function buildTiers(buckets: QualityBucket[]) {
-  const map: Record<string, { resolution: string; source: string; count: number }> = {};
-  for (const b of buckets) {
-    const key = `${b.resolution}|${b.source}`;
-    if (!map[key]) map[key] = { resolution: b.resolution, source: b.source, count: 0 };
-    map[key].count += b.count;
-  }
-  return Object.values(map)
-    .filter((t) => t.count > 0)
-    .sort((a, b) => {
-      const ra = RESOLUTION_ORDER.indexOf(a.resolution);
-      const rb = RESOLUTION_ORDER.indexOf(b.resolution);
-      if (ra !== rb) {
-        if (ra === -1) return 1;
-        if (rb === -1) return -1;
-        return ra - rb;
-      }
-      const sa = SOURCE_ORDER.indexOf(a.source);
-      const sb = SOURCE_ORDER.indexOf(b.source);
-      if (sa === -1 && sb === -1) return b.count - a.count;
-      if (sa === -1) return 1;
-      if (sb === -1) return -1;
-      return sa - sb;
-    })
-    .map((t) => ({ label: `${t.resolution} ${t.source}`, count: t.count, resolution: t.resolution, source: t.source }));
-}
-
 type QualityDimension = "dimension" | "tier";
 
 function QualityMiniChart({
@@ -401,7 +375,7 @@ function QualityMiniChart({
   );
 }
 
-function QualityCard({ data }: { data: QualityBucket[] }) {
+function QualityCard({ data, tierData }: { data: QualityBucket[]; tierData?: QualityTier[] }) {
   const navigate = useNavigate();
   const [view, setView] = useState<QualityDimension>("dimension");
 
@@ -418,7 +392,26 @@ function QualityCard({ data }: { data: QualityBucket[] }) {
   const sources = sortedGroup(data, "source", SOURCE_ORDER);
   const codecs = sortedGroup(data, "codec", CODEC_ORDER);
   const hdrs = sortedGroup(data, "hdr", HDR_ORDER);
-  const tiers = buildTiers(data);
+
+  // Use server-computed tiers (properly deduplicated) instead of client-side sum.
+  const tiers = (tierData ?? [])
+    .filter((t) => t.count > 0)
+    .sort((a, b) => {
+      const ra = RESOLUTION_ORDER.indexOf(a.resolution);
+      const rb = RESOLUTION_ORDER.indexOf(b.resolution);
+      if (ra !== rb) {
+        if (ra === -1) return 1;
+        if (rb === -1) return -1;
+        return ra - rb;
+      }
+      const sa = SOURCE_ORDER.indexOf(a.source);
+      const sb = SOURCE_ORDER.indexOf(b.source);
+      if (sa === -1 && sb === -1) return b.count - a.count;
+      if (sa === -1) return 1;
+      if (sb === -1) return -1;
+      return sa - sb;
+    })
+    .map((t) => ({ label: `${t.resolution} ${t.source}`, count: t.count, resolution: t.resolution, source: t.source }));
 
   function handleTierClick(label: string) {
     const tier = tiers.find((t) => t.label === label);
@@ -777,6 +770,7 @@ function ErrorCard({ title }: { title: string }) {
 export default function StatsPage() {
   const collection = useCollectionStats();
   const quality = useQualityStats();
+  const qualityTiers = useQualityTiers();
   const storage = useStorageStats();
   const grabs = useGrabStats();
   const decades = useDecadeStats();
@@ -837,7 +831,7 @@ export default function StatsPage() {
         ) : quality.error ? (
           <ErrorCard title="Quality Distribution" />
         ) : quality.data ? (
-          <QualityCard data={quality.data} />
+          <QualityCard data={quality.data} tierData={qualityTiers.data} />
         ) : null}
 
         {/* Storage | Grabs */}

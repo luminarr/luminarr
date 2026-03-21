@@ -111,6 +111,19 @@ export function useGenreStats() {
   });
 }
 
+export interface QualityTier {
+  resolution: string;
+  source: string;
+  count: number;
+}
+
+export function useQualityTiers() {
+  return useQuery({
+    queryKey: ["stats", "quality", "tiers"],
+    queryFn: () => apiFetch<QualityTier[]>("/stats/quality/tiers"),
+  });
+}
+
 export function useQualityMovies(resolution: string, source: string, enabled: boolean) {
   const params = new URLSearchParams();
   if (resolution) params.set("resolution", resolution);

@@ -305,4 +305,19 @@ func RegisterStatsRoutes(api huma.API, svc *stats.Service) {
 		}
 		return &struct{ Body []string }{Body: ids}, nil
 	})
+
+	// GET /api/v1/stats/quality/tiers — deduplicated movie counts per resolution+source tier.
+	huma.Register(api, huma.Operation{
+		OperationID: "stats-quality-tiers",
+		Method:      http.MethodGet,
+		Path:        "/api/v1/stats/quality/tiers",
+		Summary:     "Quality distribution grouped by resolution+source with deduplicated movie counts",
+		Tags:        []string{"Statistics"},
+	}, func(ctx context.Context, _ *struct{}) (*struct{ Body []stats.QualityTier }, error) {
+		tiers, err := svc.QualityTiers(ctx)
+		if err != nil {
+			return nil, huma.NewError(http.StatusInternalServerError, err.Error())
+		}
+		return &struct{ Body []stats.QualityTier }{Body: tiers}, nil
+	})
 }
