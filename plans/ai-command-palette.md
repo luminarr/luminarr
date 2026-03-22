@@ -1,6 +1,6 @@
 # Plan: AI-Powered Command Palette
 
-**Status**: Implemented (v2.0.0)
+**Status**: Implemented (v0.9.0)
 **Scope**: New AI integration layer, command processing service, and enhanced command palette UI
 **Depends on**: Existing command palette (frontend), settings infrastructure (existing)
 
