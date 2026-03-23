@@ -12,9 +12,11 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/luminarr/luminarr/internal/anthropic"
 	"github.com/luminarr/luminarr/internal/api"
 	"github.com/luminarr/luminarr/internal/api/ws"
 	"github.com/luminarr/luminarr/internal/config"
+	"github.com/luminarr/luminarr/internal/core/aicommand"
 	"github.com/luminarr/luminarr/internal/core/autosearch"
 	"github.com/luminarr/luminarr/internal/core/blocklist"
 	"github.com/luminarr/luminarr/internal/core/collection"
@@ -352,6 +354,15 @@ func run() error {
 		traktClient = trakt.New(cfg.Trakt.ClientID.Value(), logger)
 	}
 
+	// ── AI command service ──────────────────────────────────────────────────
+	// Always created; the Anthropic client is set only when an API key is
+	// configured (and can be hot-swapped via the settings UI).
+	var aiClient *anthropic.Client
+	if !cfg.AI.APIKey.IsEmpty() {
+		aiClient = anthropic.New(cfg.AI.APIKey.Value())
+	}
+	aiCmdSvc := aicommand.NewService(aiClient, movieSvc, statsSvc, autoSvc, librarySvc, qualitySvc, logger)
+
 	// ── Import list service ──────────────────────────────────────────────────
 	importListSvc := importlist.NewService(queries, registry.Default, movieSvc, autoSvc, rawTMDB, traktClient, logger)
 
@@ -382,7 +393,6 @@ func run() error {
 		DBType:                   database.Driver,
 		DBPath:                   cfg.Database.Path,
 		ConfigFile:               cfg.ConfigFile,
-		AIEnabled:                !cfg.AI.APIKey.IsEmpty(),
 		TMDBKeyIsDefault:         cfg.TMDBKeyIsDefault,
 		QualityService:           qualitySvc,
 		QualityDefinitionService: qualityDefSvc,
@@ -406,6 +416,7 @@ func run() error {
 		TagService:               tagSvc,
 		CustomFormatService:      cfSvc,
 		AutoSearchService:        autoSvc,
+		AICommandService:         aiCmdSvc,
 		ImportListService:        importListSvc,
 		LogBuffer:                logBuffer,
 		WSHub:                    wsHub,

@@ -12,7 +12,9 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 
+	"github.com/luminarr/luminarr/internal/anthropic"
 	"github.com/luminarr/luminarr/internal/config"
+	"github.com/luminarr/luminarr/internal/core/aicommand"
 	"github.com/luminarr/luminarr/internal/core/movie"
 	"github.com/luminarr/luminarr/internal/metadata/tmdb"
 	"github.com/luminarr/luminarr/internal/safedialer"
@@ -90,8 +92,8 @@ type githubRelease struct {
 }
 
 // RegisterSystemRoutes registers the /api/v1/system/* endpoints.
-// movieSvc may be nil in test environments; aiEnabled reflects the static AI key state.
-func RegisterSystemRoutes(api huma.API, startTime time.Time, dbType, dbPath, configFile string, aiEnabled bool, tmdbKeyIsDefault bool, apiKey string, movieSvc *movie.Service, logger *slog.Logger) {
+// movieSvc/aiCmdSvc may be nil in test environments.
+func RegisterSystemRoutes(api huma.API, startTime time.Time, dbType, dbPath, configFile string, aiCmdSvc *aicommand.Service, tmdbKeyIsDefault bool, apiKey string, movieSvc *movie.Service, logger *slog.Logger) {
 	huma.Register(api, huma.Operation{
 		OperationID: "get-system-status",
 		Method:      "GET",
@@ -101,6 +103,7 @@ func RegisterSystemRoutes(api huma.API, startTime time.Time, dbType, dbPath, con
 		Tags:        []string{"System"},
 	}, func(ctx context.Context, _ *struct{}) (*systemStatusOutput, error) {
 		tmdbEnabled := movieSvc != nil && movieSvc.HasMetadataProvider()
+		aiEnabled := aiCmdSvc != nil && aiCmdSvc.Enabled()
 		return &systemStatusOutput{
 			Body: &systemStatus{
 				AppName:       "Luminarr",
@@ -200,6 +203,10 @@ func RegisterSystemRoutes(api huma.API, startTime time.Time, dbType, dbPath, con
 			writePath, err = config.WriteConfigKey(configFile, "ai.api_key", input.Body.AIAPIKey)
 			if err != nil {
 				return nil, huma.NewError(http.StatusInternalServerError, "failed to write AI config", err)
+			}
+			// Wire up the new Anthropic client immediately — no restart needed.
+			if aiCmdSvc != nil {
+				aiCmdSvc.SetClient(anthropic.New(input.Body.AIAPIKey))
 			}
 		}
 

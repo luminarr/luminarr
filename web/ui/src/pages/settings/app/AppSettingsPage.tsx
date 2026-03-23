@@ -341,6 +341,11 @@ function ConfigSection() {
   const [show, setShow] = useState(false);
   const [saved, setSaved] = useState(false);
 
+  // AI API key state
+  const [aiKey, setAiKey] = useState("");
+  const [showAiKey, setShowAiKey] = useState(false);
+  const [aiSaved, setAiSaved] = useState(false);
+
   function handleSave() {
     if (!key.trim()) return;
     saveConfig.mutate(
@@ -355,13 +360,62 @@ function ConfigSection() {
     );
   }
 
+  function handleAiSave() {
+    if (!aiKey.trim()) return;
+    saveConfig.mutate(
+      { ai_api_key: aiKey.trim() },
+      {
+        onSuccess: () => {
+          setAiSaved(true);
+          setAiKey("");
+          setTimeout(() => setAiSaved(false), 2000);
+        },
+      }
+    );
+  }
+
   const keySource = sysConfig?.tmdb_key_source ?? "none";
+
+  const keyInputStyle: React.CSSProperties = {
+    background: "var(--color-bg-elevated)",
+    border: "1px solid var(--color-border-default)",
+    borderRadius: 6,
+    padding: "8px 12px",
+    fontSize: 13,
+    color: "var(--color-text-primary)",
+    width: 320,
+    outline: "none",
+    fontFamily: "var(--font-family-mono)",
+  };
+
+  const showHideBtnStyle: React.CSSProperties = {
+    background: "none",
+    border: "none",
+    cursor: "pointer",
+    fontSize: 12,
+    color: "var(--color-text-muted)",
+    padding: "4px 6px",
+  };
+
+  function saveBtnStyle(enabled: boolean): React.CSSProperties {
+    return {
+      background: enabled ? "var(--color-accent)" : "var(--color-bg-subtle)",
+      color: enabled ? "var(--color-accent-fg)" : "var(--color-text-muted)",
+      border: "none",
+      borderRadius: 6,
+      padding: "8px 16px",
+      fontSize: 13,
+      fontWeight: 500,
+      cursor: enabled ? "pointer" : "not-allowed",
+    };
+  }
 
   return (
     <div style={card}>
       <p style={sectionHeader}>Configuration</p>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      {/* TMDB API Key */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 24 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <span style={{ fontSize: 13, color: "var(--color-text-secondary)", minWidth: 100 }}>
             TMDB API Key
@@ -387,17 +441,7 @@ function ConfigSection() {
             value={key}
             onChange={(e) => setKey(e.currentTarget.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSave()}
-            style={{
-              background: "var(--color-bg-elevated)",
-              border: "1px solid var(--color-border-default)",
-              borderRadius: 6,
-              padding: "8px 12px",
-              fontSize: 13,
-              color: "var(--color-text-primary)",
-              width: 320,
-              outline: "none",
-              fontFamily: "var(--font-family-mono)",
-            }}
+            style={keyInputStyle}
             onFocus={(e) => {
               (e.currentTarget as HTMLInputElement).style.borderColor = "var(--color-accent)";
             }}
@@ -406,38 +450,13 @@ function ConfigSection() {
                 "var(--color-border-default)";
             }}
           />
-          <button
-            onClick={() => setShow((s) => !s)}
-            style={{
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              fontSize: 12,
-              color: "var(--color-text-muted)",
-              padding: "4px 6px",
-            }}
-          >
+          <button onClick={() => setShow((s) => !s)} style={showHideBtnStyle}>
             {show ? "hide" : "show"}
           </button>
           <button
             disabled={!key.trim() || saveConfig.isPending}
             onClick={handleSave}
-            style={{
-              background:
-                !key.trim() || saveConfig.isPending
-                  ? "var(--color-bg-subtle)"
-                  : "var(--color-accent)",
-              color:
-                !key.trim() || saveConfig.isPending
-                  ? "var(--color-text-muted)"
-                  : "var(--color-accent-fg)",
-              border: "none",
-              borderRadius: 6,
-              padding: "8px 16px",
-              fontSize: 13,
-              fontWeight: 500,
-              cursor: !key.trim() || saveConfig.isPending ? "not-allowed" : "pointer",
-            }}
+            style={saveBtnStyle(!!key.trim() && !saveConfig.isPending)}
             onMouseEnter={(e) => {
               if (key.trim() && !saveConfig.isPending)
                 (e.currentTarget as HTMLButtonElement).style.background =
@@ -451,6 +470,73 @@ function ConfigSection() {
             {saveConfig.isPending ? "Saving…" : "Save"}
           </button>
           {saved && (
+            <span style={{ fontSize: 12, color: "var(--color-success)" }}>Saved ✓</span>
+          )}
+        </div>
+      </div>
+
+      {/* AI API Key */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ fontSize: 13, color: "var(--color-text-secondary)", minWidth: 100 }}>
+            Claude API Key
+          </span>
+          {status && (
+            <Pill
+              ok={status.ai_enabled}
+              labelTrue="Configured"
+              labelFalse="Not configured"
+            />
+          )}
+        </div>
+        <p style={{ fontSize: 12, color: "var(--color-text-muted)", margin: 0 }}>
+          Enables AI-powered commands in the command palette (Cmd+K). Get a key from{" "}
+          <a
+            href="https://console.anthropic.com/settings/keys"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ color: "var(--color-accent)" }}
+          >
+            console.anthropic.com
+          </a>.
+        </p>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4, flexWrap: "wrap" }}>
+          <input
+            type={showAiKey ? "text" : "password"}
+            placeholder="sk-ant-..."
+            value={aiKey}
+            onChange={(e) => setAiKey(e.currentTarget.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleAiSave()}
+            style={keyInputStyle}
+            onFocus={(e) => {
+              (e.currentTarget as HTMLInputElement).style.borderColor = "var(--color-accent)";
+            }}
+            onBlur={(e) => {
+              (e.currentTarget as HTMLInputElement).style.borderColor =
+                "var(--color-border-default)";
+            }}
+          />
+          <button onClick={() => setShowAiKey((s) => !s)} style={showHideBtnStyle}>
+            {showAiKey ? "hide" : "show"}
+          </button>
+          <button
+            disabled={!aiKey.trim() || saveConfig.isPending}
+            onClick={handleAiSave}
+            style={saveBtnStyle(!!aiKey.trim() && !saveConfig.isPending)}
+            onMouseEnter={(e) => {
+              if (aiKey.trim() && !saveConfig.isPending)
+                (e.currentTarget as HTMLButtonElement).style.background =
+                  "var(--color-accent-hover)";
+            }}
+            onMouseLeave={(e) => {
+              if (aiKey.trim() && !saveConfig.isPending)
+                (e.currentTarget as HTMLButtonElement).style.background = "var(--color-accent)";
+            }}
+          >
+            {saveConfig.isPending ? "Saving…" : "Save"}
+          </button>
+          {aiSaved && (
             <span style={{ fontSize: 12, color: "var(--color-success)" }}>Saved ✓</span>
           )}
         </div>

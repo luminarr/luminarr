@@ -259,6 +259,45 @@ Once available, Luminarr scans new imports automatically. For existing files, us
 
 ---
 
+## AI Command Palette (optional)
+
+Luminarr has an optional AI-powered command palette that lets you control the app with natural language. Open it with **Cmd+K** (or **Ctrl+K**) and type commands like:
+
+- "grab Dune in 4K"
+- "how many movies am I missing?"
+- "go to quality profiles"
+- "scan my libraries"
+
+### Setup
+
+1. Get a Claude API key from [console.anthropic.com](https://console.anthropic.com/settings/keys)
+2. Go to **Settings → App**
+3. Paste your key in the **Claude API Key** field and click **Save**
+4. The status pill changes to "Configured" immediately — no restart needed
+
+### How it works
+
+- The command palette shows an **Ask AI** option when you type 2+ characters
+- Read-only commands (navigate, search, answer questions) execute immediately
+- State-modifying commands (grab a movie, run a task) show a **Confirm / Cancel** prompt before executing
+- If a movie isn't in your library yet, confirming will add it automatically and then search
+- Rate limited to 10 requests per minute
+- Uses Claude Haiku (~$0.001 per command)
+
+### Privacy
+
+Only your command text and aggregate library stats (total movie count, quality breakdown) are sent to Claude. No movie titles, file paths, or personal data leave your server. See the [Privacy policy](../PRIVACY.md) for full details.
+
+### Configuration
+
+| Setting | Default | Env var | Description |
+|---------|---------|---------|-------------|
+| `ai.api_key` | — | `LUMINARR_AI_API_KEY` | Anthropic API key; empty = AI features disabled |
+
+When no key is configured, the command palette works exactly as before — fuzzy matching for pages, movies, and actions.
+
+---
+
 ## Notifications (optional)
 
 **Settings → Notifications → Add Notification**
@@ -345,6 +384,7 @@ All settings can live in `config.yaml` or as environment variables (prefixed wit
 | `mediainfo.ffprobe_path` | `` | `LUMINARR_MEDIAINFO_FFPROBE_PATH` | Path to ffprobe binary; empty = search $PATH |
 | `mediainfo.scan_timeout` | `30s` | `LUMINARR_MEDIAINFO_SCAN_TIMEOUT` | Per-file scan timeout |
 | `mediainfo.scan_on_import` | `true` | `LUMINARR_MEDIAINFO_SCAN_ON_IMPORT` | Auto-scan imported files |
+| `ai.api_key` | — | `LUMINARR_AI_API_KEY` | Anthropic API key for AI command palette; empty = disabled |
 
 Config file search order:
 1. `/config/config.yaml` (Docker volume mount)

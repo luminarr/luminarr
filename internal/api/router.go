@@ -17,6 +17,7 @@ import (
 	v3 "github.com/luminarr/luminarr/internal/api/v3"
 	"github.com/luminarr/luminarr/internal/api/ws"
 	"github.com/luminarr/luminarr/internal/config"
+	"github.com/luminarr/luminarr/internal/core/aicommand"
 	"github.com/luminarr/luminarr/internal/core/autosearch"
 	"github.com/luminarr/luminarr/internal/core/blocklist"
 	"github.com/luminarr/luminarr/internal/core/collection"
@@ -54,7 +55,6 @@ type RouterConfig struct {
 	DBType                   string
 	DBPath                   string
 	ConfigFile               string
-	AIEnabled                bool
 	TMDBKeyIsDefault         bool
 	QualityService           *quality.Service
 	QualityDefinitionService *quality.DefinitionService
@@ -78,6 +78,7 @@ type RouterConfig struct {
 	TagService               *tag.Service
 	CustomFormatService      *customformat.Service
 	AutoSearchService        *autosearch.Service
+	AICommandService         *aicommand.Service
 	ImportListService        *importlist.Service
 	LogBuffer                *logging.RingBuffer
 	WSHub                    *ws.Hub
@@ -172,7 +173,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		_ = huma.WriteErr(humaAPI, ctx, http.StatusUnauthorized, "A valid X-Api-Key header is required.")
 	})
 
-	v1.RegisterSystemRoutes(humaAPI, cfg.StartTime, cfg.DBType, cfg.DBPath, cfg.ConfigFile, cfg.AIEnabled, cfg.TMDBKeyIsDefault, cfg.Auth.Value(), cfg.MovieService, cfg.Logger)
+	v1.RegisterSystemRoutes(humaAPI, cfg.StartTime, cfg.DBType, cfg.DBPath, cfg.ConfigFile, cfg.AICommandService, cfg.TMDBKeyIsDefault, cfg.Auth.Value(), cfg.MovieService, cfg.Logger)
 
 	if cfg.LogBuffer != nil {
 		v1.RegisterLogRoutes(humaAPI, cfg.LogBuffer)
@@ -283,6 +284,10 @@ func NewRouter(cfg RouterConfig) http.Handler {
 
 	v1.RegisterFilesystemRoutes(humaAPI)
 	v1.RegisterParseRoutes(humaAPI)
+
+	if cfg.AICommandService != nil {
+		v1.RegisterAIRoutes(humaAPI, cfg.AICommandService)
+	}
 
 	// ── Radarr v3 API compatibility layer ────────────────────────────────
 	// External tools (Overseerr, Homepage, etc.) can point their "Radarr"

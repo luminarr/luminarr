@@ -3,7 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useLookupMovies } from "@/api/movies";
-import { useRunTask } from "@/api/system";
+import { useRunTask, useSystemStatus } from "@/api/system";
+import { useSendAICommand, useConfirmAIAction, type AICommandResponse } from "@/api/ai";
 import {
   NAV_COMMANDS,
   ACTION_COMMANDS,
@@ -12,13 +13,13 @@ import {
   type ActionCommand,
 } from "./commands";
 import type { Movie, MovieListResponse, TMDBResult } from "@/types";
-import { Film } from "lucide-react";
+import { Film, Sparkles, Settings, Check, X } from "lucide-react";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
 interface PaletteItem {
   id: string;
-  category: "navigation" | "movie" | "action";
+  category: "navigation" | "movie" | "action" | "ai";
   label: string;
   subtitle?: string;
   icon?: React.ElementType;
@@ -35,7 +36,6 @@ interface CommandPaletteProps {
 
 function getCachedMovies(qc: ReturnType<typeof useQueryClient>): Map<number, Movie> {
   const map = new Map<number, Movie>();
-  // The movies query uses ["movies", filters] as key. Try to find any cached result.
   const cache = qc.getQueriesData<MovieListResponse>({ queryKey: ["movies"] });
   for (const [, data] of cache) {
     if (data?.movies) {
@@ -54,10 +54,17 @@ export function CommandPalette({ onClose }: CommandPaletteProps) {
   const queryClient = useQueryClient();
   const lookup = useLookupMovies();
   const runTask = useRunTask();
+  const aiCommand = useSendAICommand();
+  const confirmAction = useConfirmAIAction();
+  const { data: status } = useSystemStatus();
+
+  const aiEnabled = status?.ai_enabled ?? false;
 
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
   const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [aiResponse, setAiResponse] = useState<AICommandResponse | null>(null);
+  const [confirmResult, setConfirmResult] = useState<AICommandResponse | null>(null);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -93,10 +100,64 @@ export function CommandPalette({ onClose }: CommandPaletteProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedQuery]);
 
-  // Reset active index when query changes
+  // Reset state when query changes
   useEffect(() => {
     setActiveIndex(0);
+    setAiResponse(null);
+    setConfirmResult(null);
   }, [query]);
+
+  // ── AI command handler ─────────────────────────────────────────────────────
+
+  const handleAICommand = useCallback(() => {
+    if (!query.trim()) return;
+
+    aiCommand.mutate(query.trim(), {
+      onSuccess: (resp) => {
+        setAiResponse(resp);
+
+        // If the action requires confirmation, show the confirm UI — don't execute yet.
+        if (resp.requires_confirmation) return;
+
+        switch (resp.action) {
+          case "navigate":
+            if (resp.params?.path) {
+              navigate(resp.params.path as string);
+              onClose();
+            }
+            break;
+          case "search_movie":
+            if (resp.params?.query) {
+              lookup.mutate({ query: resp.params.query as string });
+            }
+            break;
+          // query_library, explain, fallback — show inline response
+        }
+      },
+      onError: (err) => {
+        toast.error((err as Error).message);
+      },
+    });
+  }, [query, aiCommand, navigate, onClose, lookup]);
+
+  const handleConfirm = useCallback(() => {
+    if (!aiResponse?.pending_action_id) return;
+
+    confirmAction.mutate(aiResponse.pending_action_id, {
+      onSuccess: (resp) => {
+        setConfirmResult(resp);
+        toast.success(resp.explanation);
+      },
+      onError: (err) => {
+        toast.error((err as Error).message);
+      },
+    });
+  }, [aiResponse, confirmAction]);
+
+  const handleDismiss = useCallback(() => {
+    setAiResponse(null);
+    setConfirmResult(null);
+  }, []);
 
   // ── Build flat item list ───────────────────────────────────────────────────
 
@@ -123,7 +184,6 @@ export function CommandPalette({ onClose }: CommandPaletteProps) {
       if (libraryMovie) {
         navigate(`/movies/${libraryMovie.id}`);
       } else {
-        // Navigate to dashboard — user can add from there
         navigate("/");
       }
       onClose();
@@ -178,6 +238,31 @@ export function CommandPalette({ onClose }: CommandPaletteProps) {
     });
   }
 
+  // "Ask AI" option — shown when there's a query and AI is enabled
+  if (query.length >= 2 && aiEnabled) {
+    items.push({
+      id: "ai:ask",
+      category: "ai",
+      label: `Ask AI: "${query}"`,
+      icon: Sparkles,
+      onSelect: handleAICommand,
+    });
+  }
+
+  // "Set up AI" option — shown when there's a query but AI is not enabled
+  if (query.length >= 2 && !aiEnabled) {
+    items.push({
+      id: "ai:setup",
+      category: "ai",
+      label: "Set up AI in Settings > App",
+      icon: Settings,
+      onSelect: () => {
+        navigate("/settings/app");
+        onClose();
+      },
+    });
+  }
+
   // ── Keyboard handling ──────────────────────────────────────────────────────
 
   function onKeyDown(e: React.KeyboardEvent) {
@@ -218,6 +303,7 @@ export function CommandPalette({ onClose }: CommandPaletteProps) {
   const navItems = items.filter((i) => i.category === "navigation");
   const movieItems = items.filter((i) => i.category === "movie");
   const actionItems = items.filter((i) => i.category === "action");
+  const aiItems = items.filter((i) => i.category === "ai");
 
   // Track global index for each item
   let globalIndex = 0;
@@ -388,6 +474,80 @@ export function CommandPalette({ onClose }: CommandPaletteProps) {
               })}
             </PaletteGroup>
           )}
+
+          {aiItems.length > 0 && (
+            <PaletteGroup label="AI">
+              {aiItems.map((item) => {
+                const idx = nextIndex();
+                return (
+                  <PaletteRow
+                    key={item.id}
+                    item={item}
+                    index={idx}
+                    isActive={idx === activeIndex}
+                    onHover={setActiveIndex}
+                  />
+                );
+              })}
+            </PaletteGroup>
+          )}
+
+          {/* AI loading state */}
+          {aiCommand.isPending && (
+            <PaletteGroup label="AI">
+              <div
+                style={{
+                  padding: "12px 16px",
+                  fontSize: 13,
+                  color: "var(--color-text-muted)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                }}
+              >
+                <Sparkles size={14} style={{ animation: "pulse 1.5s ease-in-out infinite" }} />
+                Thinking...
+              </div>
+            </PaletteGroup>
+          )}
+
+          {/* AI confirmation prompt */}
+          {aiResponse?.requires_confirmation && !confirmResult && !confirmAction.isPending && (
+            <AIConfirmPrompt
+              response={aiResponse}
+              onConfirm={handleConfirm}
+              onDismiss={handleDismiss}
+            />
+          )}
+
+          {/* AI confirm loading */}
+          {confirmAction.isPending && (
+            <PaletteGroup label="AI">
+              <div
+                style={{
+                  padding: "12px 16px",
+                  fontSize: 13,
+                  color: "var(--color-text-muted)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                }}
+              >
+                <Sparkles size={14} style={{ animation: "pulse 1.5s ease-in-out infinite" }} />
+                Executing...
+              </div>
+            </PaletteGroup>
+          )}
+
+          {/* AI confirm result */}
+          {confirmResult && (
+            <AIResponseDisplay response={confirmResult} />
+          )}
+
+          {/* AI response display (non-confirmation) */}
+          {aiResponse && !aiResponse.requires_confirmation && !aiCommand.isPending && (
+            <AIResponseDisplay response={aiResponse} />
+          )}
         </div>
       </div>
     </div>
@@ -395,6 +555,109 @@ export function CommandPalette({ onClose }: CommandPaletteProps) {
 }
 
 // ── Sub-components ───────────────────────────────────────────────────────────
+
+function AIConfirmPrompt({
+  response,
+  onConfirm,
+  onDismiss,
+}: {
+  response: AICommandResponse;
+  onConfirm: () => void;
+  onDismiss: () => void;
+}) {
+  const message = response.confirmation_message || response.explanation;
+
+  return (
+    <PaletteGroup label="Confirm Action">
+      <div
+        style={{
+          padding: "10px 16px",
+          fontSize: 13,
+          color: "var(--color-text-primary)",
+          lineHeight: 1.5,
+        }}
+      >
+        {message}
+      </div>
+      <div
+        style={{
+          display: "flex",
+          gap: 8,
+          padding: "4px 16px 12px",
+        }}
+      >
+        <button
+          onClick={onConfirm}
+          data-testid="ai-confirm-btn"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            padding: "6px 14px",
+            borderRadius: 6,
+            border: "none",
+            background: "var(--color-accent)",
+            color: "var(--color-accent-fg)",
+            fontSize: 13,
+            fontWeight: 500,
+            cursor: "pointer",
+          }}
+        >
+          <Check size={14} />
+          Confirm
+        </button>
+        <button
+          onClick={onDismiss}
+          data-testid="ai-dismiss-btn"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            padding: "6px 14px",
+            borderRadius: 6,
+            border: "1px solid var(--color-border-default)",
+            background: "transparent",
+            color: "var(--color-text-secondary)",
+            fontSize: 13,
+            cursor: "pointer",
+          }}
+        >
+          <X size={14} />
+          Cancel
+        </button>
+      </div>
+    </PaletteGroup>
+  );
+}
+
+function AIResponseDisplay({ response }: { response: AICommandResponse }) {
+  // Don't show inline for navigate/search_movie — those actions execute immediately
+  if (response.action === "navigate" || response.action === "search_movie") {
+    return null;
+  }
+
+  const answer =
+    (response.action === "query_library" && response.result?.answer)
+      ? String(response.result.answer)
+      : response.explanation;
+
+  return (
+    <PaletteGroup label="AI Response">
+      <div
+        style={{
+          padding: "10px 16px",
+          fontSize: 13,
+          color: "var(--color-text-primary)",
+          lineHeight: 1.5,
+          whiteSpace: "pre-wrap",
+        }}
+        data-testid="ai-response"
+      >
+        {answer}
+      </div>
+    </PaletteGroup>
+  );
+}
 
 function PaletteGroup({
   label,

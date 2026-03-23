@@ -45,6 +45,7 @@ If you're coming from Radarr, Luminarr can import your entire setup — quality 
 - **Media scanning** — optional ffprobe integration to verify actual codec, resolution, and HDR
 - **Notifications** — Discord, Slack, Telegram, Pushover, Gotify, ntfy, webhook, email, and custom scripts
 - **Health monitoring** — disk space, download client connectivity, indexer reachability
+- **AI command palette** — optional Claude-powered natural language commands (Cmd+K): "grab Dune in 4K", "how many movies am I missing?", "go to quality profiles". State-modifying actions require explicit confirmation. Requires an Anthropic API key (Settings → App)
 - **WebSocket live updates** — real-time queue updates without polling
 - **OpenAPI docs** — interactive API at `/api/docs`
 - **Zero telemetry** — no analytics, no crash reporting, no phoning home
@@ -112,9 +113,9 @@ Full details: [Radarr API Compatibility](https://github.com/luminarr/luminarr/wi
 
 ## Privacy
 
-Luminarr makes outbound connections **only** to services you explicitly configure (TMDB, your indexers, your download clients, your media servers, your notification targets). No telemetry, no analytics, no crash reporting, no update checks.
+Luminarr makes outbound connections **only** to services you explicitly configure (TMDB, your indexers, your download clients, your media servers, your notification targets, and optionally the Anthropic API for AI features). No telemetry, no analytics, no crash reporting, no update checks.
 
-Credentials are stored in your local `config.yaml` only and never written to logs.
+Credentials are stored in your local `config.yaml` only and never written to logs. When AI features are enabled, only your command text and aggregate library stats are sent to Claude — no movie titles, file paths, or personal data.
 
 Full details: [Privacy](https://github.com/luminarr/luminarr/wiki/Privacy)
 

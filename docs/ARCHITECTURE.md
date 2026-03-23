@@ -37,6 +37,7 @@ Luminarr is a single Go binary that embeds the React frontend as a static file s
 │  Core services                                         │
 │  movie · quality · library · indexer · downloader      │
 │  queue · notification · health · importer · plexsync   │
+│  aicommand · autosearch · stats                        │
 ├─────────────────────────────────────────────────────────┤
 │  Plugin registry                                       │
 │  torznab · newznab                                     │
@@ -47,7 +48,7 @@ Luminarr is a single Go binary that embeds the React frontend as a static file s
 ├─────────────────────────────────────────────────────────┤
 │  Infrastructure                                        │
 │  SQLite/Postgres (sqlc) · Events bus · Scheduler       │
-│  TMDB client · Radarr import                          │
+│  TMDB client · Anthropic client · Radarr import       │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -65,7 +66,9 @@ internal/
   api/                 HTTP router, middleware, Huma setup
   api/v1/              REST handlers (one file per domain)
   config/              Config loading (Viper), Secret type
+  anthropic/           Minimal Claude Messages API client
   core/
+    aicommand/         AI command palette service (intent parsing, confirmation, execution)
     downloader/        Download client config + grab dispatch
     health/            System health checks (disk, clients, indexers)
     importer/          File import after download completes
@@ -141,6 +144,7 @@ All settings can be set via `config.yaml` or environment variables. Environment 
 | `database.dsn` | — | `LUMINARR_DATABASE_DSN` | Postgres connection string |
 | `auth.api_key` | auto-generated | `LUMINARR_AUTH_API_KEY` | Required for all API calls |
 | `tmdb.api_key` | — | `LUMINARR_TMDB_API_KEY` | Movie metadata (optional) |
+| `ai.api_key` | — | `LUMINARR_AI_API_KEY` | Anthropic key for AI command palette (optional) |
 | `log.level` | `info` | `LUMINARR_LOG_LEVEL` | `debug`, `info`, `warn`, `error` |
 | `log.format` | `json` | `LUMINARR_LOG_FORMAT` | `json` or `text` |
 
@@ -174,6 +178,7 @@ Interactive docs with full request/response schemas are available at `/api/docs`
 | **Notifications** | `GET/POST /api/v1/notifications` · `GET/PUT/DELETE /api/v1/notifications/{id}` · `POST /api/v1/notifications/{id}/test` |
 | **Media Servers** | `GET/POST /api/v1/media-servers` · `GET/PUT/DELETE /api/v1/media-servers/{id}` · `POST /api/v1/media-servers/{id}/test` |
 | **Library Sync** | `GET /api/v1/media-servers/{id}/sections` · `POST /api/v1/media-servers/{id}/sync/preview` · `POST /api/v1/media-servers/{id}/sync/import` |
+| **AI** | `POST /api/v1/ai/command` · `POST /api/v1/ai/command/confirm` |
 | **Import** | `POST /api/v1/import/radarr/preview` · `POST /api/v1/import/radarr/execute` |
 
 ---

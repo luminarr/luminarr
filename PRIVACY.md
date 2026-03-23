@@ -14,6 +14,7 @@ configure. The complete list:
 | **Configured indexers** | RSS sync and manual release search | Indexer settings in the UI/API |
 | **Configured download clients** | Sending grabs, polling queue status | Download client settings |
 | **Configured notification targets** | Webhooks, Discord, email, etc. | Notification settings |
+| **Anthropic API** (optional) | AI command palette requests | Claude API key in App Settings |
 
 ## What Luminarr Never Does
 
@@ -21,6 +22,23 @@ configure. The complete list:
 - **No crash reporting.** Errors are logged locally only.
 - **No update checks.** Luminarr never contacts any server to check for updates.
 - **No account or registration required.** There is no Luminarr service to sign up for.
+
+## AI Features (Optional)
+
+When you configure a Claude API key in Settings → App, the AI command palette sends
+the following to the Anthropic API:
+
+- **Your command text** — the natural language query you type (e.g. "grab Dune in 4K")
+- **Aggregate library stats** — total movie count, quality distribution, storage usage
+
+The following are **never** sent:
+
+- Individual movie titles, file names, or file paths
+- Your API keys, passwords, or any credentials
+- Personal information of any kind
+
+AI features are entirely opt-in. When no API key is configured, no data is sent to
+Anthropic and the command palette works exactly as before (fuzzy matching only).
 
 ## Credentials and Secrets
 

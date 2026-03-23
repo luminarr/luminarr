@@ -476,6 +476,76 @@ function StatusSection() {
   );
 }
 
+// ── Section: AI Command Palette ───────────────────────────────────────────────
+
+function AISection() {
+  const { data } = useSystemStatus();
+  const enabled = data?.ai_enabled ?? false;
+
+  const examples = [
+    { cmd: "grab Dune in 4K", desc: "Add and search for a release" },
+    { cmd: "how many movies am I missing?", desc: "Query library stats" },
+    { cmd: "go to quality profiles", desc: "Navigate to a page" },
+    { cmd: "scan my libraries", desc: "Run a scheduled task" },
+    { cmd: "what is a custom format?", desc: "Explain a concept" },
+  ];
+
+  return (
+    <div style={card}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+        <p style={{ ...sectionHeader, marginBottom: 0 }}>AI Command Palette</p>
+        <Pill ok={enabled} labelTrue="Enabled" labelFalse="Not configured" />
+      </div>
+
+      <p style={{ fontSize: 13, color: "var(--color-text-secondary)", margin: "0 0 16px" }}>
+        {enabled
+          ? <>Open the command palette with <kbd style={{ padding: "1px 5px", borderRadius: 3, fontSize: 11, background: "var(--color-bg-elevated)", border: "1px solid var(--color-border-subtle)", color: "var(--color-text-muted)" }}>Cmd+K</kbd> and type a natural language command. State-modifying actions (grabs, task runs) always require confirmation.</>
+          : <>Add a Claude API key in <a href="/settings/app" style={{ color: "var(--color-accent)", textDecoration: "none" }}>App Settings</a> to enable natural language commands in the command palette.</>
+        }
+      </p>
+
+      {enabled && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+          <div style={{
+            fontSize: 11,
+            fontWeight: 600,
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+            color: "var(--color-text-muted)",
+            marginBottom: 8,
+          }}>
+            Example Commands
+          </div>
+          {examples.map(({ cmd, desc }, i) => (
+            <div
+              key={cmd}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 12,
+                padding: "8px 0",
+                borderBottom: i < examples.length - 1 ? "1px solid var(--color-border-subtle)" : "none",
+              }}
+            >
+              <code style={{
+                fontSize: 13,
+                color: "var(--color-text-primary)",
+                fontFamily: "var(--font-family-mono)",
+              }}>
+                {cmd}
+              </code>
+              <span style={{ fontSize: 12, color: "var(--color-text-muted)", flexShrink: 0 }}>
+                {desc}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Section 2: Health ─────────────────────────────────────────────────────────
 
 function HealthSection() {
@@ -943,6 +1013,7 @@ export default function SystemPage() {
       <StatsStrip />
       <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
         <StatusSection />
+        <AISection />
         <HealthSection />
         <TasksSection />
         <LogsSection />
