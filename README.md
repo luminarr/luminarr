@@ -26,27 +26,37 @@ If you're coming from Radarr, Luminarr can import your entire setup — quality 
   <img src="docs/screenshots/dashboard.png" alt="Luminarr Dashboard" width="800">
 </p>
 
-## Current Features
+## Features
 
 - **Quality profiles** with explicit codec + HDR dimensions — no Custom Formats to configure
+- **Custom formats** — regex-based release matching with weighted scoring, TRaSH Guides presets built in
 - **TMDB integration** — search, add, and manage movies with full metadata
 - **Torznab & Newznab indexers** — compatible with Prowlarr and Jackett
 - **qBittorrent, Deluge, Transmission, SABnzbd, NZBGet** download clients
 - **Automatic RSS sync** — checks indexers on a schedule and grabs matching releases
+- **Auto-search** — searches all indexers, scores against your quality profile and custom formats, grabs the best release automatically
 - **Auto-import** — moves or hardlinks completed downloads into your library
+- **Release decision explainability** — "Why?" button on every release shows exactly why it was grabbed or skipped
+- **Import conflict detection** — warns about dimension-by-dimension regressions (HDR lost, audio downgrade) before grabbing
 - **Radarr import** — one-click migration from a running Radarr instance
 - **Radarr v3 API compatibility** — use Overseerr, Homepage, Home Assistant, and other tools without changes
+- **Import lists** — auto-add movies from TMDB, Trakt, Plex watchlists, MDBList, and custom lists
 - **Media server integration** — Plex, Emby, and Jellyfin library sync with auto-refresh
 - **Library Sync** — compare your media server library against Luminarr and import the difference
-- **Wanted page** — missing movies and cutoff-unmet in one view
+- **Wanted page** — missing movies, cutoff-unmet, and upgrade recommendations in one view
 - **Calendar** — monthly grid of movies by release date
+- **Statistics** — library breakdown by quality tier, genre, decade, storage trends, and indexer performance with clickable drill-down
 - **Manual search** — search all indexers for a specific movie and pick a release
+- **Edition support** — parse 15 canonical editions, set preferred edition per movie with score bonus
 - **File management** — view, rename, and delete files per movie
 - **Media scanning** — optional ffprobe integration to verify actual codec, resolution, and HDR
 - **Notifications** — Discord, Slack, Telegram, Pushover, Gotify, ntfy, webhook, email, and custom scripts
 - **Health monitoring** — disk space, download client connectivity, indexer reachability
-- **AI command palette** — optional Claude-powered natural language commands (Cmd+K): "grab Dune in 4K", "how many movies am I missing?", "go to quality profiles". State-modifying actions require explicit confirmation. Requires an Anthropic API key (Settings → App)
+- **AI command palette** — optional Claude-powered natural language commands (Cmd+K): "grab Dune in 4K", "how many movies am I missing?", "go to quality profiles". State-modifying actions require explicit confirmation
+- **Collections** — TMDB collection browsing and tracking
+- **Tags** — organize movies for filtering and per-tag indexer/notification routing
 - **WebSocket live updates** — real-time queue updates without polling
+- **Backup & restore** — download/upload database snapshots from the UI
 - **OpenAPI docs** — interactive API at `/api/docs`
 - **Zero telemetry** — no analytics, no crash reporting, no phoning home
 
