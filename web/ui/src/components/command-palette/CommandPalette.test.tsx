@@ -93,9 +93,9 @@ describe("CommandPalette", () => {
     // First item should be active (index 0 = Dashboard)
     expect(isHighlighted(screen.getByTestId("palette-item-nav:dashboard"))).toBe(true);
 
-    // ArrowDown moves to next item
+    // ArrowDown moves to next item (Activity is now second after Dashboard)
     fireEvent.keyDown(input, { key: "ArrowDown" });
-    expect(isHighlighted(screen.getByTestId("palette-item-nav:calendar"))).toBe(true);
+    expect(isHighlighted(screen.getByTestId("palette-item-nav:activity"))).toBe(true);
     // First item should no longer be highlighted
     expect(isHighlighted(screen.getByTestId("palette-item-nav:dashboard"))).toBe(false);
 

@@ -16,6 +16,7 @@ type Querier interface {
 	AddMovieTag(ctx context.Context, arg AddMovieTagParams) error
 	AddNotificationTag(ctx context.Context, arg AddNotificationTagParams) error
 	ClearBlocklist(ctx context.Context) error
+	CountActivities(ctx context.Context, arg CountActivitiesParams) (int64, error)
 	CountBlocklist(ctx context.Context) (int64, error)
 	CountDownloadClientsForTag(ctx context.Context, tagID string) (int64, error)
 	CountEditionMismatches(ctx context.Context) (int64, error)
@@ -91,10 +92,12 @@ type Querier interface {
 	GetTag(ctx context.Context, id string) (Tag, error)
 	GetTagByName(ctx context.Context, name string) (Tag, error)
 	GetTopIndexers(ctx context.Context) ([]GetTopIndexersRow, error)
+	InsertActivity(ctx context.Context, arg InsertActivityParams) error
 	InsertStorageSnapshot(ctx context.Context, arg InsertStorageSnapshotParams) error
 	IsBlocklisted(ctx context.Context, releaseGuid string) (int64, error)
 	IsBlocklistedByTitle(ctx context.Context, releaseTitle string) (int64, error)
 	ListActiveGrabs(ctx context.Context) ([]GrabHistory, error)
+	ListActivities(ctx context.Context, arg ListActivitiesParams) ([]ActivityLog, error)
 	ListAllTMDBIDs(ctx context.Context) ([]int64, error)
 	ListBlocklist(ctx context.Context, arg ListBlocklistParams) ([]ListBlocklistRow, error)
 	ListCollections(ctx context.Context) ([]Collection, error)
@@ -144,6 +147,7 @@ type Querier interface {
 	ListUnmatchedLibraryFileCandidates(ctx context.Context, libraryID string) ([]LibraryFileCandidate, error)
 	ListUnscannedMovieFiles(ctx context.Context) ([]ListUnscannedMovieFilesRow, error)
 	MarkGrabRemoved(ctx context.Context, id string) error
+	PruneActivities(ctx context.Context, createdAt string) error
 	PruneOldStorageSnapshots(ctx context.Context, capturedAt time.Time) error
 	// Removes candidates that were not seen in the current scan (scanned_at < cutoff).
 	PruneStaleLibraryFileCandidates(ctx context.Context, arg PruneStaleLibraryFileCandidatesParams) error

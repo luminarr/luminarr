@@ -16,6 +16,7 @@ import (
 	"github.com/luminarr/luminarr/internal/api"
 	"github.com/luminarr/luminarr/internal/api/ws"
 	"github.com/luminarr/luminarr/internal/config"
+	"github.com/luminarr/luminarr/internal/core/activity"
 	"github.com/luminarr/luminarr/internal/core/aicommand"
 	"github.com/luminarr/luminarr/internal/core/autosearch"
 	"github.com/luminarr/luminarr/internal/core/blocklist"
@@ -313,6 +314,9 @@ func run() error {
 	}
 	mediainfoSvc := mediainfo.NewService(mediainfoScanner, queries, logger)
 
+	activitySvc := activity.NewService(queries, logger)
+	activitySvc.Subscribe(bus)
+
 	importerSvc := importer.NewService(queries, bus, logger, mmSvc, dhSvc, mediainfoSvc, database.SQL)
 	importerSvc.Subscribe()
 
@@ -382,6 +386,7 @@ func run() error {
 	sched.Add(jobs.RefreshMetadata(movieSvc, queries, logger))
 	sched.Add(jobs.StatsSnapshot(statsSvc, logger))
 	sched.Add(jobs.ImportListSync(importListSvc, logger))
+	sched.Add(jobs.ActivityPrune(activitySvc, logger))
 
 	// ── HTTP router ───────────────────────────────────────────────────────────
 	startTime := time.Now()
@@ -417,6 +422,7 @@ func run() error {
 		CustomFormatService:      cfSvc,
 		AutoSearchService:        autoSvc,
 		AICommandService:         aiCmdSvc,
+		ActivityService:          activitySvc,
 		ImportListService:        importListSvc,
 		LogBuffer:                logBuffer,
 		WSHub:                    wsHub,

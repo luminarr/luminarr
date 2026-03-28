@@ -8,6 +8,16 @@ import (
 	"time"
 )
 
+type ActivityLog struct {
+	ID        string  `json:"id"`
+	Type      string  `json:"type"`
+	Category  string  `json:"category"`
+	MovieID   *string `json:"movieId"`
+	Title     string  `json:"title"`
+	Detail    *string `json:"detail"`
+	CreatedAt string  `json:"createdAt"`
+}
+
 type Blocklist struct {
 	ID           string    `json:"id"`
 	MovieID      string    `json:"movieId"`

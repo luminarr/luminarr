@@ -38,6 +38,11 @@ export const handlers = [
   // History
   http.get("/api/v1/history", () => HttpResponse.json([])),
 
+  // Activity
+  http.get("/api/v1/activity", () =>
+    HttpResponse.json({ activities: [], total: 0 })
+  ),
+
   // Wanted
   http.get("/api/v1/wanted/missing", () =>
     HttpResponse.json({ movies: [], total: 0, page: 1, per_page: 50 })
