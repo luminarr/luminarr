@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
+import { Poster } from "@/components/Poster";
 import { toast } from "sonner";
 import { useLookupMovies } from "@/api/movies";
 import { useRunTask, useSystemStatus } from "@/api/system";
@@ -722,17 +723,12 @@ function PaletteRow({
         borderRadius: 0,
       }}
     >
-      {item.posterUrl ? (
-        <img
+      {item.category === "movie" ? (
+        <Poster
           src={item.posterUrl}
-          alt=""
-          style={{
-            width: 24,
-            height: 36,
-            borderRadius: 3,
-            objectFit: "cover",
-            flexShrink: 0,
-          }}
+          title={item.label}
+          style={{ width: 24, height: 36, borderRadius: 3, flexShrink: 0, padding: 0, fontSize: 0 }}
+          imgStyle={{ width: 24, height: 36, borderRadius: 3 }}
         />
       ) : (
         <Icon size={16} strokeWidth={1.5} style={{ flexShrink: 0 }} />

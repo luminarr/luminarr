@@ -153,13 +153,14 @@ describe("CommandPalette", () => {
     // Wait for debounce + API response
     await waitFor(
       () => {
-        expect(screen.getByText("Fight Club")).toBeInTheDocument();
+        // "Fight Club" appears in both the poster placeholder and the row label
+        expect(screen.getAllByText("Fight Club").length).toBeGreaterThanOrEqual(1);
       },
       { timeout: 2000 }
     );
 
     expect(screen.getByText("Movies")).toBeInTheDocument();
-    expect(screen.getByText("1999")).toBeInTheDocument();
+    expect(screen.getAllByText("1999").length).toBeGreaterThanOrEqual(1);
   });
 
   it("runs action on Enter and closes", async () => {

@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useMemo } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { Trash2 } from "lucide-react";
+import { Poster } from "@/components/Poster";
 import { toast } from "sonner";
 import {
   useMovie,
@@ -1227,34 +1228,14 @@ export default function MovieDetail() {
       {/* Main layout */}
       <div style={{ display: "flex", gap: 24, alignItems: "flex-start" }}>
         {/* Poster */}
-        <div style={{ flexShrink: 0 }}>
-          {movie.poster_url ? (
-            <img
-              src={movie.poster_url}
-              alt={movie.title}
-              style={{
-                width: 180,
-                borderRadius: 8,
-                boxShadow: "var(--shadow-modal)",
-                display: "block",
-              }}
-            />
-          ) : (
-            <div
-              style={{
-                width: 180,
-                height: 270,
-                borderRadius: 8,
-                background: "var(--color-bg-elevated)",
-                border: "1px solid var(--color-border-subtle)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <span style={{ fontSize: 11, color: "var(--color-text-muted)" }}>No poster</span>
-            </div>
-          )}
+        <div style={{ flexShrink: 0, width: 180 }}>
+          <Poster
+            src={movie.poster_url}
+            title={movie.title}
+            year={movie.year}
+            loading="eager"
+            style={{ boxShadow: "var(--shadow-modal)" }}
+          />
         </div>
 
         {/* Content */}
