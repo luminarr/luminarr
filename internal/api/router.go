@@ -17,6 +17,7 @@ import (
 	v3 "github.com/luminarr/luminarr/internal/api/v3"
 	"github.com/luminarr/luminarr/internal/api/ws"
 	"github.com/luminarr/luminarr/internal/config"
+	"github.com/luminarr/luminarr/internal/core/activity"
 	"github.com/luminarr/luminarr/internal/core/aicommand"
 	"github.com/luminarr/luminarr/internal/core/autosearch"
 	"github.com/luminarr/luminarr/internal/core/blocklist"
@@ -79,6 +80,7 @@ type RouterConfig struct {
 	CustomFormatService      *customformat.Service
 	AutoSearchService        *autosearch.Service
 	AICommandService         *aicommand.Service
+	ActivityService          *activity.Service
 	ImportListService        *importlist.Service
 	LogBuffer                *logging.RingBuffer
 	WSHub                    *ws.Hub
@@ -287,6 +289,10 @@ func NewRouter(cfg RouterConfig) http.Handler {
 
 	if cfg.AICommandService != nil {
 		v1.RegisterAIRoutes(humaAPI, cfg.AICommandService)
+	}
+
+	if cfg.ActivityService != nil {
+		v1.RegisterActivityRoutes(humaAPI, cfg.ActivityService)
 	}
 
 	// ── Radarr v3 API compatibility layer ────────────────────────────────
