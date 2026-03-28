@@ -68,4 +68,36 @@ type MovieDetail struct {
 	// Status is mapped from the TMDB status string to our internal values.
 	// TMDB "Released" → "released"; "In Production" / "Post Production" / anything else → "announced".
 	Status string
+
+	// Credits and recommendations are populated only when fetched via
+	// GetMovieExtended (append_to_response=credits,recommendations).
+	Cast            []CastMember          `json:"cast,omitempty"`
+	Crew            []CrewMember          `json:"crew,omitempty"`
+	Recommendations []MovieRecommendation `json:"recommendations,omitempty"`
+}
+
+// CastMember is an actor in the movie's credits.
+type CastMember struct {
+	ID          int    `json:"id"`
+	Name        string `json:"name"`
+	Character   string `json:"character"`
+	ProfilePath string `json:"profile_path"`
+	Order       int    `json:"order"`
+}
+
+// CrewMember is a crew member (director, writer, etc.) in the movie's credits.
+type CrewMember struct {
+	ID          int    `json:"id"`
+	Name        string `json:"name"`
+	Job         string `json:"job"`
+	Department  string `json:"department"`
+	ProfilePath string `json:"profile_path"`
+}
+
+// MovieRecommendation is a TMDB-recommended movie.
+type MovieRecommendation struct {
+	TMDBID     int    `json:"tmdb_id"`
+	Title      string `json:"title"`
+	Year       int    `json:"year"`
+	PosterPath string `json:"poster_path"`
 }

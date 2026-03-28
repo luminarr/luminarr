@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -255,6 +256,124 @@ func TestStatusMapping(t *testing.T) {
 		if got != tc.want {
 			t.Errorf("mapStatus(%q) = %q, want %q", tc.tmdb, got, tc.want)
 		}
+	}
+}
+
+func TestGetMovieExtended_Success(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/movie/27205" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+		}
+		if !strings.Contains(r.URL.RawQuery, "append_to_response=credits%2Crecommendations") {
+			t.Errorf("expected append_to_response in query, got: %s", r.URL.RawQuery)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(mustMarshal(t, map[string]any{
+			"id":             27205,
+			"imdb_id":        "tt1375666",
+			"title":          "Inception",
+			"original_title": "Inception",
+			"overview":       "A thief.",
+			"release_date":   "2010-07-16",
+			"runtime":        148,
+			"genres":         []map[string]any{{"id": 28, "name": "Action"}},
+			"poster_path":    "/poster.jpg",
+			"backdrop_path":  "/backdrop.jpg",
+			"status":         "Released",
+			"credits": map[string]any{
+				"cast": []map[string]any{
+					{"id": 1, "name": "Leonardo DiCaprio", "character": "Cobb", "profile_path": "/leo.jpg", "order": 0},
+					{"id": 2, "name": "Joseph Gordon-Levitt", "character": "Arthur", "profile_path": "/jgl.jpg", "order": 1},
+				},
+				"crew": []map[string]any{
+					{"id": 10, "name": "Christopher Nolan", "job": "Director", "department": "Directing", "profile_path": "/nolan.jpg"},
+					{"id": 11, "name": "Christopher Nolan", "job": "Screenplay", "department": "Writing", "profile_path": "/nolan.jpg"},
+					{"id": 12, "name": "Hans Zimmer", "job": "Original Music Composer", "department": "Sound", "profile_path": "/zimmer.jpg"},
+					{"id": 13, "name": "Wally Pfister", "job": "Director of Photography", "department": "Camera", "profile_path": "/pfister.jpg"},
+				},
+			},
+			"recommendations": map[string]any{
+				"results": []map[string]any{
+					{"id": 155, "title": "The Dark Knight", "release_date": "2008-07-18", "poster_path": "/dk.jpg"},
+					{"id": 49026, "title": "The Dark Knight Rises", "release_date": "2012-07-20", "poster_path": "/dkr.jpg"},
+				},
+			},
+		}))
+	}))
+	defer srv.Close()
+
+	c := newTestClient(srv.URL)
+	movie, err := c.GetMovieExtended(context.Background(), 27205)
+	if err != nil {
+		t.Fatalf("GetMovieExtended() error = %v", err)
+	}
+
+	// Basic movie fields
+	if movie.ID != 27205 {
+		t.Errorf("ID = %d, want 27205", movie.ID)
+	}
+	if movie.Title != "Inception" {
+		t.Errorf("Title = %q, want Inception", movie.Title)
+	}
+
+	// Cast: top 10, both should be present
+	if len(movie.Cast) != 2 {
+		t.Fatalf("Cast len = %d, want 2", len(movie.Cast))
+	}
+	if movie.Cast[0].Name != "Leonardo DiCaprio" {
+		t.Errorf("Cast[0].Name = %q", movie.Cast[0].Name)
+	}
+	if movie.Cast[0].Character != "Cobb" {
+		t.Errorf("Cast[0].Character = %q", movie.Cast[0].Character)
+	}
+
+	// Crew: only key roles (Director, Screenplay, Composer — not DoP)
+	if len(movie.Crew) != 3 {
+		t.Fatalf("Crew len = %d, want 3 (Director, Screenplay, Composer)", len(movie.Crew))
+	}
+
+	// Recommendations
+	if len(movie.Recommendations) != 2 {
+		t.Fatalf("Recommendations len = %d, want 2", len(movie.Recommendations))
+	}
+	if movie.Recommendations[0].Title != "The Dark Knight" {
+		t.Errorf("Recommendations[0].Title = %q", movie.Recommendations[0].Title)
+	}
+	if movie.Recommendations[0].Year != 2008 {
+		t.Errorf("Recommendations[0].Year = %d, want 2008", movie.Recommendations[0].Year)
+	}
+}
+
+func TestGetMovieExtended_EmptyCredits(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(mustMarshal(t, map[string]any{
+			"id":              27205,
+			"title":           "Test",
+			"original_title":  "Test",
+			"release_date":    "2010-01-01",
+			"genres":          []any{},
+			"status":          "Released",
+			"credits":         map[string]any{"cast": []any{}, "crew": []any{}},
+			"recommendations": map[string]any{"results": []any{}},
+		}))
+	}))
+	defer srv.Close()
+
+	c := newTestClient(srv.URL)
+	movie, err := c.GetMovieExtended(context.Background(), 27205)
+	if err != nil {
+		t.Fatalf("error = %v", err)
+	}
+	if len(movie.Cast) != 0 {
+		t.Errorf("Cast should be empty, got %d", len(movie.Cast))
+	}
+	if len(movie.Crew) != 0 {
+		t.Errorf("Crew should be empty, got %d", len(movie.Crew))
+	}
+	if len(movie.Recommendations) != 0 {
+		t.Errorf("Recommendations should be empty, got %d", len(movie.Recommendations))
 	}
 }
 

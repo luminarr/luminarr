@@ -403,6 +403,7 @@ func run() error {
 		QualityDefinitionService: qualityDefSvc,
 		LibraryService:           librarySvc,
 		MovieService:             movieSvc,
+		TMDBClient:               rawTMDB,
 		IndexerService:           indexerSvc,
 		DownloaderService:        downloaderSvc,
 		BlocklistService:         blocklistSvc,

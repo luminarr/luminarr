@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useMemo } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { Trash2 } from "lucide-react";
 import { Poster } from "@/components/Poster";
+import { useMovieCredits } from "@/api/movies";
 import { toast } from "sonner";
 import {
   useMovie,
@@ -1043,6 +1044,8 @@ type Tab = "overview" | "releases" | "files" | "history";
 export default function MovieDetail() {
   const { id } = useParams<{ id: string }>();
   const { data: movie, isLoading, error } = useMovie(id ?? "");
+  const { data: credits } = useMovieCredits(id ?? "");
+  const { data: files } = useMovieFiles(id ?? "");
   const updateMovie = useUpdateMovie();
   const refreshMovie = useRefreshMovie();
   const autoSearch = useAutoSearch();
@@ -1151,7 +1154,29 @@ export default function MovieDetail() {
   }
 
   return (
-    <div style={{ padding: 24, maxWidth: 1000 }}>
+    <div style={{ padding: 24, maxWidth: 1000, position: "relative" }}>
+      {/* Backdrop */}
+      {movie.fanart_url && (
+        <div
+          data-testid="backdrop"
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            height: 280,
+            backgroundImage: `url(${movie.fanart_url})`,
+            backgroundSize: "cover",
+            backgroundPosition: "center top",
+            opacity: 0.12,
+            maskImage: "linear-gradient(to bottom, black 40%, transparent 100%)",
+            WebkitMaskImage: "linear-gradient(to bottom, black 40%, transparent 100%)",
+            pointerEvents: "none",
+            borderRadius: 12,
+          }}
+        />
+      )}
+
       {/* Back link */}
       <Link
         to="/"
@@ -1387,6 +1412,52 @@ export default function MovieDetail() {
                 </p>
               )}
 
+              {/* File status card */}
+              {files && files.length > 0 ? (
+                <div
+                  data-testid="file-status-card"
+                  style={{
+                    padding: "10px 14px",
+                    borderRadius: 8,
+                    background: "color-mix(in srgb, var(--color-success) 8%, transparent)",
+                    border: "1px solid color-mix(in srgb, var(--color-success) 20%, transparent)",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
+                    <span style={{ color: "var(--color-success)", fontWeight: 600 }}>On Disk</span>
+                    <span style={{ color: "var(--color-text-secondary)" }}>
+                      {files[0].quality?.name || "Unknown quality"}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 12, color: "var(--color-text-muted)", marginTop: 4 }}>
+                    {files[0].edition && <span>{files[0].edition} &middot; </span>}
+                    {(files[0].size_bytes / (1024 * 1024 * 1024)).toFixed(1)} GB
+                    {files[0].imported_at && <span> &middot; Imported {new Date(files[0].imported_at).toLocaleDateString()}</span>}
+                  </div>
+                  {files[0].mediainfo && files[0].quality &&
+                    files[0].mediainfo.codec && files[0].quality.codec &&
+                    files[0].mediainfo.codec !== files[0].quality.codec && (
+                    <div style={{ fontSize: 12, color: "var(--color-warning)", marginTop: 4 }}>
+                      Mismatch: actual codec is {files[0].mediainfo.codec}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div
+                  data-testid="file-status-card"
+                  style={{
+                    padding: "10px 14px",
+                    borderRadius: 8,
+                    background: "var(--color-bg-elevated)",
+                    border: "1px solid var(--color-border-subtle)",
+                    fontSize: 13,
+                    color: "var(--color-text-muted)",
+                  }}
+                >
+                  {movie.monitored ? "Missing — Monitored, searching" : "Missing — Not monitored"}
+                </div>
+              )}
+
               {/* File path */}
               {movie.path && (
                 <div>
@@ -1408,6 +1479,116 @@ export default function MovieDetail() {
                   >
                     {movie.path}
                   </code>
+                </div>
+              )}
+
+              {/* Director / Writer */}
+              {credits && credits.crew.length > 0 && (
+                <div data-testid="crew-row" style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>
+                  {credits.crew
+                    .filter((c) => c.job === "Director")
+                    .map((c, i) => (
+                      <span key={c.id}>
+                        {i > 0 && ", "}
+                        Directed by <span style={{ color: "var(--color-text-primary)", fontWeight: 500 }}>{c.name}</span>
+                      </span>
+                    ))}
+                  {credits.crew.some((c) => c.job === "Director") &&
+                    credits.crew.some((c) => c.job === "Screenplay" || c.job === "Writer") &&
+                    <span> &middot; </span>}
+                  {credits.crew
+                    .filter((c) => c.job === "Screenplay" || c.job === "Writer")
+                    .slice(0, 2)
+                    .map((c, i) => (
+                      <span key={c.id}>
+                        {i > 0 && ", "}
+                        {i === 0 && "Written by "}
+                        <span style={{ color: "var(--color-text-primary)", fontWeight: 500 }}>{c.name}</span>
+                      </span>
+                    ))}
+                </div>
+              )}
+
+              {/* Cast strip */}
+              {credits && credits.cast.length > 0 && (
+                <div data-testid="cast-strip">
+                  <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--color-text-muted)", marginBottom: 8 }}>
+                    Cast
+                  </div>
+                  <div style={{ display: "flex", gap: 12, overflowX: "auto", paddingBottom: 4 }}>
+                    {credits.cast.map((c) => (
+                      <div key={c.id} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, minWidth: 72, maxWidth: 72 }}>
+                        {c.profile_path ? (
+                          <img
+                            src={`https://image.tmdb.org/t/p/w185${c.profile_path}`}
+                            alt={c.name}
+                            style={{ width: 48, height: 48, borderRadius: "50%", objectFit: "cover" }}
+                          />
+                        ) : (
+                          <div
+                            style={{
+                              width: 48,
+                              height: 48,
+                              borderRadius: "50%",
+                              background: "var(--color-bg-subtle)",
+                              border: "1px solid var(--color-border-subtle)",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              fontSize: 14,
+                              fontWeight: 600,
+                              color: "var(--color-text-muted)",
+                            }}
+                          >
+                            {c.name.charAt(0)}
+                          </div>
+                        )}
+                        <span style={{ fontSize: 10, fontWeight: 500, color: "var(--color-text-primary)", textAlign: "center", lineHeight: 1.2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", width: "100%" }}>
+                          {c.name}
+                        </span>
+                        <span style={{ fontSize: 9, color: "var(--color-text-muted)", textAlign: "center", lineHeight: 1.2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", width: "100%" }}>
+                          {c.character}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Similar movies */}
+              {credits && credits.recommendations.length > 0 && (
+                <div data-testid="similar-movies">
+                  <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--color-text-muted)", marginBottom: 8 }}>
+                    You might also like
+                  </div>
+                  <div style={{ display: "flex", gap: 12, overflowX: "auto", paddingBottom: 4 }}>
+                    {credits.recommendations.map((r) => (
+                      <Link
+                        key={r.tmdb_id}
+                        to={r.in_library && r.movie_id ? `/movies/${r.movie_id}` : `/`}
+                        style={{ textDecoration: "none", minWidth: 100, maxWidth: 100 }}
+                      >
+                        <Poster
+                          src={r.poster_path ? `https://image.tmdb.org/t/p/w185${r.poster_path}` : undefined}
+                          title={r.title}
+                          year={r.year}
+                        />
+                        <div style={{ marginTop: 6 }}>
+                          <span style={{ fontSize: 11, fontWeight: 500, color: "var(--color-text-primary)", display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {r.title}
+                          </span>
+                          <span style={{ fontSize: 10, color: "var(--color-text-muted)" }}>
+                            {r.year > 0 && r.year}
+                          </span>
+                          {r.in_library && (
+                            <span style={{ fontSize: 9, padding: "1px 5px", borderRadius: 3, background: "color-mix(in srgb, var(--color-success) 15%, transparent)", color: "var(--color-success)", fontWeight: 600, marginLeft: 4 }}>
+                              In Library
+                            </span>
+                          )}
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>

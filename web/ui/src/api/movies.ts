@@ -247,3 +247,37 @@ export function useExplainReleases(movieId: string, enabled: boolean) {
     enabled: enabled && !!movieId,
   });
 }
+
+export interface MovieCredits {
+  cast: {
+    id: number;
+    name: string;
+    character: string;
+    profile_path: string;
+    order: number;
+  }[];
+  crew: {
+    id: number;
+    name: string;
+    job: string;
+    department: string;
+    profile_path: string;
+  }[];
+  recommendations: {
+    tmdb_id: number;
+    title: string;
+    year: number;
+    poster_path: string;
+    in_library: boolean;
+    movie_id?: string;
+  }[];
+}
+
+export function useMovieCredits(movieId: string) {
+  return useQuery({
+    queryKey: ["movies", movieId, "credits"],
+    queryFn: () => apiFetch<MovieCredits>(`/movies/${movieId}/credits`),
+    enabled: !!movieId,
+    staleTime: 5 * 60_000, // cache 5 min — TMDB data doesn't change often
+  });
+}
