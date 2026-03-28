@@ -43,6 +43,11 @@ export const handlers = [
     HttpResponse.json({ activities: [], total: 0 })
   ),
 
+  // Movie credits
+  http.get("/api/v1/movies/:id/credits", () =>
+    HttpResponse.json({ cast: [], crew: [], recommendations: [] })
+  ),
+
   // Wanted
   http.get("/api/v1/wanted/missing", () =>
     HttpResponse.json({ movies: [], total: 0, page: 1, per_page: 50 })

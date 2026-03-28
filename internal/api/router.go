@@ -40,6 +40,7 @@ import (
 	"github.com/luminarr/luminarr/internal/core/tag"
 	"github.com/luminarr/luminarr/internal/events"
 	"github.com/luminarr/luminarr/internal/logging"
+	"github.com/luminarr/luminarr/internal/metadata/tmdb"
 	"github.com/luminarr/luminarr/internal/plexsync"
 	"github.com/luminarr/luminarr/internal/radarrimport"
 	"github.com/luminarr/luminarr/internal/scheduler"
@@ -61,6 +62,7 @@ type RouterConfig struct {
 	QualityDefinitionService *quality.DefinitionService
 	LibraryService           *library.Service
 	MovieService             *movie.Service
+	TMDBClient               *tmdb.Client
 	IndexerService           *indexer.Service
 	DownloaderService        *downloader.Service
 	BlocklistService         *blocklist.Service
@@ -196,6 +198,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	if cfg.MovieService != nil {
 		v1.RegisterMovieRoutes(humaAPI, cfg.MovieService, cfg.TagService)
 		v1.RegisterMovieFileRoutes(humaAPI, cfg.MovieService, cfg.MediaManagementService, cfg.MediaInfoService)
+		v1.RegisterMovieCreditsRoutes(humaAPI, cfg.MovieService, cfg.TMDBClient)
 		v1.RegisterWantedRoutes(humaAPI, cfg.MovieService)
 	}
 

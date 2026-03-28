@@ -129,6 +129,132 @@ func (c *Client) GetMovie(ctx context.Context, tmdbID int) (*MovieDetail, error)
 	}, nil
 }
 
+// GetMovieExtended fetches movie details with credits and recommendations in
+// a single API call using TMDB's append_to_response parameter.
+func (c *Client) GetMovieExtended(ctx context.Context, tmdbID int) (*MovieDetail, error) {
+	var raw struct {
+		ID            int    `json:"id"`
+		IMDBId        string `json:"imdb_id"`
+		Title         string `json:"title"`
+		OriginalTitle string `json:"original_title"`
+		Overview      string `json:"overview"`
+		ReleaseDate   string `json:"release_date"`
+		Runtime       int    `json:"runtime"`
+		Genres        []struct {
+			Name string `json:"name"`
+		} `json:"genres"`
+		PosterPath   string `json:"poster_path"`
+		BackdropPath string `json:"backdrop_path"`
+		Status       string `json:"status"`
+		Credits      struct {
+			Cast []struct {
+				ID          int    `json:"id"`
+				Name        string `json:"name"`
+				Character   string `json:"character"`
+				ProfilePath string `json:"profile_path"`
+				Order       int    `json:"order"`
+			} `json:"cast"`
+			Crew []struct {
+				ID          int    `json:"id"`
+				Name        string `json:"name"`
+				Job         string `json:"job"`
+				Department  string `json:"department"`
+				ProfilePath string `json:"profile_path"`
+			} `json:"crew"`
+		} `json:"credits"`
+		Recommendations struct {
+			Results []struct {
+				ID          int    `json:"id"`
+				Title       string `json:"title"`
+				ReleaseDate string `json:"release_date"`
+				PosterPath  string `json:"poster_path"`
+			} `json:"results"`
+		} `json:"recommendations"`
+	}
+
+	params := url.Values{}
+	params.Set("append_to_response", "credits,recommendations")
+
+	path := fmt.Sprintf("/movie/%d", tmdbID)
+	if err := c.get(ctx, path, params, &raw); err != nil {
+		return nil, fmt.Errorf("tmdb get movie extended %d: %w", tmdbID, err)
+	}
+
+	genres := make([]string, 0, len(raw.Genres))
+	for _, g := range raw.Genres {
+		genres = append(genres, g.Name)
+	}
+
+	// Top 10 cast by billing order.
+	maxCast := 10
+	if len(raw.Credits.Cast) < maxCast {
+		maxCast = len(raw.Credits.Cast)
+	}
+	cast := make([]CastMember, 0, maxCast)
+	for _, c := range raw.Credits.Cast[:maxCast] {
+		cast = append(cast, CastMember{
+			ID:          c.ID,
+			Name:        c.Name,
+			Character:   c.Character,
+			ProfilePath: c.ProfilePath,
+			Order:       c.Order,
+		})
+	}
+
+	// Key crew: Director, Screenplay/Writer, Original Music Composer.
+	keyJobs := map[string]bool{
+		"Director":                true,
+		"Screenplay":              true,
+		"Writer":                  true,
+		"Original Music Composer": true,
+	}
+	crew := make([]CrewMember, 0)
+	for _, c := range raw.Credits.Crew {
+		if keyJobs[c.Job] {
+			crew = append(crew, CrewMember{
+				ID:          c.ID,
+				Name:        c.Name,
+				Job:         c.Job,
+				Department:  c.Department,
+				ProfilePath: c.ProfilePath,
+			})
+		}
+	}
+
+	// Up to 10 recommendations.
+	maxRecs := 10
+	if len(raw.Recommendations.Results) < maxRecs {
+		maxRecs = len(raw.Recommendations.Results)
+	}
+	recs := make([]MovieRecommendation, 0, maxRecs)
+	for _, r := range raw.Recommendations.Results[:maxRecs] {
+		recs = append(recs, MovieRecommendation{
+			TMDBID:     r.ID,
+			Title:      r.Title,
+			Year:       parseYear(r.ReleaseDate),
+			PosterPath: r.PosterPath,
+		})
+	}
+
+	return &MovieDetail{
+		ID:              raw.ID,
+		IMDBId:          raw.IMDBId,
+		Title:           raw.Title,
+		OriginalTitle:   raw.OriginalTitle,
+		Overview:        raw.Overview,
+		ReleaseDate:     raw.ReleaseDate,
+		Year:            parseYear(raw.ReleaseDate),
+		RuntimeMinutes:  raw.Runtime,
+		Genres:          genres,
+		PosterPath:      raw.PosterPath,
+		BackdropPath:    raw.BackdropPath,
+		Status:          mapStatus(raw.Status),
+		Cast:            cast,
+		Crew:            crew,
+		Recommendations: recs,
+	}, nil
+}
+
 // GetPerson fetches a TMDB person by ID.
 func (c *Client) GetPerson(ctx context.Context, personID int) (*Person, error) {
 	var raw struct {
