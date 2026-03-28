@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMovies } from "@/api/movies";
+import { Poster } from "@/components/Poster";
 import type { Movie } from "@/types";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -53,13 +54,12 @@ function MovieChip({ movie, onClick }: { movie: Movie; onClick: () => void }) {
         (e.currentTarget as HTMLButtonElement).style.background = "var(--color-bg-surface)";
       }}
     >
-      {movie.poster_url && (
-        <img
-          src={movie.poster_url}
-          alt=""
-          style={{ width: 14, height: 20, borderRadius: 2, objectFit: "cover", flexShrink: 0 }}
-        />
-      )}
+      <Poster
+        src={movie.poster_url}
+        title={movie.title}
+        style={{ width: 14, height: 20, borderRadius: 2, flexShrink: 0, padding: 0, fontSize: 0 }}
+        imgStyle={{ width: 14, height: 20, borderRadius: 2 }}
+      />
       <span
         style={{
           fontSize: 10,

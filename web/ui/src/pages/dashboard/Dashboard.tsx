@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { LayoutGrid, List } from "lucide-react";
+import { Poster } from "@/components/Poster";
 import { toast } from "sonner";
 import {
   useMovies,
@@ -110,47 +111,17 @@ function PosterCard({
           position: "relative",
           borderRadius: 8,
           overflow: "hidden",
-          background: "var(--color-bg-subtle)",
-          border: "1px solid var(--color-border-subtle)",
         }}
       >
-        {movie.poster_url ? (
-          <img
+        <div style={{ position: "absolute", inset: 0 }}>
+          <Poster
             src={movie.poster_url}
-            alt={movie.title}
-            loading="lazy"
-            style={{
-              position: "absolute",
-              inset: 0,
-              width: "100%",
-              height: "100%",
-              objectFit: "cover",
-              display: "block",
-            }}
+            title={movie.title}
+            year={movie.year}
+            style={{ borderRadius: 0, width: "100%", height: "100%" }}
+            imgStyle={{ borderRadius: 0 }}
           />
-        ) : (
-          <div
-            style={{
-              position: "absolute",
-              inset: 0,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              padding: 12,
-            }}
-          >
-            <span
-              style={{
-                fontSize: 11,
-                color: "var(--color-text-muted)",
-                textAlign: "center",
-                lineHeight: 1.4,
-              }}
-            >
-              {movie.title}
-            </span>
-          </div>
-        )}
+        </div>
 
         {/* Hover overlay */}
         {hovered && (
@@ -423,19 +394,13 @@ function ListRow({
             flexShrink: 0,
           }}
         >
-          {movie.poster_url && (
-            <img
-              src={movie.poster_url}
-              alt=""
-              loading="lazy"
-              style={{
-                width: "100%",
-                height: "100%",
-                objectFit: "cover",
-                display: "block",
-              }}
-            />
-          )}
+          <Poster
+            src={movie.poster_url}
+            title={movie.title}
+            year={movie.year}
+            style={{ borderRadius: 4, width: "100%", height: "100%" }}
+            imgStyle={{ borderRadius: 4 }}
+          />
         </div>
       </td>
 
