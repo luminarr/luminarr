@@ -48,6 +48,14 @@ export const handlers = [
     HttpResponse.json({ cast: [], crew: [], recommendations: [] })
   ),
 
+  // Watch
+  http.post("/api/v1/watch-sync/run", () =>
+    HttpResponse.json({ status: "ok" })
+  ),
+  http.get("/api/v1/stats/watch", () =>
+    HttpResponse.json({ watched_count: 0, total_count: 0, percentage: 0 })
+  ),
+
   // Discover
   http.get("/api/v1/discover/trending", () =>
     HttpResponse.json({ results: [], page: 1, total_pages: 0 })

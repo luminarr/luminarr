@@ -296,3 +296,17 @@ type Tag struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
 }
+
+type WatchHistory struct {
+	ID        string `json:"id"`
+	MovieID   string `json:"movieId"`
+	TmdbID    int64  `json:"tmdbId"`
+	WatchedAt string `json:"watchedAt"`
+	UserName  string `json:"userName"`
+	Source    string `json:"source"`
+}
+
+type WatchSyncState struct {
+	MediaServerID string `json:"mediaServerId"`
+	LastSyncAt    string `json:"lastSyncAt"`
+}

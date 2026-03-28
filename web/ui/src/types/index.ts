@@ -79,6 +79,11 @@ export interface Movie {
   added_at: string;
   updated_at: string;
   metadata_refreshed_at?: string;
+  watch_status?: {
+    watched: boolean;
+    play_count: number;
+    last_watched_at?: string;
+  };
 }
 
 export interface MovieListResponse {

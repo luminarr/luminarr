@@ -15,6 +15,7 @@ import (
 	"github.com/luminarr/luminarr/internal/core/movie"
 	"github.com/luminarr/luminarr/internal/core/renamer"
 	"github.com/luminarr/luminarr/internal/core/tag"
+	"github.com/luminarr/luminarr/internal/core/watchsync"
 	"github.com/luminarr/luminarr/internal/metadata/tmdb"
 )
 
@@ -63,29 +64,36 @@ type movieFileDeleteInput struct {
 // ── Request / response shapes ────────────────────────────────────────────────
 
 type movieBody struct {
-	ID                  string     `json:"id"                             doc:"Movie UUID"`
-	TMDBID              int        `json:"tmdb_id"                        doc:"TMDB movie ID"`
-	IMDBID              string     `json:"imdb_id,omitempty"              doc:"IMDB movie ID"`
-	Title               string     `json:"title"                          doc:"Movie title"`
-	OriginalTitle       string     `json:"original_title"                 doc:"Original-language title"`
-	Year                int        `json:"year"                           doc:"Release year"`
-	Overview            string     `json:"overview"                       doc:"Plot summary"`
-	RuntimeMinutes      int        `json:"runtime_minutes"                doc:"Runtime in minutes"`
-	Genres              []string   `json:"genres"                         doc:"Genre list"`
-	PosterURL           string     `json:"poster_url,omitempty"           doc:"TMDB poster path"`
-	FanartURL           string     `json:"fanart_url,omitempty"           doc:"TMDB backdrop/fanart path"`
-	Status              string     `json:"status"                         doc:"Release status: released or announced"`
-	Monitored           bool       `json:"monitored"                      doc:"Whether the movie is monitored for downloads"`
-	LibraryID           string     `json:"library_id"                     doc:"Parent library UUID"`
-	QualityProfileID    string     `json:"quality_profile_id"             doc:"Quality profile UUID"`
-	MinimumAvailability string     `json:"minimum_availability"           doc:"Minimum availability before grabbing: tba, announced, in_cinemas, released"`
-	PreferredEdition    string     `json:"preferred_edition,omitempty"    doc:"Preferred edition (e.g. Director's Cut, Extended); empty = no preference"`
-	ReleaseDate         string     `json:"release_date,omitempty"         doc:"TMDB release date (YYYY-MM-DD)"`
-	Path                string     `json:"path,omitempty"                 doc:"Absolute path on disk"`
-	TagIDs              []string   `json:"tag_ids"                        doc:"Assigned tag UUIDs"`
-	AddedAt             time.Time  `json:"added_at"                       doc:"When the movie was added"`
-	UpdatedAt           time.Time  `json:"updated_at"                     doc:"When the record was last changed"`
-	MetadataRefreshedAt *time.Time `json:"metadata_refreshed_at,omitempty" doc:"When metadata was last refreshed"`
+	ID                  string           `json:"id"                             doc:"Movie UUID"`
+	TMDBID              int              `json:"tmdb_id"                        doc:"TMDB movie ID"`
+	IMDBID              string           `json:"imdb_id,omitempty"              doc:"IMDB movie ID"`
+	Title               string           `json:"title"                          doc:"Movie title"`
+	OriginalTitle       string           `json:"original_title"                 doc:"Original-language title"`
+	Year                int              `json:"year"                           doc:"Release year"`
+	Overview            string           `json:"overview"                       doc:"Plot summary"`
+	RuntimeMinutes      int              `json:"runtime_minutes"                doc:"Runtime in minutes"`
+	Genres              []string         `json:"genres"                         doc:"Genre list"`
+	PosterURL           string           `json:"poster_url,omitempty"           doc:"TMDB poster path"`
+	FanartURL           string           `json:"fanart_url,omitempty"           doc:"TMDB backdrop/fanart path"`
+	Status              string           `json:"status"                         doc:"Release status: released or announced"`
+	Monitored           bool             `json:"monitored"                      doc:"Whether the movie is monitored for downloads"`
+	LibraryID           string           `json:"library_id"                     doc:"Parent library UUID"`
+	QualityProfileID    string           `json:"quality_profile_id"             doc:"Quality profile UUID"`
+	MinimumAvailability string           `json:"minimum_availability"           doc:"Minimum availability before grabbing: tba, announced, in_cinemas, released"`
+	PreferredEdition    string           `json:"preferred_edition,omitempty"    doc:"Preferred edition (e.g. Director's Cut, Extended); empty = no preference"`
+	ReleaseDate         string           `json:"release_date,omitempty"         doc:"TMDB release date (YYYY-MM-DD)"`
+	Path                string           `json:"path,omitempty"                 doc:"Absolute path on disk"`
+	TagIDs              []string         `json:"tag_ids"                        doc:"Assigned tag UUIDs"`
+	WatchStatus         *watchStatusBody `json:"watch_status,omitempty"     doc:"Watch history status"`
+	AddedAt             time.Time        `json:"added_at"                       doc:"When the movie was added"`
+	UpdatedAt           time.Time        `json:"updated_at"                     doc:"When the record was last changed"`
+	MetadataRefreshedAt *time.Time       `json:"metadata_refreshed_at,omitempty" doc:"When metadata was last refreshed"`
+}
+
+type watchStatusBody struct {
+	Watched       bool    `json:"watched"                    doc:"At least one watch event exists"`
+	PlayCount     int64   `json:"play_count"                 doc:"Total times watched"`
+	LastWatchedAt *string `json:"last_watched_at,omitempty"  doc:"Most recent watch (ISO 8601)"`
 }
 
 type searchResultBody struct {
@@ -251,7 +259,11 @@ func searchResultToBody(r tmdb.SearchResult) *searchResultBody {
 // ── Route registration ────────────────────────────────────────────────────────
 
 // RegisterMovieRoutes registers all /api/v1/movies endpoints.
-func RegisterMovieRoutes(api huma.API, svc *movie.Service, tagSvc *tag.Service) {
+func RegisterMovieRoutes(api huma.API, svc *movie.Service, tagSvc *tag.Service, watchSvc ...*watchsync.Service) {
+	var wSvc *watchsync.Service
+	if len(watchSvc) > 0 {
+		wSvc = watchSvc[0]
+	}
 	// GET /api/v1/movies
 	huma.Register(api, huma.Operation{
 		OperationID: "list-movies",
@@ -369,6 +381,15 @@ func RegisterMovieRoutes(api huma.API, svc *movie.Service, tagSvc *tag.Service) 
 		b := movieToBody(m)
 		if tagSvc != nil {
 			b.TagIDs, _ = tagSvc.MovieTagIDs(ctx, m.ID)
+		}
+		if wSvc != nil {
+			if ws, err := wSvc.WatchStatusForMovie(ctx, m.ID); err == nil {
+				b.WatchStatus = &watchStatusBody{
+					Watched:       ws.Watched,
+					PlayCount:     ws.PlayCount,
+					LastWatchedAt: ws.LastWatchedAt,
+				}
+			}
 		}
 		return &movieOutput{Body: b}, nil
 	})

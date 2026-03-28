@@ -39,6 +39,7 @@ import (
 	"github.com/luminarr/luminarr/internal/core/seedenforcer"
 	"github.com/luminarr/luminarr/internal/core/stats"
 	"github.com/luminarr/luminarr/internal/core/tag"
+	"github.com/luminarr/luminarr/internal/core/watchsync"
 	"github.com/luminarr/luminarr/internal/db"
 	dbsqlite "github.com/luminarr/luminarr/internal/db/generated/sqlite"
 	"github.com/luminarr/luminarr/internal/events"
@@ -332,6 +333,7 @@ func run() error {
 	msDispatcher.Subscribe()
 
 	plexSyncSvc := plexsync.NewService(mediaServerSvc, movieSvc, queries)
+	watchSyncSvc := watchsync.NewService(queries, mediaServerSvc, movieSvc, registry.Default, logger)
 
 	healthSvc := health.NewService(librarySvc, downloaderSvc, indexerSvc, logger)
 
@@ -387,6 +389,7 @@ func run() error {
 	sched.Add(jobs.StatsSnapshot(statsSvc, logger))
 	sched.Add(jobs.ImportListSync(importListSvc, logger))
 	sched.Add(jobs.ActivityPrune(activitySvc, logger))
+	sched.Add(jobs.WatchSync(watchSyncSvc, logger))
 
 	// ── HTTP router ───────────────────────────────────────────────────────────
 	startTime := time.Now()
@@ -424,6 +427,7 @@ func run() error {
 		AutoSearchService:        autoSvc,
 		AICommandService:         aiCmdSvc,
 		ActivityService:          activitySvc,
+		WatchSyncService:         watchSyncSvc,
 		ImportListService:        importListSvc,
 		LogBuffer:                logBuffer,
 		WSHub:                    wsHub,

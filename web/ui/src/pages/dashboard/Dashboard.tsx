@@ -301,6 +301,29 @@ function PosterCard({
             </span>
           ) : null}
         </div>
+
+        {/* Watched badge */}
+        {movie.watch_status?.watched && (
+          <div
+            data-testid={`watched-${movie.id}`}
+            style={{
+              position: "absolute",
+              bottom: 6,
+              left: 6,
+              padding: "2px 6px",
+              borderRadius: 3,
+              background: "rgba(0,0,0,0.7)",
+              backdropFilter: "blur(4px)",
+              fontSize: 9,
+              fontWeight: 600,
+              color: "rgba(255,255,255,0.8)",
+              pointerEvents: "none",
+              letterSpacing: "0.04em",
+            }}
+          >
+            WATCHED
+          </div>
+        )}
       </div>
 
       {/* Card footer */}

@@ -38,6 +38,7 @@ import (
 	"github.com/luminarr/luminarr/internal/core/queue"
 	"github.com/luminarr/luminarr/internal/core/stats"
 	"github.com/luminarr/luminarr/internal/core/tag"
+	"github.com/luminarr/luminarr/internal/core/watchsync"
 	"github.com/luminarr/luminarr/internal/events"
 	"github.com/luminarr/luminarr/internal/logging"
 	"github.com/luminarr/luminarr/internal/metadata/tmdb"
@@ -83,6 +84,7 @@ type RouterConfig struct {
 	AutoSearchService        *autosearch.Service
 	AICommandService         *aicommand.Service
 	ActivityService          *activity.Service
+	WatchSyncService         *watchsync.Service
 	ImportListService        *importlist.Service
 	LogBuffer                *logging.RingBuffer
 	WSHub                    *ws.Hub
@@ -196,7 +198,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	}
 
 	if cfg.MovieService != nil {
-		v1.RegisterMovieRoutes(humaAPI, cfg.MovieService, cfg.TagService)
+		v1.RegisterMovieRoutes(humaAPI, cfg.MovieService, cfg.TagService, cfg.WatchSyncService)
 		v1.RegisterMovieFileRoutes(humaAPI, cfg.MovieService, cfg.MediaManagementService, cfg.MediaInfoService)
 		v1.RegisterMovieCreditsRoutes(humaAPI, cfg.MovieService, cfg.TMDBClient)
 		v1.RegisterDiscoverRoutes(humaAPI, cfg.MovieService, cfg.TMDBClient)
@@ -297,6 +299,10 @@ func NewRouter(cfg RouterConfig) http.Handler {
 
 	if cfg.ActivityService != nil {
 		v1.RegisterActivityRoutes(humaAPI, cfg.ActivityService)
+	}
+
+	if cfg.WatchSyncService != nil {
+		v1.RegisterWatchSyncRoutes(humaAPI, cfg.WatchSyncService)
 	}
 
 	// ── Radarr v3 API compatibility layer ────────────────────────────────

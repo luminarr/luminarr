@@ -15,6 +15,8 @@ type Querier interface {
 	AddIndexerTag(ctx context.Context, arg AddIndexerTagParams) error
 	AddMovieTag(ctx context.Context, arg AddMovieTagParams) error
 	AddNotificationTag(ctx context.Context, arg AddNotificationTagParams) error
+	CleanupNeverWatched(ctx context.Context, addedAt string) ([]CleanupNeverWatchedRow, error)
+	CleanupWatchedOnce(ctx context.Context) ([]CleanupWatchedOnceRow, error)
 	ClearBlocklist(ctx context.Context) error
 	CountActivities(ctx context.Context, arg CountActivitiesParams) (int64, error)
 	CountBlocklist(ctx context.Context) (int64, error)
@@ -89,11 +91,13 @@ type Querier interface {
 	GetNotificationConfig(ctx context.Context, id string) (NotificationConfig, error)
 	GetQualityProfile(ctx context.Context, id string) (QualityProfile, error)
 	GetStorageTotals(ctx context.Context) (GetStorageTotalsRow, error)
+	GetSyncState(ctx context.Context, mediaServerID string) (string, error)
 	GetTag(ctx context.Context, id string) (Tag, error)
 	GetTagByName(ctx context.Context, name string) (Tag, error)
 	GetTopIndexers(ctx context.Context) ([]GetTopIndexersRow, error)
 	InsertActivity(ctx context.Context, arg InsertActivityParams) error
 	InsertStorageSnapshot(ctx context.Context, arg InsertStorageSnapshotParams) error
+	InsertWatchEvent(ctx context.Context, arg InsertWatchEventParams) error
 	IsBlocklisted(ctx context.Context, releaseGuid string) (int64, error)
 	IsBlocklistedByTitle(ctx context.Context, releaseTitle string) (int64, error)
 	ListActiveGrabs(ctx context.Context) ([]GrabHistory, error)
@@ -190,6 +194,10 @@ type Querier interface {
 	UpdateQualityProfile(ctx context.Context, arg UpdateQualityProfileParams) (QualityProfile, error)
 	UpdateTag(ctx context.Context, arg UpdateTagParams) (Tag, error)
 	UpsertLibraryFileCandidate(ctx context.Context, arg UpsertLibraryFileCandidateParams) error
+	UpsertSyncState(ctx context.Context, arg UpsertSyncStateParams) error
+	WatchStats(ctx context.Context) (WatchStatsRow, error)
+	WatchStatusBatch(ctx context.Context) ([]WatchStatusBatchRow, error)
+	WatchStatusForMovie(ctx context.Context, movieID string) (WatchStatusForMovieRow, error)
 }
 
 var _ Querier = (*Queries)(nil)

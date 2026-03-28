@@ -1458,6 +1458,34 @@ export default function MovieDetail() {
                 </div>
               )}
 
+              {/* Watch info */}
+              {movie.watch_status && (
+                <div
+                  data-testid="watch-info"
+                  style={{
+                    padding: "8px 14px",
+                    borderRadius: 8,
+                    background: "var(--color-bg-elevated)",
+                    border: "1px solid var(--color-border-subtle)",
+                    fontSize: 13,
+                    color: movie.watch_status.watched ? "var(--color-text-primary)" : "var(--color-text-muted)",
+                  }}
+                >
+                  {movie.watch_status.watched ? (
+                    <>
+                      Watched {movie.watch_status.play_count} time{movie.watch_status.play_count !== 1 && "s"}
+                      {movie.watch_status.last_watched_at && (
+                        <span style={{ color: "var(--color-text-muted)" }}>
+                          {" "}&middot; Last: {new Date(movie.watch_status.last_watched_at).toLocaleDateString()}
+                        </span>
+                      )}
+                    </>
+                  ) : (
+                    "Not watched"
+                  )}
+                </div>
+              )}
+
               {/* File path */}
               {movie.path && (
                 <div>

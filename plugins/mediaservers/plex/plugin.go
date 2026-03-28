@@ -316,3 +316,79 @@ func extractTmdbID(v plexVideo) int {
 	}
 	return 0
 }
+
+// ── WatchProvider implementation ─────────────────────────────────────────────
+
+// plexHistoryContainer wraps the Plex watch history XML response.
+type plexHistoryContainer struct {
+	XMLName  xml.Name          `xml:"MediaContainer"`
+	Metadata []plexHistoryItem `xml:"Metadata"`
+}
+
+type plexHistoryItem struct {
+	RatingKey string    `xml:"ratingKey,attr"`
+	Title     string    `xml:"title,attr"`
+	Type      string    `xml:"type,attr"`
+	ViewedAt  int64     `xml:"viewedAt,attr"` // Unix timestamp
+	AccountID int       `xml:"accountID,attr"`
+	GUID      string    `xml:"guid,attr"`
+	Guids     []plexGID `xml:"Guid"`
+}
+
+// WatchHistory returns watch events since the given timestamp.
+// Implements plugin.WatchProvider.
+func (s *Server) WatchHistory(ctx context.Context, since time.Time) ([]plugin.WatchEvent, error) {
+	// Plex history API: GET /status/sessions/history/all
+	// Sorted by viewedAt descending. Filter with viewedAt>= (Unix timestamp).
+	sinceUnix := since.Unix()
+	reqURL := fmt.Sprintf("%s/status/sessions/history/all?sort=viewedAt:desc&viewedAt%%3E=%d&includeGuids=1",
+		s.cfg.URL, sinceUnix)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("plex: building watch-history request: %w", err)
+	}
+	req.Header.Set("X-Plex-Token", s.cfg.Token)
+	req.Header.Set("Accept", "application/xml")
+
+	resp, err := s.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("plex: watch-history request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		return nil, fmt.Errorf("plex: watch-history returned %d: %s", resp.StatusCode, body)
+	}
+
+	var container plexHistoryContainer
+	if err := xml.NewDecoder(resp.Body).Decode(&container); err != nil {
+		return nil, fmt.Errorf("plex: decoding watch history: %w", err)
+	}
+
+	var events []plugin.WatchEvent
+	for _, item := range container.Metadata {
+		if item.Type != "movie" {
+			continue
+		}
+
+		// Extract TMDB ID using the same logic as ListMovies.
+		tmdbID := extractTmdbID(plexVideo{
+			GUID:  item.GUID,
+			Guids: item.Guids,
+		})
+		if tmdbID == 0 {
+			continue // skip items without TMDB mapping
+		}
+
+		events = append(events, plugin.WatchEvent{
+			TMDBID:    tmdbID,
+			Title:     item.Title,
+			WatchedAt: time.Unix(item.ViewedAt, 0).UTC(),
+			UserName:  fmt.Sprintf("plex-account-%d", item.AccountID),
+		})
+	}
+
+	return events, nil
+}
