@@ -511,6 +511,104 @@ func (c *Client) FindByIMDbID(ctx context.Context, imdbID string) (int, string, 
 	return envelope.MovieResults[0].ID, envelope.MovieResults[0].Title, nil
 }
 
+// GenreList fetches the list of official TMDB movie genres.
+func (c *Client) GenreList(ctx context.Context) ([]Genre, error) {
+	var envelope struct {
+		Genres []struct {
+			ID   int    `json:"id"`
+			Name string `json:"name"`
+		} `json:"genres"`
+	}
+	if err := c.get(ctx, "/genre/movie/list", nil, &envelope); err != nil {
+		return nil, fmt.Errorf("tmdb genre list: %w", err)
+	}
+	genres := make([]Genre, 0, len(envelope.Genres))
+	for _, g := range envelope.Genres {
+		genres = append(genres, Genre{ID: g.ID, Name: g.Name})
+	}
+	return genres, nil
+}
+
+// DiscoverByGenre fetches movies filtered by genre ID.
+func (c *Client) DiscoverByGenre(ctx context.Context, genreID, page int) (*PaginatedResults, error) {
+	params := url.Values{}
+	params.Set("with_genres", strconv.Itoa(genreID))
+	params.Set("sort_by", "popularity.desc")
+	params.Set("page", strconv.Itoa(page))
+	return c.fetchMovieListPaginated(ctx, "/discover/movie", params)
+}
+
+// FetchTrending fetches trending movies with pagination metadata.
+func (c *Client) FetchTrending(ctx context.Context, page int) (*PaginatedResults, error) {
+	params := url.Values{}
+	params.Set("page", strconv.Itoa(page))
+	return c.fetchMovieListPaginated(ctx, "/trending/movie/week", params)
+}
+
+// FetchPopular fetches popular movies with pagination metadata.
+func (c *Client) FetchPopular(ctx context.Context, page int) (*PaginatedResults, error) {
+	params := url.Values{}
+	params.Set("page", strconv.Itoa(page))
+	return c.fetchMovieListPaginated(ctx, "/movie/popular", params)
+}
+
+// FetchTopRated fetches top-rated movies with pagination metadata.
+func (c *Client) FetchTopRated(ctx context.Context, page int) (*PaginatedResults, error) {
+	params := url.Values{}
+	params.Set("page", strconv.Itoa(page))
+	return c.fetchMovieListPaginated(ctx, "/movie/top_rated", params)
+}
+
+// FetchUpcoming fetches upcoming movies with pagination metadata.
+func (c *Client) FetchUpcoming(ctx context.Context, page int) (*PaginatedResults, error) {
+	params := url.Values{}
+	params.Set("page", strconv.Itoa(page))
+	return c.fetchMovieListPaginated(ctx, "/movie/upcoming", params)
+}
+
+// fetchMovieListPaginated is like fetchMovieList but also returns pagination metadata.
+func (c *Client) fetchMovieListPaginated(ctx context.Context, path string, params url.Values) (*PaginatedResults, error) {
+	var envelope struct {
+		Page       int `json:"page"`
+		TotalPages int `json:"total_pages"`
+		Results    []struct {
+			ID            int     `json:"id"`
+			Title         string  `json:"title"`
+			OriginalTitle string  `json:"original_title"`
+			Overview      string  `json:"overview"`
+			ReleaseDate   string  `json:"release_date"`
+			PosterPath    string  `json:"poster_path"`
+			BackdropPath  string  `json:"backdrop_path"`
+			Popularity    float64 `json:"popularity"`
+			VoteAverage   float64 `json:"vote_average"`
+		} `json:"results"`
+	}
+
+	if err := c.get(ctx, path, params, &envelope); err != nil {
+		return nil, fmt.Errorf("tmdb %s: %w", path, err)
+	}
+
+	results := make([]SearchResult, 0, len(envelope.Results))
+	for _, r := range envelope.Results {
+		results = append(results, SearchResult{
+			ID:            r.ID,
+			Title:         r.Title,
+			OriginalTitle: r.OriginalTitle,
+			Overview:      r.Overview,
+			ReleaseDate:   r.ReleaseDate,
+			Year:          parseYear(r.ReleaseDate),
+			PosterPath:    r.PosterPath,
+			BackdropPath:  r.BackdropPath,
+			Popularity:    r.VoteAverage, // Use vote_average as "popularity" for discover
+		})
+	}
+	return &PaginatedResults{
+		Results:    results,
+		Page:       envelope.Page,
+		TotalPages: envelope.TotalPages,
+	}, nil
+}
+
 // fetchMovieList is a shared helper for endpoints that return a paginated list
 // of movies using the standard {results: [...]} envelope (popular, upcoming, etc.).
 func (c *Client) fetchMovieList(ctx context.Context, path string, params url.Values) ([]SearchResult, error) {

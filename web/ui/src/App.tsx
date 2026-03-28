@@ -23,6 +23,7 @@ import MediaManagementPage from "@/pages/settings/media-management/MediaManageme
 import MediaScanningPage from "@/pages/settings/media-scanning/MediaScanningPage";
 import AppSettingsPage from "@/pages/settings/app/AppSettingsPage";
 import ActivityPage from "@/pages/activity/ActivityPage";
+import DiscoverPage from "@/pages/discover/DiscoverPage";
 import HistoryPage from "@/pages/history/HistoryPage";
 import WantedPage from "@/pages/wanted/WantedPage";
 import CalendarPage from "@/pages/calendar/CalendarPage";
@@ -55,6 +56,7 @@ export default function App() {
             <Route element={<Shell />}>
               <Route index element={<RouteEB><Dashboard /></RouteEB>} />
               <Route path="activity" element={<RouteEB><ActivityPage /></RouteEB>} />
+              <Route path="discover" element={<RouteEB><DiscoverPage /></RouteEB>} />
               <Route path="movies/:id" element={<RouteEB><MovieDetail /></RouteEB>} />
               <Route path="queue" element={<RouteEB><Queue /></RouteEB>} />
               <Route path="history" element={<RouteEB><HistoryPage /></RouteEB>} />

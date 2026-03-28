@@ -46,6 +46,7 @@ export interface Command {
 export const NAV_COMMANDS: Command[] = [
   { id: "nav:dashboard",        category: "navigation", label: "Dashboard",            keywords: ["home", "overview"],       icon: LayoutDashboard, onSelect: (n) => n("/") },
   { id: "nav:activity",         category: "navigation", label: "Activity",             keywords: ["events", "timeline", "log"], icon: Activity,     onSelect: (n) => n("/activity") },
+  { id: "nav:discover",         category: "navigation", label: "Discover",             keywords: ["browse", "trending", "popular", "genre"], icon: Search, onSelect: (n) => n("/discover") },
   { id: "nav:calendar",         category: "navigation", label: "Calendar",             keywords: ["schedule", "upcoming"],   icon: CalendarDays,    onSelect: (n) => n("/calendar") },
   { id: "nav:wanted",           category: "navigation", label: "Wanted",               keywords: ["missing", "cutoff"],      icon: Bookmark,        onSelect: (n) => n("/wanted") },
   { id: "nav:library-sync",     category: "navigation", label: "Library Sync",         keywords: ["plex", "sync"],           icon: RefreshCw,       onSelect: (n) => n("/library-sync") },

@@ -76,6 +76,19 @@ type MovieDetail struct {
 	Recommendations []MovieRecommendation `json:"recommendations,omitempty"`
 }
 
+// Genre is a TMDB movie genre.
+type Genre struct {
+	ID   int    `json:"id"`
+	Name string `json:"name"`
+}
+
+// PaginatedResults wraps a list of search results with pagination metadata.
+type PaginatedResults struct {
+	Results    []SearchResult `json:"results"`
+	Page       int            `json:"page"`
+	TotalPages int            `json:"total_pages"`
+}
+
 // CastMember is an actor in the movie's credits.
 type CastMember struct {
 	ID          int    `json:"id"`

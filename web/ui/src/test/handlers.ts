@@ -48,6 +48,32 @@ export const handlers = [
     HttpResponse.json({ cast: [], crew: [], recommendations: [] })
   ),
 
+  // Discover
+  http.get("/api/v1/discover/trending", () =>
+    HttpResponse.json({ results: [], page: 1, total_pages: 0 })
+  ),
+  http.get("/api/v1/discover/popular", () =>
+    HttpResponse.json({ results: [], page: 1, total_pages: 0 })
+  ),
+  http.get("/api/v1/discover/top-rated", () =>
+    HttpResponse.json({ results: [], page: 1, total_pages: 0 })
+  ),
+  http.get("/api/v1/discover/upcoming", () =>
+    HttpResponse.json({ results: [], page: 1, total_pages: 0 })
+  ),
+  http.get("/api/v1/discover/genre/:id", () =>
+    HttpResponse.json({ results: [], page: 1, total_pages: 0 })
+  ),
+  http.get("/api/v1/discover/genres", () =>
+    HttpResponse.json([
+      { id: 28, name: "Action" },
+      { id: 35, name: "Comedy" },
+      { id: 18, name: "Drama" },
+      { id: 878, name: "Science Fiction" },
+      { id: 27, name: "Horror" },
+    ])
+  ),
+
   // Wanted
   http.get("/api/v1/wanted/missing", () =>
     HttpResponse.json({ movies: [], total: 0, page: 1, per_page: 50 })

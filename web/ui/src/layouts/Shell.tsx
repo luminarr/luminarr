@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import {
   LayoutDashboard,
+  Compass,
   Film,
   Download,
   History,
@@ -45,6 +46,7 @@ interface NavItem {
 const mainNav: NavItem[] = [
   { to: "/",          icon: LayoutDashboard, label: "Dashboard" },
   { to: "/activity",     icon: Activity,     label: "Activity" },
+  { to: "/discover",     icon: Compass,      label: "Discover" },
   { to: "/calendar",     icon: CalendarDays, label: "Calendar" },
   { to: "/wanted",       icon: Bookmark,     label: "Wanted" },
   { to: "/library-sync", icon: RefreshCw,    label: "Library Sync" },
