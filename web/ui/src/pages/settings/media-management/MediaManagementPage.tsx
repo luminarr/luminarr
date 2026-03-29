@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import { useMediaManagement, useUpdateMediaManagement } from "@/api/media-management";
+import PageHeader from "@/components/PageHeader";
+import { DOCS_URLS } from "@/lib/docsUrls";
 import type { MediaManagement } from "@/types";
 
 // ── Shared styles ─────────────────────────────────────────────────────────────
@@ -163,35 +165,31 @@ export default function MediaManagementPage() {
 
   return (
     <div style={{ padding: "24px 32px", display: "flex", flexDirection: "column", gap: 20, maxWidth: 720 }}>
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "var(--color-text-primary)" }}>
-            Media Management
-          </h1>
-          <p style={{ margin: "4px 0 0", fontSize: 13, color: "var(--color-text-muted)" }}>
-            Control how movies are named and organized on disk
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={handleSave}
-          disabled={!dirty || update.isPending}
-          style={{
-            padding: "8px 18px",
-            background: dirty ? "var(--color-accent)" : "var(--color-bg-elevated)",
-            color: dirty ? "white" : "var(--color-text-muted)",
-            border: "none",
-            borderRadius: 6,
-            fontSize: 13,
-            fontWeight: 500,
-            cursor: dirty ? "pointer" : "default",
-            transition: "all 0.15s",
-          }}
-        >
-          {update.isPending ? "Saving…" : "Save Changes"}
-        </button>
-      </div>
+      <PageHeader
+        title="Media Management"
+        description="Control how movies are named and organized on disk."
+        docsUrl={DOCS_URLS.mediaManagement}
+        action={
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={!dirty || update.isPending}
+            style={{
+              padding: "8px 18px",
+              background: dirty ? "var(--color-accent)" : "var(--color-bg-elevated)",
+              color: dirty ? "white" : "var(--color-text-muted)",
+              border: "none",
+              borderRadius: 6,
+              fontSize: 13,
+              fontWeight: 500,
+              cursor: dirty ? "pointer" : "default",
+              transition: "all 0.15s",
+            }}
+          >
+            {update.isPending ? "Saving…" : "Save Changes"}
+          </button>
+        }
+      />
 
       {/* Movie Naming */}
       <SectionCard title="Movie Naming">

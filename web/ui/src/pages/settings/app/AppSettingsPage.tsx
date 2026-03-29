@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { Copy, Monitor, Moon, Sun } from "lucide-react";
+import PageHeader from "@/components/PageHeader";
+import { DOCS_URLS } from "@/lib/docsUrls";
 import { useSystemStatus, useSystemConfig, useSaveConfig, useRevealApiKey } from "@/api/system";
 import {
   THEME_PRESETS,
@@ -799,23 +801,11 @@ function BackupSection() {
 export default function AppSettingsPage() {
   return (
     <div style={{ padding: 24, maxWidth: 860 }}>
-      <div style={{ marginBottom: 24 }}>
-        <h1
-          style={{
-            fontSize: 20,
-            fontWeight: 600,
-            color: "var(--color-text-primary)",
-            margin: 0,
-            marginBottom: 4,
-            letterSpacing: "-0.01em",
-          }}
-        >
-          App Settings
-        </h1>
-        <p style={{ fontSize: 13, color: "var(--color-text-secondary)", margin: 0 }}>
-          Appearance, preferences, and application-level configuration.
-        </p>
-      </div>
+      <PageHeader
+        title="App Settings"
+        description="Appearance, preferences, and application-level configuration."
+        docsUrl={DOCS_URLS.appSettings}
+      />
 
       <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
         <AppearanceSection />

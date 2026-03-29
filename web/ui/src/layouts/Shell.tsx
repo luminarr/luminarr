@@ -30,6 +30,7 @@ import {
   ListPlus,
   ShieldOff,
   Layers,
+  BookOpen,
 } from "lucide-react";
 import { useSystemHealth } from "@/api/system";
 import { useWebSocket } from "@/api/websocket";
@@ -306,6 +307,27 @@ function Sidebar({
           gap: "4px",
         }}
       >
+        <a
+          href="https://luminarr.video/docs"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            padding: "0 12px",
+            height: "36px",
+            color: "var(--color-text-muted)",
+            fontSize: "12px",
+            textDecoration: "none",
+            borderRadius: "6px",
+            transition: "color 150ms ease",
+          }}
+          title={(!isMobile && collapsed) ? "Documentation" : undefined}
+        >
+          <BookOpen size={16} strokeWidth={1.5} style={{ flexShrink: 0 }} />
+          {(isMobile || !collapsed) && <span>Docs</span>}
+        </a>
         <HealthDot collapsed={!isMobile && collapsed} />
         {!isMobile && (
           <button

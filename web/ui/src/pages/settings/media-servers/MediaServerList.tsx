@@ -1,4 +1,6 @@
 import { useState } from "react";
+import PageHeader from "@/components/PageHeader";
+import { DOCS_URLS } from "@/lib/docsUrls";
 import {
   useMediaServers,
   useCreateMediaServer,
@@ -377,33 +379,30 @@ export default function MediaServerList() {
 
   return (
     <div style={{ padding: 24, maxWidth: 720, display: "flex", flexDirection: "column", gap: 20 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: 20, fontWeight: 600, color: "var(--color-text-primary)", letterSpacing: "-0.01em" }}>
-            Media Servers
-          </h1>
-          <p style={{ margin: "4px 0 0", fontSize: 13, color: "var(--color-text-secondary)" }}>
-            Automatically refresh your media server library when a movie is imported.
-          </p>
-        </div>
-        {!showAdd && !editingId && (
-          <button
-            onClick={startAdd}
-            style={{
-              background: "var(--color-accent)",
-              color: "var(--color-accent-fg)",
-              border: "none",
-              borderRadius: 6,
-              padding: "7px 16px",
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: "pointer",
-            }}
-          >
-            + Add
-          </button>
-        )}
-      </div>
+      <PageHeader
+        title="Media Servers"
+        description="Automatically refresh your media server library when a movie is imported."
+        docsUrl={DOCS_URLS.mediaServers}
+        action={
+          !showAdd && !editingId ? (
+            <button
+              onClick={startAdd}
+              style={{
+                background: "var(--color-accent)",
+                color: "var(--color-accent-fg)",
+                border: "none",
+                borderRadius: 6,
+                padding: "7px 16px",
+                fontSize: 13,
+                fontWeight: 600,
+                cursor: "pointer",
+              }}
+            >
+              + Add
+            </button>
+          ) : undefined
+        }
+      />
 
       {isLoading ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>

@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import Modal from "@/components/Modal";
+import PageHeader from "@/components/PageHeader";
+import { DOCS_URLS } from "@/lib/docsUrls";
 import {
   useImportLists,
   useCreateImportList,
@@ -1252,29 +1254,32 @@ export default function ImportListList() {
 
   return (
     <div style={{ padding: "32px 40px", maxWidth: 800 }}>
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-        <h2 style={{ fontSize: 20, fontWeight: 600, color: "var(--color-text-primary)", margin: 0 }}>Import Lists</h2>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button
-            style={actionBtn("var(--color-text-secondary)", "var(--color-bg-elevated)")}
-            onClick={() => syncMut.mutate()}
-            disabled={syncMut.isPending}
-          >
-            {syncMut.isPending ? "Syncing..." : "Sync All"}
-          </button>
-          <button
-            style={{
-              ...actionBtn("white", "var(--color-accent)"),
-              border: "none",
-              fontWeight: 500,
-            }}
-            onClick={openCreate}
-          >
-            + Add
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        title="Import Lists"
+        description="Automatically add movies from external lists and sources."
+        docsUrl={DOCS_URLS.importLists}
+        action={
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              style={actionBtn("var(--color-text-secondary)", "var(--color-bg-elevated)")}
+              onClick={() => syncMut.mutate()}
+              disabled={syncMut.isPending}
+            >
+              {syncMut.isPending ? "Syncing..." : "Sync All"}
+            </button>
+            <button
+              style={{
+                ...actionBtn("white", "var(--color-accent)"),
+                border: "none",
+                fontWeight: 500,
+              }}
+              onClick={openCreate}
+            >
+              + Add
+            </button>
+          </div>
+        }
+      />
 
       {/* Empty state */}
       {(!lists || lists.length === 0) && (

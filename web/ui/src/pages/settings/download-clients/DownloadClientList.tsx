@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import Modal from "@/components/Modal";
+import PageHeader from "@/components/PageHeader";
+import { DOCS_URLS } from "@/lib/docsUrls";
 import {
   useDownloadClients,
   useCreateDownloadClient,
@@ -1266,35 +1268,31 @@ export default function DownloadClientList() {
 
   return (
     <div style={{ padding: 24, maxWidth: 900 }}>
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 24 }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: 20, fontWeight: 600, color: "var(--color-text-primary)", letterSpacing: "-0.01em" }}>
-            Download Clients
-          </h1>
-          <p style={{ margin: "4px 0 0", fontSize: 13, color: "var(--color-text-secondary)" }}>
-            Torrent and Usenet clients used to download releases.
-          </p>
-        </div>
-        <button
-          onClick={openCreate}
-          style={{
-            background: "var(--color-accent)",
-            color: "var(--color-accent-fg)",
-            border: "none",
-            borderRadius: 6,
-            padding: "8px 16px",
-            fontSize: 13,
-            fontWeight: 500,
-            cursor: "pointer",
-            flexShrink: 0,
-          }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "var(--color-accent-hover)"; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "var(--color-accent)"; }}
-        >
-          + Add Client
-        </button>
-      </div>
+      <PageHeader
+        title="Download Clients"
+        description="Torrent and Usenet clients used to download releases."
+        docsUrl={DOCS_URLS.downloadClients}
+        action={
+          <button
+            onClick={openCreate}
+            style={{
+              background: "var(--color-accent)",
+              color: "var(--color-accent-fg)",
+              border: "none",
+              borderRadius: 6,
+              padding: "8px 16px",
+              fontSize: 13,
+              fontWeight: 500,
+              cursor: "pointer",
+              flexShrink: 0,
+            }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "var(--color-accent-hover)"; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "var(--color-accent)"; }}
+          >
+            + Add Client
+          </button>
+        }
+      />
 
       {/* Table card */}
       <div

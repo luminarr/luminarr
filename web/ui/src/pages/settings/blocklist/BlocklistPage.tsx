@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { Trash2 } from "lucide-react";
+import PageHeader from "@/components/PageHeader";
+import { DOCS_URLS } from "@/lib/docsUrls";
 import { useBlocklist, useDeleteBlocklistEntry, useClearBlocklist } from "@/api/blocklist";
 import { formatBytes, formatDate } from "@/lib/utils";
 
@@ -36,62 +38,36 @@ export default function BlocklistPage() {
 
   return (
     <div style={{ padding: "32px", maxWidth: 1100 }}>
-      {/* Header */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          marginBottom: 24,
-          gap: 16,
-        }}
-      >
-        <div>
-          <h1
-            style={{
-              fontSize: 22,
-              fontWeight: 700,
-              color: "var(--color-text-primary)",
-              margin: 0,
-            }}
-          >
-            Blocklist
-          </h1>
-          <p
-            style={{
-              fontSize: 13,
-              color: "var(--color-text-muted)",
-              margin: "4px 0 0",
-            }}
-          >
-            Releases that will be skipped during automatic and manual searches.
-          </p>
-        </div>
-
-        {data && data.total > 0 && (
-          <button
-            onClick={handleClear}
-            disabled={clearMutation.isPending}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              background: "var(--color-danger-muted)",
-              border: "1px solid var(--color-danger)",
-              borderRadius: 6,
-              padding: "7px 14px",
-              fontSize: 13,
-              fontWeight: 500,
-              color: "var(--color-danger)",
-              cursor: "pointer",
-              whiteSpace: "nowrap",
-            }}
-          >
-            <Trash2 size={14} />
-            {clearMutation.isPending ? "Clearing…" : "Clear All"}
-          </button>
-        )}
-      </div>
+      <PageHeader
+        title="Blocklist"
+        description="Releases that will be skipped during automatic and manual searches."
+        docsUrl={DOCS_URLS.blocklist}
+        action={
+          data && data.total > 0 ? (
+            <button
+              onClick={handleClear}
+              disabled={clearMutation.isPending}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                background: "var(--color-danger-muted)",
+                border: "1px solid var(--color-danger)",
+                borderRadius: 6,
+                padding: "7px 14px",
+                fontSize: 13,
+                fontWeight: 500,
+                color: "var(--color-danger)",
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+              }}
+            >
+              <Trash2 size={14} />
+              {clearMutation.isPending ? "Clearing…" : "Clear All"}
+            </button>
+          ) : undefined
+        }
+      />
 
       {/* Loading skeleton */}
       {isLoading && (

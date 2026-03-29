@@ -1,5 +1,7 @@
 import { useState } from "react";
 import Modal from "@/components/Modal";
+import PageHeader from "@/components/PageHeader";
+import { DOCS_URLS } from "@/lib/docsUrls";
 import {
   useImportExclusions,
   useCreateImportExclusion,
@@ -111,24 +113,23 @@ export default function ImportExclusions() {
 
   return (
     <div style={{ padding: "32px 40px", maxWidth: 800 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-        <div>
-          <h2 style={{ fontSize: 20, fontWeight: 600, color: "var(--color-text-primary)", margin: 0 }}>Import Exclusions</h2>
-          <p style={{ fontSize: 12, color: "var(--color-text-muted)", margin: "4px 0 0" }}>
-            Movies in this list will never be added by import list syncs. Deleting a movie automatically adds it here.
-          </p>
-        </div>
-        <button
-          style={{
-            ...actionBtn("white", "var(--color-accent)"),
-            border: "none",
-            fontWeight: 500,
-          }}
-          onClick={openCreate}
-        >
-          + Add
-        </button>
-      </div>
+      <PageHeader
+        title="Import Exclusions"
+        description="Movies in this list will never be added by import list syncs. Deleting a movie automatically adds it here."
+        docsUrl={DOCS_URLS.importExclusions}
+        action={
+          <button
+            style={{
+              ...actionBtn("white", "var(--color-accent)"),
+              border: "none",
+              fontWeight: 500,
+            }}
+            onClick={openCreate}
+          >
+            + Add
+          </button>
+        }
+      />
 
       {/* Empty state */}
       {(!exclusions || exclusions.length === 0) && (

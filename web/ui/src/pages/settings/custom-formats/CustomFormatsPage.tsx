@@ -1,5 +1,7 @@
 import { useMemo } from "react";
 import { toast } from "sonner";
+import PageHeader from "@/components/PageHeader";
+import { DOCS_URLS } from "@/lib/docsUrls";
 import { Trash2, Download, Check } from "lucide-react";
 import {
   useCustomFormats,
@@ -163,28 +165,11 @@ export default function CustomFormatsPage() {
 
   return (
     <div style={{ padding: 32, maxWidth: 960 }}>
-      {/* Header */}
-      <div style={{ marginBottom: 24 }}>
-        <h1
-          style={{
-            fontSize: 22,
-            fontWeight: 700,
-            color: "var(--color-text-primary)",
-            margin: 0,
-          }}
-        >
-          Custom Formats
-        </h1>
-        <p
-          style={{
-            fontSize: 13,
-            color: "var(--color-text-muted)",
-            margin: "4px 0 0",
-          }}
-        >
-          Scoring rules that influence release selection. Import built-in presets or create your own via TRaSH JSON import.
-        </p>
-      </div>
+      <PageHeader
+        title="Custom Formats"
+        description="Scoring rules that influence release selection. Import built-in presets or create your own via TRaSH JSON import."
+        docsUrl={DOCS_URLS.customFormats}
+      />
 
       {/* Loading */}
       {isLoading && (

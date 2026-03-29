@@ -1,4 +1,6 @@
 import { useState } from "react";
+import PageHeader from "@/components/PageHeader";
+import { DOCS_URLS } from "@/lib/docsUrls";
 import {
   useQualityProfiles,
   useCreateQualityProfile,
@@ -435,25 +437,21 @@ export default function QualityProfileList() {
 
   return (
     <div style={{ padding: 24, maxWidth: 900 }}>
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 24 }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: 20, fontWeight: 600, color: "var(--color-text-primary)", letterSpacing: "-0.01em" }}>
-            Quality Profiles
-          </h1>
-          <p style={{ margin: "4px 0 0", fontSize: 13, color: "var(--color-text-secondary)" }}>
-            Define which quality tiers are acceptable and when to upgrade.
-          </p>
-        </div>
-        <button
-          onClick={openCreate}
-          style={{ background: "var(--color-accent)", color: "var(--color-accent-fg)", border: "none", borderRadius: 6, padding: "8px 16px", fontSize: 13, fontWeight: 500, cursor: "pointer", flexShrink: 0 }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "var(--color-accent-hover)"; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "var(--color-accent)"; }}
-        >
-          + Add Profile
-        </button>
-      </div>
+      <PageHeader
+        title="Quality Profiles"
+        description="Define which quality tiers are acceptable and when to upgrade."
+        docsUrl={DOCS_URLS.qualityProfiles}
+        action={
+          <button
+            onClick={openCreate}
+            style={{ background: "var(--color-accent)", color: "var(--color-accent-fg)", border: "none", borderRadius: 6, padding: "8px 16px", fontSize: 13, fontWeight: 500, cursor: "pointer", flexShrink: 0 }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "var(--color-accent-hover)"; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "var(--color-accent)"; }}
+          >
+            + Add Profile
+          </button>
+        }
+      />
 
       {deleteError && (
         <div style={{ marginBottom: 16, padding: "10px 14px", background: "color-mix(in srgb, var(--color-danger) 10%, transparent)", border: "1px solid color-mix(in srgb, var(--color-danger) 30%, transparent)", borderRadius: 6, fontSize: 13, color: "var(--color-danger)" }}>

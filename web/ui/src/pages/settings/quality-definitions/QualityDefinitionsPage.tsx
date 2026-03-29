@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQualityDefinitions, useUpdateQualityDefinitions } from "@/api/quality-definitions";
+import PageHeader from "@/components/PageHeader";
+import { DOCS_URLS } from "@/lib/docsUrls";
 import { RangeSlider } from "@/components/RangeSlider";
 import type { QualityDefinition } from "@/types";
 
@@ -187,52 +189,46 @@ export default function QualityDefinitionsPage() {
 
   return (
     <div style={{ padding: 24, maxWidth: 1000, display: "flex", flexDirection: "column", gap: 24 }}>
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: 20, fontWeight: 600, color: "var(--color-text-primary)", letterSpacing: "-0.01em" }}>
-            Quality Definitions
-          </h1>
-          <p style={{ margin: "4px 0 0", fontSize: 13, color: "var(--color-text-secondary)" }}>
-            Acceptable file-size range (MB per minute of runtime) for each quality level. The
-            blue diamond marks the preferred size within that range.
-          </p>
-        </div>
-
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <button
-            onClick={handleResetAll}
-            style={{
-              background: "var(--color-bg-elevated)",
-              border: "1px solid var(--color-border-default)",
-              borderRadius: 6,
-              padding: "7px 14px",
-              fontSize: 13,
-              color: "var(--color-text-secondary)",
-              cursor: "pointer",
-            }}
-          >
-            Reset All
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={!dirty || updateMutation.isPending}
-            style={{
-              background: dirty ? "var(--color-accent)" : "var(--color-bg-elevated)",
-              border: `1px solid ${dirty ? "var(--color-accent)" : "var(--color-border-default)"}`,
-              borderRadius: 6,
-              padding: "7px 18px",
-              fontSize: 13,
-              fontWeight: 600,
-              color: dirty ? "var(--color-accent-fg)" : "var(--color-text-muted)",
-              cursor: dirty ? "pointer" : "default",
-              transition: "background 0.15s, border-color 0.15s",
-            }}
-          >
-            {updateMutation.isPending ? "Saving…" : "Save Changes"}
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        title="Quality Definitions"
+        description="Acceptable file-size range (MB per minute of runtime) for each quality level. The blue diamond marks the preferred size within that range."
+        docsUrl={DOCS_URLS.qualityDefinitions}
+        action={
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <button
+              onClick={handleResetAll}
+              style={{
+                background: "var(--color-bg-elevated)",
+                border: "1px solid var(--color-border-default)",
+                borderRadius: 6,
+                padding: "7px 14px",
+                fontSize: 13,
+                color: "var(--color-text-secondary)",
+                cursor: "pointer",
+              }}
+            >
+              Reset All
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={!dirty || updateMutation.isPending}
+              style={{
+                background: dirty ? "var(--color-accent)" : "var(--color-bg-elevated)",
+                border: `1px solid ${dirty ? "var(--color-accent)" : "var(--color-border-default)"}`,
+                borderRadius: 6,
+                padding: "7px 18px",
+                fontSize: 13,
+                fontWeight: 600,
+                color: dirty ? "var(--color-accent-fg)" : "var(--color-text-muted)",
+                cursor: dirty ? "pointer" : "default",
+                transition: "background 0.15s, border-color 0.15s",
+              }}
+            >
+              {updateMutation.isPending ? "Saving…" : "Save Changes"}
+            </button>
+          </div>
+        }
+      />
 
       {/* Table card */}
       <div style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-border-subtle)", borderRadius: 8, boxShadow: "var(--shadow-card)", overflow: "hidden" }}>

@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { useMediainfoStatus, useScanAll } from "@/api/mediainfo";
+import PageHeader from "@/components/PageHeader";
+import { DOCS_URLS } from "@/lib/docsUrls";
 
 export default function MediaScanningPage() {
   const { data: status, isLoading } = useMediainfoStatus();
@@ -18,13 +20,11 @@ export default function MediaScanningPage() {
 
   return (
     <div style={{ maxWidth: 640 }}>
-      <h2 style={{ margin: "0 0 6px", fontSize: 18, fontWeight: 600, color: "var(--color-text-primary)" }}>
-        Media Scanning
-      </h2>
-      <p style={{ margin: "0 0 24px", fontSize: 13, color: "var(--color-text-muted)" }}>
-        Luminarr can use <strong>ffprobe</strong> to verify the actual codec, resolution, and
-        HDR format of imported files — and flag mismatches against the filename-parsed quality.
-      </p>
+      <PageHeader
+        title="Media Scanning"
+        description="Luminarr can use ffprobe to verify the actual codec, resolution, and HDR format of imported files — and flag mismatches against the filename-parsed quality."
+        docsUrl={DOCS_URLS.mediaScanning}
+      />
 
       {/* Status card */}
       <div
