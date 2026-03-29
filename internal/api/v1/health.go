@@ -31,7 +31,7 @@ func RegisterHealthRoutes(api huma.API, svc *health.Service) {
 		Method:      http.MethodGet,
 		Path:        "/api/v1/system/health",
 		Summary:     "Get system health",
-		Description: "Runs live checks against disk space, download clients, and indexers.",
+		Description: "Runs live checks against library paths, download clients, and indexers.",
 		Tags:        []string{"System"},
 	}, func(ctx context.Context, _ *struct{}) (*healthReportOutput, error) {
 		report := svc.Check(ctx)

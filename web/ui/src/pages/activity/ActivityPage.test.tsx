@@ -41,7 +41,7 @@ const fixtures = {
       id: "a-4",
       type: "health_issue",
       category: "health",
-      title: "disk_space: path not accessible",
+      title: "library_paths: path not accessible",
       created_at: new Date(Date.now() - 172800_000).toISOString(), // 2d ago
     },
     {
@@ -98,7 +98,7 @@ describe("ActivityPage", () => {
       screen.getByText("Imported Inception (2010) — 2160p Bluray")
     ).toBeInTheDocument();
     expect(
-      screen.getByText("disk_space: path not accessible")
+      screen.getByText("library_paths: path not accessible")
     ).toBeInTheDocument();
     expect(
       screen.getByText("Added The Matrix (1999) to library")

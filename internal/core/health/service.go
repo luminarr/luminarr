@@ -1,5 +1,5 @@
 // Package health provides system health checks for Luminarr.
-// Checks cover disk space on library paths, download client connectivity,
+// Checks cover library path accessibility, download client connectivity,
 // and indexer reachability.
 package health
 
@@ -9,7 +9,6 @@ import (
 	"log/slog"
 	"os"
 	"strings"
-	"syscall"
 
 	"github.com/luminarr/luminarr/internal/core/downloader"
 	"github.com/luminarr/luminarr/internal/core/indexer"
@@ -61,7 +60,7 @@ func NewService(
 func (s *Service) Check(ctx context.Context) Report {
 	var checks []CheckResult
 
-	checks = append(checks, s.checkDiskSpace(ctx))
+	checks = append(checks, s.checkLibraryPaths(ctx))
 	checks = append(checks, s.checkDownloadClients(ctx))
 	checks = append(checks, s.checkIndexers(ctx))
 
@@ -80,22 +79,20 @@ func (s *Service) Check(ctx context.Context) Report {
 	return Report{Status: overall, Checks: checks}
 }
 
-// checkDiskSpace verifies that each library's root path is accessible and has
-// at least 1 GB of free disk space.
-func (s *Service) checkDiskSpace(ctx context.Context) CheckResult {
-	const minFreeBytes = 1 << 30 // 1 GiB
-
+// checkLibraryPaths verifies that each library's root path is accessible and
+// contains at least one entry.
+func (s *Service) checkLibraryPaths(ctx context.Context) CheckResult {
 	libs, err := s.libSvc.List(ctx)
 	if err != nil {
 		return CheckResult{
-			Name:    "disk_space",
+			Name:    "library_paths",
 			Status:  StatusDegraded,
 			Message: fmt.Sprintf("could not list libraries: %v", err),
 		}
 	}
 	if len(libs) == 0 {
 		return CheckResult{
-			Name:    "disk_space",
+			Name:    "library_paths",
 			Status:  StatusHealthy,
 			Message: "no libraries configured",
 		}
@@ -103,27 +100,22 @@ func (s *Service) checkDiskSpace(ctx context.Context) CheckResult {
 
 	var issues []string
 	for _, lib := range libs {
-		free, err := diskFreeBytes(lib.RootPath)
-		if err != nil {
+		if err := checkPathAccessible(lib.RootPath); err != nil {
 			issues = append(issues, fmt.Sprintf("%s: %v", lib.Name, err))
-			continue
-		}
-		if free < minFreeBytes {
-			issues = append(issues, fmt.Sprintf("%s: only %s free", lib.Name, formatBytes(free)))
 		}
 	}
 
 	if len(issues) > 0 {
 		return CheckResult{
-			Name:    "disk_space",
+			Name:    "library_paths",
 			Status:  StatusDegraded,
 			Message: joinIssues(issues),
 		}
 	}
 	return CheckResult{
-		Name:    "disk_space",
+		Name:    "library_paths",
 		Status:  StatusHealthy,
-		Message: fmt.Sprintf("%d library path(s) healthy", len(libs)),
+		Message: fmt.Sprintf("%d library path(s) accessible", len(libs)),
 	}
 }
 
@@ -231,33 +223,24 @@ func (s *Service) checkIndexers(ctx context.Context) CheckResult {
 	}
 }
 
-// diskFreeBytes returns the number of free bytes available on the filesystem
-// containing path. Returns an error if path does not exist or is inaccessible.
-func diskFreeBytes(path string) (uint64, error) {
-	if _, err := os.Stat(path); err != nil {
-		return 0, fmt.Errorf("path not accessible: %w", err)
+// checkPathAccessible verifies that path exists, is a directory, and contains
+// at least one entry.
+func checkPathAccessible(path string) error {
+	info, err := os.Stat(path)
+	if err != nil {
+		return fmt.Errorf("path not accessible: %w", err)
 	}
-	var stat syscall.Statfs_t
-	if err := syscall.Statfs(path, &stat); err != nil {
-		return 0, fmt.Errorf("statfs: %w", err)
+	if !info.IsDir() {
+		return fmt.Errorf("path is not a directory")
 	}
-	return stat.Bavail * uint64(stat.Bsize), nil //nolint:gosec // G115: Bsize is always positive on Linux
-}
-
-// formatBytes returns a human-readable byte count (e.g. "1.2 GB").
-func formatBytes(b uint64) string {
-	const (
-		gib = 1 << 30
-		mib = 1 << 20
-	)
-	switch {
-	case b >= gib:
-		return fmt.Sprintf("%.1f GB", float64(b)/gib)
-	case b >= mib:
-		return fmt.Sprintf("%.1f MB", float64(b)/mib)
-	default:
-		return fmt.Sprintf("%d B", b)
+	entries, err := os.ReadDir(path)
+	if err != nil {
+		return fmt.Errorf("cannot read directory: %w", err)
 	}
+	if len(entries) == 0 {
+		return fmt.Errorf("directory is empty")
+	}
+	return nil
 }
 
 // joinIssues concatenates a list of issue strings with "; ".

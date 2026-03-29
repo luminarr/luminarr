@@ -81,8 +81,8 @@ func TestHandleEvent_AllTypes(t *testing.T) {
 		{Type: events.TypeMovieDeleted, Timestamp: time.Now(), Data: map[string]any{"title": "Alien"}},
 		{Type: events.TypeTaskStarted, Timestamp: time.Now(), Data: map[string]any{"task": "RSS Sync"}},
 		{Type: events.TypeTaskFinished, Timestamp: time.Now(), Data: map[string]any{"task": "RSS Sync"}},
-		{Type: events.TypeHealthIssue, Timestamp: time.Now(), Data: map[string]any{"check": "disk_space", "message": "path not accessible"}},
-		{Type: events.TypeHealthOK, Timestamp: time.Now(), Data: map[string]any{"check": "disk_space"}},
+		{Type: events.TypeHealthIssue, Timestamp: time.Now(), Data: map[string]any{"check": "library_paths", "message": "path not accessible"}},
+		{Type: events.TypeHealthOK, Timestamp: time.Now(), Data: map[string]any{"check": "library_paths"}},
 		{Type: events.TypeBulkSearchComplete, Timestamp: time.Now(), Data: map[string]any{}},
 	}
 

@@ -3,6 +3,7 @@ package health
 import (
 	"context"
 	"log/slog"
+	"os"
 	"testing"
 
 	"github.com/luminarr/luminarr/internal/core/downloader"
@@ -16,28 +17,29 @@ import (
 	"github.com/luminarr/luminarr/pkg/plugin"
 )
 
-func TestFormatBytes(t *testing.T) {
-	tests := []struct {
-		name string
-		b    uint64
-		want string
-	}{
-		{"zero", 0, "0 B"},
-		{"bytes", 512, "512 B"},
-		{"below mib", 500_000, "500000 B"},
-		{"one mib", 1 << 20, "1.0 MB"},
-		{"megabytes", 100 * (1 << 20), "100.0 MB"},
-		{"one gig", 1 << 30, "1.0 GB"},
-		{"multi gig", 5_368_709_120, "5.0 GB"},
-		{"large", 100 * (1 << 30), "100.0 GB"},
+func TestCheckPathAccessible_Valid(t *testing.T) {
+	dir := t.TempDir()
+	// Create a file so the directory is non-empty.
+	if err := os.WriteFile(dir+"/test.txt", []byte("hi"), 0o644); err != nil {
+		t.Fatal(err)
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := formatBytes(tt.b)
-			if got != tt.want {
-				t.Errorf("formatBytes(%d) = %q, want %q", tt.b, got, tt.want)
-			}
-		})
+	if err := checkPathAccessible(dir); err != nil {
+		t.Errorf("checkPathAccessible(%q) = %v, want nil", dir, err)
+	}
+}
+
+func TestCheckPathAccessible_Empty(t *testing.T) {
+	dir := t.TempDir()
+	err := checkPathAccessible(dir)
+	if err == nil {
+		t.Fatal("expected error for empty directory")
+	}
+}
+
+func TestCheckPathAccessible_NonExistent(t *testing.T) {
+	err := checkPathAccessible("/this/path/does/not/exist-xyz")
+	if err == nil {
+		t.Fatal("expected error for non-existent path")
 	}
 }
 
@@ -119,23 +121,6 @@ func TestOverallStatus_Aggregation(t *testing.T) {
 	}
 }
 
-func TestDiskFreeBytes_TempDir(t *testing.T) {
-	dir := t.TempDir()
-	free, err := diskFreeBytes(dir)
-	if err != nil {
-		t.Fatalf("diskFreeBytes(%q): %v", dir, err)
-	}
-	if free == 0 {
-		t.Error("expected non-zero free bytes on temp dir")
-	}
-}
-
-func TestDiskFreeBytes_NonExistent(t *testing.T) {
-	_, err := diskFreeBytes("/this/path/does/not/exist-xyz")
-	if err == nil {
-		t.Fatal("expected error for non-existent path")
-	}
-}
 
 func TestCheck_NoLibrariesNoClientsNoIndexers(t *testing.T) {
 	q := testutil.NewTestDB(t)
@@ -164,7 +149,7 @@ func TestCheck_NoLibrariesNoClientsNoIndexers(t *testing.T) {
 	}
 }
 
-func TestCheck_WithLibrary_DiskSpace(t *testing.T) {
+func TestCheck_WithLibrary_LibraryPaths(t *testing.T) {
 	q := testutil.NewTestDB(t)
 	logger := slog.Default()
 	bus := events.New(logger)
@@ -183,8 +168,11 @@ func TestCheck_WithLibrary_DiskSpace(t *testing.T) {
 	}
 
 	libSvc := library.NewService(q, bus, nil)
-	// Create a library pointing at a temp dir so disk space check works.
+	// Create a library pointing at a temp dir with a file so path check works.
 	dir := t.TempDir()
+	if err := os.WriteFile(dir+"/movie.mkv", []byte("data"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	_, err = libSvc.Create(context.Background(), library.CreateRequest{
 		Name:                    "Test Lib",
 		RootPath:                dir,
@@ -200,18 +188,18 @@ func TestCheck_WithLibrary_DiskSpace(t *testing.T) {
 	svc := NewService(libSvc, dlSvc, idxSvc, logger)
 	report := svc.Check(context.Background())
 
-	// Find the disk_space check.
-	var diskCheck *CheckResult
+	// Find the library_paths check.
+	var pathCheck *CheckResult
 	for i := range report.Checks {
-		if report.Checks[i].Name == "disk_space" {
-			diskCheck = &report.Checks[i]
+		if report.Checks[i].Name == "library_paths" {
+			pathCheck = &report.Checks[i]
 			break
 		}
 	}
-	if diskCheck == nil {
-		t.Fatal("disk_space check not found in report")
+	if pathCheck == nil {
+		t.Fatal("library_paths check not found in report")
 	}
-	if diskCheck.Status != StatusHealthy {
-		t.Errorf("disk_space = %q (%s), want healthy (temp dir should have space)", diskCheck.Status, diskCheck.Message)
+	if pathCheck.Status != StatusHealthy {
+		t.Errorf("library_paths = %q (%s), want healthy", pathCheck.Status, pathCheck.Message)
 	}
 }
